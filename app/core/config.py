@@ -1,4 +1,10 @@
+import logging
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger("gateway.config")
+
+_INSECURE_SECRET_DEFAULT = "dev-only-insecure-key"
 
 
 class Settings(BaseSettings):
@@ -11,8 +17,27 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     database_url: str | None = None
 
-    gateway_secret_key: str = "dev-only-insecure-key"
+    gateway_secret_key: str = _INSECURE_SECRET_DEFAULT
+    # Comma-separated client API keys accepted by this gateway. When empty,
+    # authenticated endpoints fail closed (they refuse to serve) rather than
+    # exposing provider credits to anyone who can reach the port.
+    gateway_api_keys: str = ""
     otel_exporter_otlp_endpoint: str | None = None
+
+    def allowed_api_keys(self) -> list[str]:
+        return [k.strip() for k in self.gateway_api_keys.split(",") if k.strip()]
+
+    def model_post_init(self, __context: object) -> None:
+        if self.gateway_secret_key == _INSECURE_SECRET_DEFAULT:
+            logger.warning(
+                "GATEWAY_SECRET_KEY is the insecure built-in default; set a long "
+                "random value in .env before running anywhere but local dev."
+            )
+        if not self.allowed_api_keys():
+            logger.warning(
+                "GATEWAY_API_KEYS is empty; authenticated endpoints will refuse "
+                "requests. Set at least one client key in .env to enable /v1/chat."
+            )
 
 
 settings = Settings()
