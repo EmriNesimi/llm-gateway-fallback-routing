@@ -1,0 +1,32 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+
+# Secrets — never commit real env files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# OS/editor cruft
+.DS_Store
+.idea/
+.vscode/
+
+# Test/coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker volumes / local data
+data/
+grafana-data/
+prometheus-data/
+postgres-data/
