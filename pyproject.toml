@@ -1,0 +1,5 @@
+[tool.pytest.ini_options]
+# Put the project root on sys.path so `pytest` (not just `python -m pytest`)
+# can import the `app` package. Without this the test suite fails to collect.
+pythonpath = ["."]
+testpaths = ["tests"]
