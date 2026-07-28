@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     rate_limit_capacity: int = 20
     rate_limit_refill_per_sec: float = 0.5  # 30 requests/min sustained
 
+    # Per-API-key spend cap in USD, reset monthly.
+    monthly_budget_usd_per_key: float = 5.0
+
     def allowed_api_keys(self) -> list[str]:
         return [k.strip() for k in self.gateway_api_keys.split(",") if k.strip()]
 
