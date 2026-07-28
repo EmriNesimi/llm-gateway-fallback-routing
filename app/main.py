@@ -1,10 +1,10 @@
 from fastapi import Depends, FastAPI, HTTPException
 
 from app.providers.base import ChatMessage
+from app.ratelimit.dependency import enforce_rate_limit
 from app.routing.dependencies import build_router
 from app.routing.fallback import AllProvidersFailedError
 from app.schemas import ChatRequest, ChatResponseOut
-from app.security.auth import require_api_key
 
 app = FastAPI(
     title="LLM Gateway",
@@ -23,12 +23,8 @@ async def root():
     return {"service": "llm-gateway", "docs": "/docs"}
 
 
-@app.post(
-    "/v1/chat",
-    response_model=ChatResponseOut,
-    dependencies=[Depends(require_api_key)],
-)
-async def chat(request: ChatRequest):
+@app.post("/v1/chat", response_model=ChatResponseOut)
+async def chat(request: ChatRequest, api_key: str = Depends(enforce_rate_limit)):
     router = build_router(request.model)
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
 
