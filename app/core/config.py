@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     gateway_api_keys: str = ""
     otel_exporter_otlp_endpoint: str | None = None
 
+    # Token bucket: capacity = max burst size, refill_rate = tokens/sec sustained.
+    rate_limit_capacity: int = 20
+    rate_limit_refill_per_sec: float = 0.5  # 30 requests/min sustained
+
     def allowed_api_keys(self) -> list[str]:
         return [k.strip() for k in self.gateway_api_keys.split(",") if k.strip()]
 
