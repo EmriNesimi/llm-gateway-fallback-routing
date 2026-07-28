@@ -24,7 +24,7 @@ def _extract_key(authorization: str | None, x_api_key: str | None) -> str | None
 async def require_api_key(
     authorization: str | None = Header(default=None),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
-) -> None:
+) -> str:
     allowed = settings.allowed_api_keys()
     if not allowed:
         # Fail closed: without configured keys we refuse rather than serve openly.
@@ -42,7 +42,7 @@ async def require_api_key(
 
     for key in allowed:
         if hmac.compare_digest(presented, key):
-            return
+            return presented
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
