@@ -29,7 +29,12 @@ if tokens >= requested then
 end
 
 redis.call('HMSET', key, 'tokens', tokens, 'updated_at', now)
-redis.call('EXPIRE', key, math.ceil(capacity / refill_rate) + 60)
+
+local ttl_seconds = 3600
+if refill_rate > 0 then
+  ttl_seconds = math.ceil(capacity / refill_rate) + 60
+end
+redis.call('EXPIRE', key, ttl_seconds)
 
 return {allowed, tokens}
 """
