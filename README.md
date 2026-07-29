@@ -54,17 +54,32 @@ Client ─────────────▶│   FastAPI Gateway    │
 
 ## Status
 
-🚧 Actively in development. Current milestone: core proxy + provider adapters.
+🚧 Actively in development. Current milestone: Redis-backed rate limiting & budgets (Phase 2).
 
 - [x] Project scaffold, config, security foundations
-- [ ] Provider adapters (OpenAI / Anthropic / Ollama) + fallback chain
-- [ ] Redis-backed rate limiting & per-team budgets
+- [x] Provider adapters (OpenAI / Anthropic / Ollama) + fallback chain
+- [x] Redis-backed rate limiting & per-key monthly budgets
 - [ ] OpenTelemetry tracing + Prometheus metrics
 - [ ] Grafana dashboards
 - [ ] Streaming support with mid-stream fallback
 - [ ] Circuit breaker + retry/backoff
 - [ ] Admin API for teams/keys + audit log
-- [ ] Tests + CI
+- [x] Tests for rate limiter, budget tracker, health endpoint
+- [ ] CI
+
+## Calling the API
+
+`POST /v1/chat` requires a client API key (one of the values in `GATEWAY_API_KEYS`), passed as either:
+
+```
+Authorization: Bearer <key>
+```
+or
+```
+X-API-Key: <key>
+```
+
+Each key is independently rate-limited (token bucket: `RATE_LIMIT_CAPACITY` burst, `RATE_LIMIT_REFILL_PER_SEC` sustained) and budget-capped (`MONTHLY_BUDGET_USD_PER_KEY`, resets monthly). Exceeding the rate limit returns `429`; exceeding the budget returns `402`.
 
 ## Getting started
 
@@ -90,10 +105,7 @@ docker compose up --build
 ## Security
 
 - **No secrets in the repo.** Real credentials live only in a local `.env` (git-ignored). `.env.example` documents every variable with placeholder values.
-- **Client API keys are hashed** (HMAC-SHA256) before storage — the gateway never persists or logs raw keys.
+- **`/v1/chat` fails closed.** If no client keys are configured, the endpoint refuses all requests (503) rather than serving openly.
+- **Constant-time key comparison** (`hmac.compare_digest`) prevents timing attacks on API key checks.
 - **Structured logging** is scrubbed of tokens, keys, and Authorization headers.
 - Dependency and secret scanning are enabled on this repository.
-
-## License
-
-MIT
