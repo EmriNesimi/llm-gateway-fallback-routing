@@ -1,5 +1,6 @@
 import logging
 
+from app.observability.metrics import FALLBACK_TRIGGERED, PROVIDER_ATTEMPTS
 from app.providers.base import BaseProvider, ChatMessage, ChatResponse, ProviderError
 
 logger = logging.getLogger("gateway.router")
@@ -19,10 +20,15 @@ class FallbackRouter:
     async def chat(self, messages: list[ChatMessage]) -> ChatResponse:
         errors: list[str] = []
 
-        for provider, model in self._chain:
+        for attempt, (provider, model) in enumerate(self._chain):
             try:
-                return await provider.chat(model=model, messages=messages)
+                result = await provider.chat(model=model, messages=messages)
+                PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="success").inc()
+                if attempt > 0:
+                    FALLBACK_TRIGGERED.inc()
+                return result
             except ProviderError as exc:
+                PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="error").inc()
                 logger.warning("provider %s failed, falling back: %s", provider.name, exc)
                 errors.append(f"{provider.name}: {exc}")
 
