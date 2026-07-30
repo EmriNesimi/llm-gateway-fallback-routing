@@ -1,53 +1,64 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:1e3a8a,100:059669&height=180&section=header&text=LLM%20Gateway&fontSize=52&fontColor=ffffff&fontAlignY=38&desc=Fallback%20Routing%20%7C%20Rate%20Limiting%20%7C%20Budgets%20%7C%20Observability&descAlignY=58&descSize=16&animation=fadeIn" width="100%"/>
+<img src="https://capsule-render.vercel.app/api?type=soft&color=0:0a0e27,50:0f3443,100:00d9a3&height=200&section=header&text=LLM%20GATEWAY&fontSize=54&fontColor=00ff9d&fontAlignY=35&desc=%3E%20route%20/%20fallback%20/%20throttle%20/%20observe&descAlignY=55&descSize=18&descColor=7dffcf&animation=twinkling" width="100%"/>
 
-<a href="https://github.com/EmriNesimi/llm-gateway-fallback-routing">
-  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=20&pause=1200&color=059669&center=true&vCenter=true&width=700&lines=One+API+in+front+of+OpenAI%2C+Anthropic%2C+and+Ollama;Automatic+failover+when+a+provider+goes+down;Per-key+rate+limits+%2B+budgets%2C+enforced+in+Redis;Traced+with+OpenTelemetry%2C+measured+with+Prometheus" alt="Typing SVG" />
-</a>
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=500&size=16&pause=900&color=00E5A0&background=0A0E27&center=true&vCenter=true&width=780&height=110&lines=%24+curl+-X+POST+%2Fv1%2Fchat+-H+%22Authorization%3A+Bearer+...%22;%5Bgateway%5D+routing+request+%E2%86%92+openai%3Agpt-4o-mini;%5Bopenai%5D+429+rate_limited+%E2%86%92+falling+back...;%5Banthropic%5D+200+OK+%E2%86%90+response+served+in+412ms;%5Bbudget%5D+key+sk_live_%2A%2A%2A8f2c+%E2%80%94+%240.0031+recorded;%5Bmetrics%5D+fallback_triggered_total%2B%2B+%7C+scraped+by+prometheus" alt="terminal typing animation" />
 
-<br/>
+<br/><br/>
 
-![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
-![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
-![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)
-![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-black?style=for-the-badge&logo=opentelemetry&logoColor=white)
-![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)
-![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)
-![Status](https://img.shields.io/badge/status-active%20development-blueviolet?style=for-the-badge)
+[![Python](https://img.shields.io/badge/Python-3.12-0a0e27?style=for-the-badge&logo=python&logoColor=00ff9d&labelColor=0a0e27)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0a0e27?style=for-the-badge&logo=fastapi&logoColor=00ff9d&labelColor=0a0e27)](https://fastapi.tiangolo.com/)
+[![Redis](https://img.shields.io/badge/Redis-0a0e27?style=for-the-badge&logo=redis&logoColor=00ff9d&labelColor=0a0e27)](https://redis.io/)
+[![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-0a0e27?style=for-the-badge&logo=opentelemetry&logoColor=00ff9d&labelColor=0a0e27)](https://opentelemetry.io/)
+[![Prometheus](https://img.shields.io/badge/Prometheus-0a0e27?style=for-the-badge&logo=prometheus&logoColor=00ff9d&labelColor=0a0e27)](https://prometheus.io/)
+[![Grafana](https://img.shields.io/badge/Grafana-0a0e27?style=for-the-badge&logo=grafana&logoColor=00ff9d&labelColor=0a0e27)](https://grafana.com/)
+
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:00d9a3,100:0a0e27&height=3&width=100%25" width="100%"/>
 
 </div>
 
----
+## 📡 what this is
 
-## Why this exists
+Every request into this gateway is a **packet looking for a route**. It hits auth, clears the rate limiter, checks its budget, then gets handed to the router — which tries providers in priority order until one answers. If OpenAI is down, Anthropic picks it up. If both are unavailable, Ollama (local, free) is the last hop. Every hop is measured.
 
-Most AI demos show off a single model doing a clever trick. In production, the harder problem is **reliability**: providers rate-limit you, go down, or get expensive — and someone has to own the routing, the budget enforcement, and the "why did this request fail at 2am" answer. This gateway is that someone.
+> Most AI demos show a single model doing a clever trick. In production, the hard part is **reliability** — providers rate-limit you, go down, or get expensive, and someone has to own the routing, the budget enforcement, and the "why did this fail at 2am" answer. This gateway is that someone.
 
-## What it does
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:0a0e27,100:00d9a3&height=3&width=100%25" width="100%"/>
 
-- 🔀 **Unified API** — one OpenAI-compatible endpoint in front of multiple providers, so clients don't need to know or care who's actually serving the request.
-- 🛟 **Automatic failover** — if the primary provider errors out or times out, the gateway retries against the next provider in the chain.
-- 🚦 **Per-key rate limiting & budgets** — Redis-backed token bucket limits and monthly spend caps, so one key can't blow the budget or starve everyone else.
-- 📊 **Full observability** — every request is traced (OpenTelemetry) and measured (Prometheus), with Grafana dashboards for traffic, latency, error/fallback rate.
-- 🔒 **Security-first** — fail-closed auth, constant-time key comparisons, secrets never touch logs or the repo.
+## 🧭 the routing table
 
-## Architecture
+| Signal | Meaning |
+|:---:|---|
+| 🟢 | Primary provider answered — fast path |
+| 🟡 | Primary failed, fallback provider served the request |
+| 🔴 | Every provider in the chain failed — `502` returned, nothing silently swallowed |
+| 🚫 | Rate limit or budget cap hit before a provider was ever called — `429` / `402` |
+
+## ⚙️ what it does
+
+- 🔀 **Unified API** — one OpenAI-compatible endpoint in front of multiple providers; clients never know who actually answered.
+- 🛟 **Automatic failover** — primary errors or times out → the router advances to the next provider in the chain, no client-side retry logic needed.
+- 🚦 **Per-key rate limiting & budgets** — Redis-backed token bucket + monthly spend cap, enforced *before* a provider is ever called.
+- 📊 **Full observability** — every hop is traced (OpenTelemetry) and measured (Prometheus), visualized in Grafana.
+- 🔒 **Security-first** — fail-closed auth, constant-time key comparison, zero secrets in git history.
+
+## 🗺️ the request path
 
 ```mermaid
+%%{init: {'theme':'dark', 'themeVariables': {'primaryColor':'#0f3443','primaryTextColor':'#00ff9d','primaryBorderColor':'#00d9a3','lineColor':'#00d9a3','secondaryColor':'#0a0e27','tertiaryColor':'#0a0e27'}}}%%
 flowchart LR
-    Client -->|API key| Auth[Auth]
-    Auth --> RateLimit[Rate Limiter\nRedis token bucket]
-    RateLimit --> Budget[Budget Check\nRedis spend tracker]
-    Budget --> Router[Fallback Router]
-    Router -->|1st try| OpenAI
-    Router -->|fallback| Anthropic
-    Router -->|fallback| Ollama
-    Router -.trace/metrics.-> Otel[OpenTelemetry + Prometheus]
-    Otel --> Grafana[Grafana Dashboards]
+    Client(["📨 Client"]) -->|API key| Auth{{"🔑 Auth"}}
+    Auth -->|429 if over| RateLimit["🚦 Rate Limiter\nRedis token bucket"]
+    RateLimit -->|402 if over| Budget["💰 Budget Check\nRedis spend tracker"]
+    Budget --> Router["🔀 Fallback Router"]
+    Router -->|"1️⃣ try"| OpenAI["OpenAI"]
+    Router -->|"2️⃣ fallback"| Anthropic["Anthropic"]
+    Router -->|"3️⃣ fallback"| Ollama["Ollama (local)"]
+    Router -.trace + metrics.-> Otel["📡 OpenTelemetry\n+ Prometheus"]
+    Otel --> Grafana["📊 Grafana"]
 ```
 
-## Stack
+## 🧱 stack
 
 | Layer | Choice |
 |---|---|
@@ -57,9 +68,11 @@ flowchart LR
 | Dashboards | Grafana |
 | Providers | OpenAI, Anthropic, Ollama |
 
-## Status
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:00d9a3,100:0a0e27&height=3&width=100%25" width="100%"/>
 
-Actively in development. Current milestone: observability (Phase 3).
+## 🚧 build log
+
+Actively in development. Current milestone: observability (Phase 3) ✅
 
 - [x] Project scaffold, config, security foundations
 - [x] Provider adapters (OpenAI / Anthropic / Ollama) + fallback chain
@@ -69,10 +82,10 @@ Actively in development. Current milestone: observability (Phase 3).
 - [ ] Streaming support with mid-stream fallback
 - [ ] Circuit breaker + retry/backoff
 - [ ] Admin API for teams/keys + audit log
-- [x] Tests for rate limiter, budget tracker, health endpoint
+- [x] Tests for rate limiter, budget tracker, metrics, health endpoint
 - [ ] CI
 
-## Calling the API
+## 🔌 calling the api
 
 `POST /v1/chat` requires a client API key (one of the values in `GATEWAY_API_KEYS`), passed as either:
 
@@ -86,13 +99,13 @@ X-API-Key: <key>
 
 Each key is independently rate-limited (token bucket: `RATE_LIMIT_CAPACITY` burst, `RATE_LIMIT_REFILL_PER_SEC` sustained) and budget-capped (`MONTHLY_BUDGET_USD_PER_KEY`, resets monthly). Exceeding the rate limit returns `429`; exceeding the budget returns `402`.
 
-## Observability
+## 📊 observability
 
 - **`GET /metrics`** — Prometheus-format metrics: request count/latency, per-provider attempt outcomes, fallback rate.
-- **Tracing** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to send traces to any OTLP collector. Each provider attempt gets its own span with provider/model/attempt attributes. If unset, or if nothing is listening on that endpoint, the app still works fine — you'll just see a harmless retry warning in the logs.
+- **Tracing** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to send traces to any OTLP collector. Each provider attempt gets its own span with provider/model/attempt attributes. If unset, or nothing is listening there, the app still runs fine — you'll just see a harmless retry warning in the logs.
 - **Dashboards** — `docker compose up` brings up Prometheus (`:9090`) scraping the gateway and Grafana (`:3000`, default login `admin`/`admin`) ready to point at it.
 
-## Getting started
+## 🚀 getting started
 
 ```bash
 git clone https://github.com/EmriNesimi/llm-gateway-fallback-routing.git
@@ -107,7 +120,7 @@ uvicorn app.main:app --reload
 
 Visit `http://localhost:8000/docs` for the interactive API docs, or `http://localhost:8000/healthz` for a health check.
 
-### With Docker
+### with docker
 
 ```bash
 docker compose up --build
@@ -115,7 +128,9 @@ docker compose up --build
 
 Spins up the gateway, Redis, Prometheus, and Grafana together.
 
-## Security
+<img src="https://capsule-render.vercel.app/api?type=rect&color=0:0a0e27,100:00d9a3&height=3&width=100%25" width="100%"/>
+
+## 🔒 security
 
 - **No secrets in the repo.** Real credentials live only in a local `.env` (git-ignored). `.env.example` documents every variable with placeholder values.
 - **`/v1/chat` fails closed.** If no client keys are configured, the endpoint refuses all requests (503) rather than serving openly.
@@ -123,8 +138,7 @@ Spins up the gateway, Redis, Prometheus, and Grafana together.
 - **Structured logging** is scrubbed of tokens, keys, and Authorization headers.
 - Dependency and secret scanning are enabled on this repository.
 
----
-
 <div align="center">
-<img src="https://capsule-render.vercel.app/api?type=waving&color=0:059669,100:1e3a8a&height=100&section=footer" width="100%"/>
+<br/>
+<img src="https://capsule-render.vercel.app/api?type=soft&color=0:00d9a3,100:0a0e27&height=120&section=footer&animation=twinkling" width="100%"/>
 </div>
