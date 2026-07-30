@@ -1,7 +1,11 @@
-from fastapi import Depends, FastAPI, HTTPException
+import time
+
+from fastapi import Depends, FastAPI, HTTPException, Response
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from app.budget.dependency import enforce_budget, tracker as budget_tracker
 from app.budget.pricing import estimate_cost_usd
+from app.observability.metrics import REQUEST_COUNT, REQUEST_LATENCY
 from app.providers.base import ChatMessage
 from app.routing.dependencies import build_router
 from app.routing.fallback import AllProvidersFailedError
@@ -24,15 +28,26 @@ async def root():
     return {"service": "llm-gateway", "docs": "/docs"}
 
 
+@app.get("/metrics")
+async def metrics():
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
 @app.post("/v1/chat", response_model=ChatResponseOut)
 async def chat(request: ChatRequest, api_key: str = Depends(enforce_budget)):
     router = build_router(request.model)
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
 
+    start = time.perf_counter()
     try:
         result = await router.chat(messages)
     except AllProvidersFailedError as exc:
+        REQUEST_COUNT.labels(status="error").inc()
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+    finally:
+        REQUEST_LATENCY.observe(time.perf_counter() - start)
+
+    REQUEST_COUNT.labels(status="success").inc()
 
     cost = estimate_cost_usd(
         provider=result.provider,
