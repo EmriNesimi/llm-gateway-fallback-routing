@@ -1,6 +1,7 @@
 import logging
 
 from app.observability.metrics import FALLBACK_TRIGGERED, PROVIDER_ATTEMPTS
+from app.observability.tracing import tracer
 from app.providers.base import BaseProvider, ChatMessage, ChatResponse, ProviderError
 
 logger = logging.getLogger("gateway.router")
@@ -21,16 +22,21 @@ class FallbackRouter:
         errors: list[str] = []
 
         for attempt, (provider, model) in enumerate(self._chain):
-            try:
-                result = await provider.chat(model=model, messages=messages)
-                PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="success").inc()
-                if attempt > 0:
-                    FALLBACK_TRIGGERED.inc()
-                return result
-            except ProviderError as exc:
-                PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="error").inc()
-                logger.warning("provider %s failed, falling back: %s", provider.name, exc)
-                errors.append(f"{provider.name}: {exc}")
+            with tracer.start_as_current_span(f"provider.{provider.name}.chat") as span:
+                span.set_attribute("gateway.provider", provider.name)
+                span.set_attribute("gateway.model", model)
+                span.set_attribute("gateway.attempt", attempt)
+                try:
+                    result = await provider.chat(model=model, messages=messages)
+                    PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="success").inc()
+                    if attempt > 0:
+                        FALLBACK_TRIGGERED.inc()
+                    return result
+                except ProviderError as exc:
+                    span.set_attribute("gateway.error", str(exc))
+                    PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="error").inc()
+                    logger.warning("provider %s failed, falling back: %s", provider.name, exc)
+                    errors.append(f"{provider.name}: {exc}")
 
         raise AllProvidersFailedError(
             f"all providers in fallback chain failed: {'; '.join(errors)}"
