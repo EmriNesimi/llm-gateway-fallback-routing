@@ -1,8 +1,22 @@
-# 🛡️ LLM Gateway with Fallback Routing
+<div align="center">
 
-A production-style proxy that sits in front of OpenAI, Anthropic, and local Ollama models — giving every request automatic provider failover, per-team rate limits and budgets, and full observability out of the box.
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:1e3a8a,100:059669&height=180&section=header&text=LLM%20Gateway&fontSize=52&fontColor=ffffff&fontAlignY=38&desc=Fallback%20Routing%20%7C%20Rate%20Limiting%20%7C%20Budgets%20%7C%20Observability&descAlignY=58&descSize=16&animation=fadeIn" width="100%"/>
 
-> The infrastructure layer every team running LLMs in production eventually needs to build. This project builds it once, properly.
+<a href="https://github.com/EmriNesimi/llm-gateway-fallback-routing">
+  <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&size=20&pause=1200&color=059669&center=true&vCenter=true&width=700&lines=One+API+in+front+of+OpenAI%2C+Anthropic%2C+and+Ollama;Automatic+failover+when+a+provider+goes+down;Per-key+rate+limits+%2B+budgets%2C+enforced+in+Redis;Traced+with+OpenTelemetry%2C+measured+with+Prometheus" alt="Typing SVG" />
+</a>
+
+<br/>
+
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=for-the-badge&logo=redis&logoColor=white)
+![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-black?style=for-the-badge&logo=opentelemetry&logoColor=white)
+![Prometheus](https://img.shields.io/badge/Prometheus-E6522C?style=for-the-badge&logo=prometheus&logoColor=white)
+![Grafana](https://img.shields.io/badge/Grafana-F46800?style=for-the-badge&logo=grafana&logoColor=white)
+![Status](https://img.shields.io/badge/status-active%20development-blueviolet?style=for-the-badge)
+
+</div>
 
 ---
 
@@ -12,34 +26,25 @@ Most AI demos show off a single model doing a clever trick. In production, the h
 
 ## What it does
 
-- **Unified API** — one OpenAI-compatible endpoint in front of multiple providers, so clients don't need to know or care who's actually serving the request.
-- **Automatic failover** — if the primary provider errors out, times out, or rate-limits you, the gateway retries against the next provider in the chain — including mid-stream.
-- **Per-team rate limiting & budgets** — token-bucket limits and spend caps enforced in Redis, so one team can't blow the budget or the shared rate limit for everyone else.
-- **Full observability** — every request is traced (OpenTelemetry) and measured (Prometheus), with Grafana dashboards for traffic, latency, error/fallback rate, and cost by team.
-- **Security-first** — client API keys are hashed at rest, secrets never touch logs or the repo, and every credential is environment-based.
+- 🔀 **Unified API** — one OpenAI-compatible endpoint in front of multiple providers, so clients don't need to know or care who's actually serving the request.
+- 🛟 **Automatic failover** — if the primary provider errors out or times out, the gateway retries against the next provider in the chain.
+- 🚦 **Per-key rate limiting & budgets** — Redis-backed token bucket limits and monthly spend caps, so one key can't blow the budget or starve everyone else.
+- 📊 **Full observability** — every request is traced (OpenTelemetry) and measured (Prometheus), with Grafana dashboards for traffic, latency, error/fallback rate.
+- 🔒 **Security-first** — fail-closed auth, constant-time key comparisons, secrets never touch logs or the repo.
 
 ## Architecture
 
-```
-                     ┌─────────────────────┐
-Client ─────────────▶│   FastAPI Gateway    │
-                     │  ┌───────────────┐   │
-                     │  │ Rate Limiter  │◀──┼── Redis (token bucket, budgets)
-                     │  └───────┬───────┘   │
-                     │  ┌───────▼───────┐   │
-                     │  │ Router +      │   │
-                     │  │ Fallback Chain│   │
-                     │  └───────┬───────┘   │
-                     └──────────┼───────────┘
-                                │
-              ┌─────────────────┼─────────────────┐
-              ▼                 ▼                 ▼
-          OpenAI           Anthropic           Ollama
-                                │
-                     ┌──────────▼───────────┐
-                     │ OpenTelemetry traces │
-                     │ Prometheus metrics   │──▶ Grafana dashboards
-                     └──────────────────────┘
+```mermaid
+flowchart LR
+    Client -->|API key| Auth[Auth]
+    Auth --> RateLimit[Rate Limiter\nRedis token bucket]
+    RateLimit --> Budget[Budget Check\nRedis spend tracker]
+    Budget --> Router[Fallback Router]
+    Router -->|1st try| OpenAI
+    Router -->|fallback| Anthropic
+    Router -->|fallback| Ollama
+    Router -.trace/metrics.-> Otel[OpenTelemetry + Prometheus]
+    Otel --> Grafana[Grafana Dashboards]
 ```
 
 ## Stack
@@ -54,13 +59,13 @@ Client ─────────────▶│   FastAPI Gateway    │
 
 ## Status
 
-🚧 Actively in development. Current milestone: Redis-backed rate limiting & budgets (Phase 2).
+Actively in development. Current milestone: observability (Phase 3).
 
 - [x] Project scaffold, config, security foundations
 - [x] Provider adapters (OpenAI / Anthropic / Ollama) + fallback chain
 - [x] Redis-backed rate limiting & per-key monthly budgets
-- [ ] OpenTelemetry tracing + Prometheus metrics
-- [ ] Grafana dashboards
+- [x] OpenTelemetry tracing + Prometheus metrics
+- [x] Grafana dashboards (via docker compose)
 - [ ] Streaming support with mid-stream fallback
 - [ ] Circuit breaker + retry/backoff
 - [ ] Admin API for teams/keys + audit log
@@ -80,6 +85,12 @@ X-API-Key: <key>
 ```
 
 Each key is independently rate-limited (token bucket: `RATE_LIMIT_CAPACITY` burst, `RATE_LIMIT_REFILL_PER_SEC` sustained) and budget-capped (`MONTHLY_BUDGET_USD_PER_KEY`, resets monthly). Exceeding the rate limit returns `429`; exceeding the budget returns `402`.
+
+## Observability
+
+- **`GET /metrics`** — Prometheus-format metrics: request count/latency, per-provider attempt outcomes, fallback rate.
+- **Tracing** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to send traces to any OTLP collector. Each provider attempt gets its own span with provider/model/attempt attributes. If unset, or if nothing is listening on that endpoint, the app still works fine — you'll just see a harmless retry warning in the logs.
+- **Dashboards** — `docker compose up` brings up Prometheus (`:9090`) scraping the gateway and Grafana (`:3000`, default login `admin`/`admin`) ready to point at it.
 
 ## Getting started
 
@@ -102,6 +113,8 @@ Visit `http://localhost:8000/docs` for the interactive API docs, or `http://loca
 docker compose up --build
 ```
 
+Spins up the gateway, Redis, Prometheus, and Grafana together.
+
 ## Security
 
 - **No secrets in the repo.** Real credentials live only in a local `.env` (git-ignored). `.env.example` documents every variable with placeholder values.
@@ -109,3 +122,9 @@ docker compose up --build
 - **Constant-time key comparison** (`hmac.compare_digest`) prevents timing attacks on API key checks.
 - **Structured logging** is scrubbed of tokens, keys, and Authorization headers.
 - Dependency and secret scanning are enabled on this repository.
+
+---
+
+<div align="center">
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:059669,100:1e3a8a&height=100&section=footer" width="100%"/>
+</div>
