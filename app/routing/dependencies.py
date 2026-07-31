@@ -3,10 +3,12 @@ from app.providers.anthropic_provider import AnthropicProvider
 from app.providers.base import BaseProvider
 from app.providers.ollama_provider import OllamaProvider
 from app.providers.openai_provider import OpenAIProvider
+from app.routing.circuit_breaker import CircuitBreaker
 from app.routing.fallback import FallbackRouter
 from app.routing.model_map import get_chain
 
 _PROVIDER_INSTANCES: dict[str, BaseProvider] = {}
+_BREAKERS: dict[str, CircuitBreaker] = {}
 
 
 def _get_provider(name: str) -> BaseProvider:
@@ -26,6 +28,18 @@ def _get_provider(name: str) -> BaseProvider:
     return provider
 
 
+def _get_breaker(name: str) -> CircuitBreaker:
+    if name not in _BREAKERS:
+        _BREAKERS[name] = CircuitBreaker(
+            failure_threshold=settings.circuit_breaker_failure_threshold,
+            cooldown_seconds=settings.circuit_breaker_cooldown_seconds,
+        )
+    return _BREAKERS[name]
+
+
 def build_router(virtual_model: str) -> FallbackRouter:
-    chain = [(_get_provider(name), model) for name, model in get_chain(virtual_model)]
+    chain = [
+        (_get_provider(name), model, _get_breaker(name))
+        for name, model in get_chain(virtual_model)
+    ]
     return FallbackRouter(chain)
