@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     circuit_breaker_failure_threshold: int = 3
     circuit_breaker_cooldown_seconds: float = 30.0
 
+    # Retries against the SAME provider before moving on to the next one in
+    # the fallback chain. 0 = no retry, fail over immediately.
+    provider_retry_attempts: int = 1
+    provider_retry_backoff_seconds: float = 0.5
+
     def allowed_api_keys(self) -> list[str]:
         return [k.strip() for k in self.gateway_api_keys.split(",") if k.strip()]
 

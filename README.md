@@ -82,10 +82,10 @@ Actively in development. Current milestone: resilience (Phase 4) 🟡
 - [x] OpenTelemetry tracing + Prometheus metrics
 - [x] Grafana dashboards (via docker compose)
 - [x] Circuit breaker per provider
+- [x] Retry with backoff before falling back
 - [ ] Streaming support with mid-stream fallback
-- [ ] Retry/backoff before falling back
 - [ ] Admin API for teams/keys + audit log
-- [x] Tests for rate limiter, budget tracker, metrics, circuit breaker, health endpoint
+- [x] Tests for rate limiter, budget tracker, metrics, circuit breaker, fallback/retry, health endpoint
 - [ ] CI
 
 ## 🔌 calling the api
@@ -105,6 +105,10 @@ Each key is independently rate-limited (token bucket: `RATE_LIMIT_CAPACITY` burs
 ## ⚡ circuit breaker
 
 Each provider gets its own breaker: `CIRCUIT_BREAKER_FAILURE_THRESHOLD` consecutive failures trips it open, and it stays open (skipped, no network call) for `CIRCUIT_BREAKER_COOLDOWN_SECONDS` before a single trial request is allowed through (half-open). That trial succeeding closes the circuit; failing re-opens it. This keeps a dead provider from adding latency to every single request while it's down.
+
+## 🔁 retry before fallback
+
+A single transient error (a dropped connection, a momentary 5xx) doesn't need a full provider swap. Before the router gives up on a provider and moves to the next one in the chain, it retries the *same* provider `PROVIDER_RETRY_ATTEMPTS` times with a `PROVIDER_RETRY_BACKOFF_SECONDS` pause between tries. Only after retries are exhausted does the circuit breaker record a failure and the router falls back.
 
 ## 📊 observability
 
