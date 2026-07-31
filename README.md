@@ -33,11 +33,13 @@ Every request into this gateway is a **packet looking for a route**. It hits aut
 | 🟡 | Primary failed, fallback provider served the request |
 | 🔴 | Every provider in the chain failed — `502` returned, nothing silently swallowed |
 | 🚫 | Rate limit or budget cap hit before a provider was ever called — `429` / `402` |
+| ⚫ | Provider's circuit is open (too many recent failures) — skipped without a network call |
 
 ## ⚙️ what it does
 
 - 🔀 **Unified API** — one OpenAI-compatible endpoint in front of multiple providers; clients never know who actually answered.
 - 🛟 **Automatic failover** — primary errors or times out → the router advances to the next provider in the chain, no client-side retry logic needed.
+- ⚡ **Circuit breaker per provider** — after repeated failures a provider is skipped entirely for a cooldown period instead of being retried and timing out every request.
 - 🚦 **Per-key rate limiting & budgets** — Redis-backed token bucket + monthly spend cap, enforced *before* a provider is ever called.
 - 📊 **Full observability** — every hop is traced (OpenTelemetry) and measured (Prometheus), visualized in Grafana.
 - 🔒 **Security-first** — fail-closed auth, constant-time key comparison, zero secrets in git history.
@@ -72,17 +74,18 @@ flowchart LR
 
 ## 🚧 build log
 
-Actively in development. Current milestone: observability (Phase 3) ✅
+Actively in development. Current milestone: resilience (Phase 4) 🟡
 
 - [x] Project scaffold, config, security foundations
 - [x] Provider adapters (OpenAI / Anthropic / Ollama) + fallback chain
 - [x] Redis-backed rate limiting & per-key monthly budgets
 - [x] OpenTelemetry tracing + Prometheus metrics
 - [x] Grafana dashboards (via docker compose)
+- [x] Circuit breaker per provider
 - [ ] Streaming support with mid-stream fallback
-- [ ] Circuit breaker + retry/backoff
+- [ ] Retry/backoff before falling back
 - [ ] Admin API for teams/keys + audit log
-- [x] Tests for rate limiter, budget tracker, metrics, health endpoint
+- [x] Tests for rate limiter, budget tracker, metrics, circuit breaker, health endpoint
 - [ ] CI
 
 ## 🔌 calling the api
@@ -98,6 +101,10 @@ X-API-Key: <key>
 ```
 
 Each key is independently rate-limited (token bucket: `RATE_LIMIT_CAPACITY` burst, `RATE_LIMIT_REFILL_PER_SEC` sustained) and budget-capped (`MONTHLY_BUDGET_USD_PER_KEY`, resets monthly). Exceeding the rate limit returns `429`; exceeding the budget returns `402`.
+
+## ⚡ circuit breaker
+
+Each provider gets its own breaker: `CIRCUIT_BREAKER_FAILURE_THRESHOLD` consecutive failures trips it open, and it stays open (skipped, no network call) for `CIRCUIT_BREAKER_COOLDOWN_SECONDS` before a single trial request is allowed through (half-open). That trial succeeding closes the circuit; failing re-opens it. This keeps a dead provider from adding latency to every single request while it's down.
 
 ## 📊 observability
 
