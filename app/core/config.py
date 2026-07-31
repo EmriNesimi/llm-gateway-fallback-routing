@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     # Per-API-key spend cap in USD, reset monthly.
     monthly_budget_usd_per_key: float = 5.0
 
+    # Circuit breaker: consecutive failures before a provider is skipped, and
+    # how long to wait before trying it again.
+    circuit_breaker_failure_threshold: int = 3
+    circuit_breaker_cooldown_seconds: float = 30.0
+
     def allowed_api_keys(self) -> list[str]:
         return [k.strip() for k in self.gateway_api_keys.split(",") if k.strip()]
 
