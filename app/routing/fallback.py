@@ -1,10 +1,11 @@
 import asyncio
 import logging
+from collections.abc import AsyncIterator
 
 from app.core.config import settings
 from app.observability.metrics import FALLBACK_TRIGGERED, PROVIDER_ATTEMPTS
 from app.observability.tracing import tracer
-from app.providers.base import BaseProvider, ChatMessage, ChatResponse, ProviderError
+from app.providers.base import BaseProvider, ChatMessage, ChatResponse, ProviderError, StreamChunk
 from app.routing.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger("gateway.router")
@@ -83,6 +84,100 @@ class FallbackRouter:
             breaker.record_failure()
             logger.warning("provider %s exhausted retries, falling back: %s", provider.name, last_error)
             errors.append(f"{provider.name}: {last_error}")
+
+        if not tried_any:
+            logger.error("all providers had open circuits, nothing was attempted")
+
+        raise AllProvidersFailedError(
+            f"all providers in fallback chain failed: {'; '.join(errors)}"
+        )
+
+    async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[StreamChunk]:
+        """Like `chat`, but streams chunks as they arrive.
+
+        Fallback only works up to the FIRST chunk of a provider's response: we
+        buffer it before yielding anything downstream, so if a provider fails
+        before producing any output we can still try the next one. Once a
+        provider has started streaming to the client, we're committed to it —
+        a mid-stream failure at that point ends the response rather than
+        silently switching providers partway through an answer.
+        """
+        errors: list[str] = []
+        tried_any = False
+
+        for attempt, (provider, model, breaker) in enumerate(self._chain):
+            if not breaker.allow_request():
+                logger.warning("provider %s circuit open, skipping", provider.name)
+                errors.append(f"{provider.name}: circuit open")
+                continue
+
+            tried_any = True
+            last_error: ProviderError | None = None
+            committed = False
+
+            for retry in range(self._retry_attempts + 1):
+                failure: ProviderError | None = None
+
+                with tracer.start_as_current_span(f"provider.{provider.name}.chat_stream") as span:
+                    span.set_attribute("gateway.provider", provider.name)
+                    span.set_attribute("gateway.model", model)
+                    span.set_attribute("gateway.attempt", attempt)
+                    span.set_attribute("gateway.retry", retry)
+
+                    generator = provider.chat_stream(model=model, messages=messages)
+                    try:
+                        first_chunk = await generator.__anext__()
+                    except StopAsyncIteration:
+                        failure = ProviderError("stream produced no chunks")
+                    except ProviderError as exc:
+                        failure = exc
+
+                    if failure is not None:
+                        last_error = failure
+                        span.set_attribute("gateway.error", str(failure))
+                        PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="error").inc()
+                        if retry < self._retry_attempts:
+                            logger.warning(
+                                "provider %s failed before first chunk (retry %d/%d): %s",
+                                provider.name,
+                                retry + 1,
+                                self._retry_attempts,
+                                failure,
+                            )
+                            await asyncio.sleep(self._retry_backoff_seconds)
+                        continue
+
+                    # Committed: first chunk arrived, hand it and everything after to the caller.
+                    committed = True
+                    breaker.record_success()
+                    PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="success").inc()
+                    if attempt > 0:
+                        FALLBACK_TRIGGERED.inc()
+
+                    yield first_chunk
+                    try:
+                        async for chunk in generator:
+                            yield chunk
+                    except ProviderError as exc:
+                        breaker.record_failure()
+                        logger.error(
+                            "provider %s failed mid-stream after committing: %s",
+                            provider.name,
+                            exc,
+                        )
+                        raise AllProvidersFailedError(
+                            f"{provider.name} failed mid-stream: {exc}"
+                        ) from exc
+                    return
+
+            if not committed:
+                breaker.record_failure()
+                logger.warning(
+                    "provider %s exhausted retries before first chunk, falling back: %s",
+                    provider.name,
+                    last_error,
+                )
+                errors.append(f"{provider.name}: {last_error}")
 
         if not tried_any:
             logger.error("all providers had open circuits, nothing was attempted")
