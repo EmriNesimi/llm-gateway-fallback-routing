@@ -154,9 +154,13 @@ class FallbackRouter:
                     if attempt > 0:
                         FALLBACK_TRIGGERED.inc()
 
+                    first_chunk.provider = provider.name
+                    first_chunk.model = model
                     yield first_chunk
                     try:
                         async for chunk in generator:
+                            chunk.provider = provider.name
+                            chunk.model = model
                             yield chunk
                     except ProviderError as exc:
                         breaker.record_failure()

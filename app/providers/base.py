@@ -21,12 +21,19 @@ class ChatResponse:
 @dataclass
 class StreamChunk:
     """One piece of a streamed response. `done` marks the final chunk, which
-    carries the usage totals (providers report token counts once, at the end)."""
+    carries the usage totals (providers report token counts once, at the end).
+
+    `provider`/`model` are left blank by the provider adapters themselves —
+    the router fills them in once a provider is committed to, since that's
+    the only place that knows which provider ended up serving the request.
+    """
 
     content: str
     done: bool = False
     input_tokens: int = 0
     output_tokens: int = 0
+    provider: str = ""
+    model: str = ""
 
 
 class ProviderError(Exception):
