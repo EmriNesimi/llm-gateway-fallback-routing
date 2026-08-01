@@ -83,9 +83,9 @@ Actively in development. Current milestone: resilience (Phase 4) 🟡
 - [x] Grafana dashboards (via docker compose)
 - [x] Circuit breaker per provider
 - [x] Retry with backoff before falling back
-- [ ] Streaming support with mid-stream fallback
+- [x] Streaming support with fallback-before-first-chunk
 - [ ] Admin API for teams/keys + audit log
-- [x] Tests for rate limiter, budget tracker, metrics, circuit breaker, fallback/retry, health endpoint
+- [x] Tests for rate limiter, budget tracker, metrics, circuit breaker, fallback/retry, streaming, health endpoint
 - [ ] CI
 
 ## 🔌 calling the api
@@ -101,6 +101,15 @@ X-API-Key: <key>
 ```
 
 Each key is independently rate-limited (token bucket: `RATE_LIMIT_CAPACITY` burst, `RATE_LIMIT_REFILL_PER_SEC` sustained) and budget-capped (`MONTHLY_BUDGET_USD_PER_KEY`, resets monthly). Exceeding the rate limit returns `429`; exceeding the budget returns `402`.
+
+`POST /v1/chat/stream` takes the same request body and auth, but streams the response back as Server-Sent Events (`text/event-stream`) — each `data:` line is a JSON chunk, ending with `data: [DONE]`.
+
+## 📡 streaming fallback
+
+Fallback and streaming don't naturally get along: once a client has started receiving tokens, silently switching providers mid-answer would produce garbled output. This gateway resolves it by **buffering only the first chunk** of a provider's response before committing:
+
+- If a provider fails (or its circuit is open) before it produces any output, the router retries it, then falls back to the next provider — the client never sees a failed attempt.
+- Once a provider's first chunk has been sent to the client, the gateway is committed to it. A failure *after* that point ends the stream with an `event: error` SSE message rather than switching providers mid-answer.
 
 ## ⚡ circuit breaker
 
