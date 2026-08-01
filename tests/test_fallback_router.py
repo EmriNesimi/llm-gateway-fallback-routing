@@ -19,6 +19,10 @@ class FakeProvider(BaseProvider):
             content="ok", provider=self.name, model=model, input_tokens=1, output_tokens=1
         )
 
+    async def chat_stream(self, model, messages):
+        raise NotImplementedError("not exercised by these tests")
+        yield  # pragma: no cover - makes this an async generator
+
 
 def _breaker():
     return CircuitBreaker(failure_threshold=99, cooldown_seconds=60)
