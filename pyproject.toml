@@ -3,3 +3,10 @@
 # can import the `app` package. Without this the test suite fails to collect.
 pythonpath = ["."]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
