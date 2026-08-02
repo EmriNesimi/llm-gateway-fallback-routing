@@ -8,7 +8,8 @@ from fastapi.responses import StreamingResponse
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from app.budget.dependency import enforce_budget, tracker as budget_tracker
+from app.budget.dependency import enforce_budget
+from app.budget.dependency import tracker as budget_tracker
 from app.budget.pricing import estimate_cost_usd
 from app.observability.metrics import REQUEST_COUNT, REQUEST_LATENCY
 from app.observability.tracing import configure_tracing

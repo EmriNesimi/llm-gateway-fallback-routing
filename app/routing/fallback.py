@@ -82,7 +82,9 @@ class FallbackRouter:
                             await asyncio.sleep(self._retry_backoff_seconds)
 
             breaker.record_failure()
-            logger.warning("provider %s exhausted retries, falling back: %s", provider.name, last_error)
+            logger.warning(
+                "provider %s exhausted retries, falling back: %s", provider.name, last_error
+            )
             errors.append(f"{provider.name}: {last_error}")
 
         if not tried_any:
