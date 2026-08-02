@@ -6,6 +6,7 @@
 
 <br/><br/>
 
+[![CI](https://github.com/EmriNesimi/llm-gateway-fallback-routing/actions/workflows/ci.yml/badge.svg)](https://github.com/EmriNesimi/llm-gateway-fallback-routing/actions/workflows/ci.yml)
 [![Python](https://img.shields.io/badge/Python-3.12-0a0e27?style=for-the-badge&logo=python&logoColor=00ff9d&labelColor=0a0e27)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0a0e27?style=for-the-badge&logo=fastapi&logoColor=00ff9d&labelColor=0a0e27)](https://fastapi.tiangolo.com/)
 [![Redis](https://img.shields.io/badge/Redis-0a0e27?style=for-the-badge&logo=redis&logoColor=00ff9d&labelColor=0a0e27)](https://redis.io/)
@@ -86,7 +87,7 @@ Actively in development. Current milestone: resilience (Phase 4) 🟡
 - [x] Streaming support with fallback-before-first-chunk
 - [ ] Admin API for teams/keys + audit log
 - [x] Tests for rate limiter, budget tracker, metrics, circuit breaker, fallback/retry, streaming, health endpoint
-- [ ] CI
+- [x] CI (GitHub Actions: lint + tests + coverage on every push/PR)
 
 ## 🔌 calling the api
 
@@ -139,6 +140,15 @@ uvicorn app.main:app --reload
 ```
 
 Visit `http://localhost:8000/docs` for the interactive API docs, or `http://localhost:8000/healthz` for a health check.
+
+### running lint & tests locally
+
+```bash
+ruff check .
+pytest -q --cov=app --cov-report=term-missing
+```
+
+Same commands CI runs on every push/PR to `main`.
 
 ### with docker
 
