@@ -67,6 +67,7 @@ flowchart LR
 |---|---|
 | Backend | Python, FastAPI |
 | Rate limiting / budgets | Redis (token bucket) |
+| API keys / audit log | SQLAlchemy async — SQLite by default, Postgres in production |
 | Observability | OpenTelemetry, Prometheus |
 | Dashboards | Grafana |
 | Providers | OpenAI, Anthropic, Ollama |
@@ -75,7 +76,7 @@ flowchart LR
 
 ## 🚧 build log
 
-Actively in development. Current milestone: resilience (Phase 4) 🟡
+Phase 4 (resilience) complete ✅ — next up: production polish (retries on the HTTP client level, alerting, deploy configs).
 
 - [x] Project scaffold, config, security foundations
 - [x] Provider adapters (OpenAI / Anthropic / Ollama) + fallback chain
@@ -85,8 +86,8 @@ Actively in development. Current milestone: resilience (Phase 4) 🟡
 - [x] Circuit breaker per provider
 - [x] Retry with backoff before falling back
 - [x] Streaming support with fallback-before-first-chunk
-- [ ] Admin API for teams/keys + audit log
-- [x] Tests for rate limiter, budget tracker, metrics, circuit breaker, fallback/retry, streaming, health endpoint
+- [x] Admin API for teams/keys + audit log
+- [x] Tests for rate limiter, budget tracker, metrics, circuit breaker, fallback/retry, streaming, admin API, audit log, health endpoint
 - [x] CI (GitHub Actions: lint + tests + coverage on every push/PR)
 
 ## 🔌 calling the api
@@ -119,6 +120,20 @@ Each provider gets its own breaker: `CIRCUIT_BREAKER_FAILURE_THRESHOLD` consecut
 ## 🔁 retry before fallback
 
 A single transient error (a dropped connection, a momentary 5xx) doesn't need a full provider swap. Before the router gives up on a provider and moves to the next one in the chain, it retries the *same* provider `PROVIDER_RETRY_ATTEMPTS` times with a `PROVIDER_RETRY_BACKOFF_SECONDS` pause between tries. Only after retries are exhausted does the circuit breaker record a failure and the router falls back.
+
+## 🔑 admin api & audit log
+
+Client API keys can be issued and revoked without editing `.env`, via an admin API gated by a separate `ADMIN_API_KEY` secret (higher trust level than client keys — a leaked client key can't be used to mint more keys):
+
+```
+POST   /admin/keys        {"team": "acme"}   → {"api_key": "...", "team": "acme"}  (shown once)
+GET    /admin/keys                            → [{"id", "team", "created_at", "revoked"}, ...]
+DELETE /admin/keys/{id}                        → revokes the key immediately
+```
+
+Pass the admin secret via `X-Admin-Key`. Like the client-facing auth, this fails closed (`503`) if `ADMIN_API_KEY` isn't set, rather than being left open.
+
+Every `/v1/chat` and `/v1/chat/stream` request — success or failure — is written to an **audit log** (SQLite by default, Postgres via `DATABASE_URL` in production): timestamp, hashed API key, team, model, provider, outcome, tokens, cost, and latency. That's the "why did this fail at 2am" record — keys issued through the admin API get their team attributed automatically; keys from the legacy `GATEWAY_API_KEYS` env var are logged under `team: "unlinked"`.
 
 ## 📊 observability
 
