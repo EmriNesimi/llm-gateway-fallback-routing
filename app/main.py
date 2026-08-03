@@ -9,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
+from app.admin.routes import router as admin_router
 from app.budget.dependency import enforce_budget
 from app.budget.dependency import tracker as budget_tracker
 from app.budget.pricing import estimate_cost_usd
@@ -38,6 +39,7 @@ app = FastAPI(
 )
 
 FastAPIInstrumentor.instrument_app(app)
+app.include_router(admin_router)
 
 
 @app.get("/healthz")

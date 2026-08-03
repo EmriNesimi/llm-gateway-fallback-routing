@@ -1,16 +1,22 @@
-"""Lightweight client API key auth for gateway endpoints.
+"""Client API key auth for gateway endpoints.
 
-Phase 1 keeps this deliberately simple: accepted client keys are configured via
-the GATEWAY_API_KEYS env var and compared in constant time. Full per-team key
-issuance and hashed-at-rest storage (see app/security/api_keys.py) lands later.
-The important property now is that /v1/chat is not open to the world, so nobody
-who can reach the port can burn the operator's OpenAI/Anthropic credits.
+Two sources of valid keys, checked in order:
+1. The GATEWAY_API_KEYS env var (legacy/simple — good for a single operator).
+2. Keys issued through the admin API and stored (hashed) in the DB, which
+   support per-team attribution and revocation.
+Either source being satisfied is enough; this lets an operator start with env
+keys and migrate to admin-issued keys without a breaking change.
 """
 import hmac
 
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.db.models import ApiKeyRecord
+from app.db.session import get_session
+from app.security.api_keys import hash_key
 
 
 def _extract_key(authorization: str | None, x_api_key: str | None) -> str | None:
@@ -21,19 +27,24 @@ def _extract_key(authorization: str | None, x_api_key: str | None) -> str | None
     return None
 
 
+async def _is_valid_db_key(presented: str, session: AsyncSession) -> bool:
+    result = await session.execute(
+        select(ApiKeyRecord).where(
+            ApiKeyRecord.key_hash == hash_key(presented),
+            ApiKeyRecord.revoked.is_(False),
+        )
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def require_api_key(
     authorization: str | None = Header(default=None),
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
+    session: AsyncSession = Depends(get_session),
 ) -> str:
     allowed = settings.allowed_api_keys()
-    if not allowed:
-        # Fail closed: without configured keys we refuse rather than serve openly.
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="gateway API key auth is not configured",
-        )
-
     presented = _extract_key(authorization, x_api_key)
+
     if not presented:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -43,6 +54,17 @@ async def require_api_key(
     for key in allowed:
         if hmac.compare_digest(presented, key):
             return presented
+
+    if await _is_valid_db_key(presented, session):
+        return presented
+
+    if not allowed:
+        # No env keys configured and no matching DB key: fail closed rather
+        # than leaving the endpoint open if the admin API hasn't been used yet.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="gateway API key auth is not configured",
+        )
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
