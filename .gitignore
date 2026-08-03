@@ -30,3 +30,6 @@ data/
 grafana-data/
 prometheus-data/
 postgres-data/
+
+# Local SQLite database (default DATABASE_URL target)
+*.db

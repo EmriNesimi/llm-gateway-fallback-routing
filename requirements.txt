@@ -10,6 +10,9 @@ opentelemetry-sdk>=1.25
 opentelemetry-exporter-otlp>=1.25
 opentelemetry-instrumentation-fastapi>=0.46b0
 prometheus-client>=0.20
+sqlalchemy[asyncio]>=2.0
+aiosqlite>=0.20
+asyncpg>=0.29
 
 # providers
 openai>=1.35

@@ -15,7 +15,13 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
 
     redis_url: str = "redis://localhost:6379/0"
-    database_url: str | None = None
+    # SQLite by default so the gateway runs with zero external setup; point at
+    # Postgres in production via DATABASE_URL (e.g. postgresql+asyncpg://...).
+    database_url: str = "sqlite+aiosqlite:///./gateway.db"
+
+    # Shared secret for the admin API (key issuance/revocation). Separate from
+    # GATEWAY_API_KEYS since admin access is a different trust level.
+    admin_api_key: str | None = None
 
     gateway_secret_key: str = _INSECURE_SECRET_DEFAULT
     # Comma-separated client API keys accepted by this gateway. When empty,
@@ -54,6 +60,11 @@ class Settings(BaseSettings):
             logger.warning(
                 "GATEWAY_API_KEYS is empty; authenticated endpoints will refuse "
                 "requests. Set at least one client key in .env to enable /v1/chat."
+            )
+        if not self.admin_api_key:
+            logger.warning(
+                "ADMIN_API_KEY is not set; the admin API (key issuance/revocation) "
+                "will refuse all requests rather than being left open."
             )
 
 
