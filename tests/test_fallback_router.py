@@ -24,6 +24,28 @@ class FakeProvider(BaseProvider):
         yield  # pragma: no cover - makes this an async generator
 
 
+class DatedSnapshotProvider(BaseProvider):
+    """Simulates a provider that echoes back a dated snapshot instead of the
+    requested model (e.g. OpenAI returning "gpt-4o-mini-2024-07-18" for a
+    "gpt-4o-mini" request) — this broke cost lookups until the router was
+    fixed to bill against the requested model, not the echoed one."""
+
+    name = "dated"
+
+    async def chat(self, model, messages):
+        return ChatResponse(
+            content="ok",
+            provider=self.name,
+            model=f"{model}-2024-07-18",
+            input_tokens=1,
+            output_tokens=1,
+        )
+
+    async def chat_stream(self, model, messages):
+        raise NotImplementedError("not exercised by these tests")
+        yield  # pragma: no cover - makes this an async generator
+
+
 def _breaker():
     return CircuitBreaker(failure_threshold=99, cooldown_seconds=60)
 
@@ -70,3 +92,17 @@ async def test_raises_when_all_providers_exhausted():
 
     with pytest.raises(AllProvidersFailedError):
         await router.chat([ChatMessage(role="user", content="hi")])
+
+
+@pytest.mark.asyncio
+async def test_result_model_is_requested_model_not_providers_echo():
+    provider = DatedSnapshotProvider()
+    router = FallbackRouter(
+        chain=[(provider, "gpt-4o-mini", _breaker())],
+        retry_attempts=0,
+        retry_backoff_seconds=0,
+    )
+
+    result = await router.chat([ChatMessage(role="user", content="hi")])
+
+    assert result.model == "gpt-4o-mini"

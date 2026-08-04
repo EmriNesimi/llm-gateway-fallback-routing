@@ -62,6 +62,11 @@ class FallbackRouter:
                     span.set_attribute("gateway.retry", retry)
                     try:
                         result = await provider.chat(model=model, messages=messages)
+                        # Bill/log against the model we actually requested (e.g.
+                        # "gpt-4o-mini"), not whatever dated snapshot the provider
+                        # echoes back (e.g. "gpt-4o-mini-2024-07-18") — otherwise
+                        # cost lookups in app/budget/pricing.py silently miss.
+                        result.model = model
                         breaker.record_success()
                         PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="success").inc()
                         if attempt > 0:
