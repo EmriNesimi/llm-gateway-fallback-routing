@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src="https://capsule-render.vercel.app/api?type=soft&color=0:0a0e27,50:0f3443,100:00d9a3&height=200&section=header&text=LLM%20GATEWAY&fontSize=54&fontColor=00ff9d&fontAlignY=35&desc=%3E%20route%20/%20fallback%20/%20throttle%20/%20observe&descAlignY=55&descSize=18&descColor=7dffcf&animation=twinkling" width="100%"/>
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:0a0e27,50:0f3443,100:00d9a3&height=200&section=header&text=LLM%20GATEWAY&fontSize=54&fontColor=00ff9d&fontAlignY=35&desc=%3E%20route%20/%20fallback%20/%20throttle%20/%20audit%20/%20observe&descAlignY=55&descSize=18&descColor=7dffcf&animation=fadeIn" width="100%"/>
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=500&size=16&pause=900&color=00E5A0&background=0A0E27&center=true&vCenter=true&width=780&height=110&lines=%24+curl+-X+POST+%2Fv1%2Fchat+-H+%22Authorization%3A+Bearer+...%22;%5Bgateway%5D+routing+request+%E2%86%92+openai%3Agpt-4o-mini;%5Bopenai%5D+429+rate_limited+%E2%86%92+falling+back...;%5Banthropic%5D+200+OK+%E2%86%90+response+served+in+412ms;%5Bbudget%5D+key+sk_live_%2A%2A%2A8f2c+%E2%80%94+%240.0031+recorded;%5Bmetrics%5D+fallback_triggered_total%2B%2B+%7C+scraped+by+prometheus" alt="terminal typing animation" />
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=500&size=16&pause=900&color=00E5A0&background=0A0E27&center=true&vCenter=true&width=820&height=130&lines=%24+curl+-X+POST+%2Fv1%2Fchat+-H+%22Authorization%3A+Bearer+...%22;%5Bgateway%5D+routing+request+%E2%86%92+openai%3Agpt-4o-mini;%5Bopenai%5D+429+rate_limited+%E2%86%92+falling+back...;%5Banthropic%5D+200+OK+%E2%86%90+response+served+in+412ms;%5Bbreaker%5D+openai+circuit+OPEN+%E2%80%94+cooling+down+30s;%5Badmin%5D+POST+%2Fadmin%2Fkeys+%E2%86%92+team%3Ademo-team+key+issued;%5Baudit%5D+row+written%3A+team%3Ddemo-team+cost%3D%240.0031+412ms;%5Bmetrics%5D+fallback_triggered_total%2B%2B+%7C+scraped+by+prometheus" alt="terminal typing animation" />
 
 <br/><br/>
 
@@ -10,6 +10,8 @@
 [![Python](https://img.shields.io/badge/Python-3.12-0a0e27?style=for-the-badge&logo=python&logoColor=00ff9d&labelColor=0a0e27)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0a0e27?style=for-the-badge&logo=fastapi&logoColor=00ff9d&labelColor=0a0e27)](https://fastapi.tiangolo.com/)
 [![Redis](https://img.shields.io/badge/Redis-0a0e27?style=for-the-badge&logo=redis&logoColor=00ff9d&labelColor=0a0e27)](https://redis.io/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-0a0e27?style=for-the-badge&logo=postgresql&logoColor=00ff9d&labelColor=0a0e27)](https://www.postgresql.org/)
+[![SQLAlchemy](https://img.shields.io/badge/SQLAlchemy-0a0e27?style=for-the-badge&logo=sqlalchemy&logoColor=00ff9d&labelColor=0a0e27)](https://www.sqlalchemy.org/)
 [![OpenTelemetry](https://img.shields.io/badge/OpenTelemetry-0a0e27?style=for-the-badge&logo=opentelemetry&logoColor=00ff9d&labelColor=0a0e27)](https://opentelemetry.io/)
 [![Prometheus](https://img.shields.io/badge/Prometheus-0a0e27?style=for-the-badge&logo=prometheus&logoColor=00ff9d&labelColor=0a0e27)](https://prometheus.io/)
 [![Grafana](https://img.shields.io/badge/Grafana-0a0e27?style=for-the-badge&logo=grafana&logoColor=00ff9d&labelColor=0a0e27)](https://grafana.com/)
@@ -171,7 +173,29 @@ Same commands CI runs on every push/PR to `main`.
 docker compose up --build
 ```
 
-Spins up the gateway, Redis, Prometheus, and Grafana together.
+Spins up the gateway, Redis, Prometheus, and Grafana together. Add `postgres` to `DATABASE_URL` in `.env` (`postgresql+asyncpg://gateway:changeme@postgres:5432/gateway`) to back the admin API/audit log with the bundled Postgres service instead of SQLite.
+
+### 🎬 run the guided demo
+
+With the gateway up and `ADMIN_API_KEY` set, `scripts/demo.sh` walks the whole system end-to-end — issuing a key, routing a real request, tripping the rate limiter, and pulling the audit trail back out:
+
+```bash
+DEMO_ADMIN_KEY=<your ADMIN_API_KEY> ./scripts/demo.sh
+```
+
+```
+=== 2. Issue a fresh client key via the admin API ===
+{ "api_key": "5992baf...", "team": "demo-team" }
+
+=== 4. Trip the rate limiter (bursting past RATE_LIMIT_CAPACITY) ===
+request 01 -> 200
+request 02 -> 200
+request 03 -> 429
+-> Rate limit engaged (429) after 3 requests.
+
+=== 6. Review the audit trail for this demo ===
+[ { "team": "demo-team", "provider": "openai", "outcome": "success", "cost_usd": 6.6e-06, ... } ]
+```
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=0:0a0e27,100:00d9a3&height=3&width=100%25" width="100%"/>
 
