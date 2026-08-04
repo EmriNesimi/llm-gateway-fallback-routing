@@ -9,6 +9,26 @@ services:
       timeout: 3s
       retries: 5
 
+  # Optional: the gateway defaults to a local SQLite file, so Postgres is not
+  # required to run the stack. Point DATABASE_URL in .env at this service
+  # (postgresql+asyncpg://gateway:changeme@postgres:5432/gateway) to use it
+  # for the admin API / audit log instead.
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=gateway
+      - POSTGRES_PASSWORD=changeme
+      - POSTGRES_DB=gateway
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gateway"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   gateway:
     build: .
     ports:
@@ -36,3 +56,6 @@ services:
       - GF_SECURITY_ADMIN_PASSWORD=admin
     depends_on:
       - prometheus
+
+volumes:
+  postgres-data:
