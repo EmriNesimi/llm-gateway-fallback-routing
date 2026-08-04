@@ -1,12 +1,12 @@
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.auth import require_admin_key
-from app.admin.schemas import ApiKeyOut, CreateKeyRequest, CreateKeyResponse
-from app.db.models import ApiKeyRecord
+from app.admin.schemas import ApiKeyOut, AuditLogEntryOut, CreateKeyRequest, CreateKeyResponse
+from app.db.models import ApiKeyRecord, AuditLogEntry
 from app.db.session import get_session
 from app.security.api_keys import hash_key
 
@@ -39,3 +39,18 @@ async def revoke_key(key_id: int, session: AsyncSession = Depends(get_session)) 
     record.revoked = True
     await session.commit()
     return {"id": key_id, "revoked": True}
+
+
+@router.get("/audit-log", response_model=list[AuditLogEntryOut])
+async def list_audit_log(
+    team: str | None = None,
+    limit: int = 100,
+    session: AsyncSession = Depends(get_session),
+) -> list[AuditLogEntry]:
+    limit = max(1, min(limit, 1000))
+    query = select(AuditLogEntry).order_by(desc(AuditLogEntry.created_at)).limit(limit)
+    if team:
+        query = query.where(AuditLogEntry.team == team)
+
+    result = await session.execute(query)
+    return list(result.scalars().all())
