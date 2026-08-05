@@ -8,8 +8,8 @@ from app.providers.base import BaseProvider, ChatMessage, ChatResponse, Provider
 class AnthropicProvider(BaseProvider):
     name = "anthropic"
 
-    def __init__(self, api_key: str):
-        self._client = AsyncAnthropic(api_key=api_key)
+    def __init__(self, api_key: str, timeout_seconds: float = 30.0):
+        self._client = AsyncAnthropic(api_key=api_key, timeout=timeout_seconds)
 
     async def chat(self, model: str, messages: list[ChatMessage]) -> ChatResponse:
         try:

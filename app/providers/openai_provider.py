@@ -8,8 +8,8 @@ from app.providers.base import BaseProvider, ChatMessage, ChatResponse, Provider
 class OpenAIProvider(BaseProvider):
     name = "openai"
 
-    def __init__(self, api_key: str):
-        self._client = AsyncOpenAI(api_key=api_key)
+    def __init__(self, api_key: str, timeout_seconds: float = 30.0):
+        self._client = AsyncOpenAI(api_key=api_key, timeout=timeout_seconds)
 
     async def chat(self, model: str, messages: list[ChatMessage]) -> ChatResponse:
         try:

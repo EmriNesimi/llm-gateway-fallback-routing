@@ -16,11 +16,20 @@ def _get_provider(name: str) -> BaseProvider:
         return _PROVIDER_INSTANCES[name]
 
     if name == "openai":
-        provider: BaseProvider = OpenAIProvider(api_key=settings.openai_api_key or "")
+        provider: BaseProvider = OpenAIProvider(
+            api_key=settings.openai_api_key or "",
+            timeout_seconds=settings.provider_request_timeout_seconds,
+        )
     elif name == "anthropic":
-        provider = AnthropicProvider(api_key=settings.anthropic_api_key or "")
+        provider = AnthropicProvider(
+            api_key=settings.anthropic_api_key or "",
+            timeout_seconds=settings.provider_request_timeout_seconds,
+        )
     elif name == "ollama":
-        provider = OllamaProvider(base_url=settings.ollama_base_url)
+        provider = OllamaProvider(
+            base_url=settings.ollama_base_url,
+            timeout_seconds=settings.ollama_request_timeout_seconds,
+        )
     else:
         raise ValueError(f"unknown provider: {name}")
 

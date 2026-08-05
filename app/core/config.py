@@ -47,6 +47,14 @@ class Settings(BaseSettings):
     provider_retry_attempts: int = 1
     provider_retry_backoff_seconds: float = 0.5
 
+    # Per-request timeout to each provider's HTTP client. Without this, a
+    # hung upstream connection could block a request (and its retries/
+    # fallback) far longer than any caller would reasonably wait. Ollama gets
+    # a separate, longer default since local generation is often slower than
+    # a hosted API.
+    provider_request_timeout_seconds: float = 30.0
+    ollama_request_timeout_seconds: float = 60.0
+
     def allowed_api_keys(self) -> list[str]:
         return [k.strip() for k in self.gateway_api_keys.split(",") if k.strip()]
 

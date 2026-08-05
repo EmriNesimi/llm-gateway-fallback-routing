@@ -9,8 +9,9 @@ from app.providers.base import BaseProvider, ChatMessage, ChatResponse, Provider
 class OllamaProvider(BaseProvider):
     name = "ollama"
 
-    def __init__(self, base_url: str):
+    def __init__(self, base_url: str, timeout_seconds: float = 60.0):
         self._base_url = base_url.rstrip("/")
+        self._timeout_seconds = timeout_seconds
 
     async def chat(self, model: str, messages: list[ChatMessage]) -> ChatResponse:
         payload = {
@@ -20,7 +21,7 @@ class OllamaProvider(BaseProvider):
         }
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
                 response = await client.post(f"{self._base_url}/api/chat", json=payload)
                 response.raise_for_status()
         except httpx.HTTPError as exc:
@@ -46,7 +47,7 @@ class OllamaProvider(BaseProvider):
         }
 
         try:
-            async with httpx.AsyncClient(timeout=60.0) as client:
+            async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
                 async with client.stream(
                     "POST", f"{self._base_url}/api/chat", json=payload
                 ) as response:
