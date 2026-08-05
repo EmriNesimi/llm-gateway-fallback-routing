@@ -8,13 +8,15 @@ from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+from sqlalchemy import text
 
 from app.admin.routes import router as admin_router
 from app.budget.dependency import enforce_budget
 from app.budget.dependency import tracker as budget_tracker
 from app.budget.pricing import estimate_cost_usd
+from app.core.redis_client import get_redis
 from app.db.audit import record_audit_log
-from app.db.session import init_db
+from app.db.session import async_session, init_db
 from app.observability.metrics import REQUEST_COUNT, REQUEST_LATENCY
 from app.observability.tracing import configure_tracing
 from app.providers.base import ChatMessage
@@ -44,7 +46,39 @@ app.include_router(admin_router)
 
 @app.get("/healthz")
 async def healthz():
+    """Liveness: is the process up? No dependency checks — used by orchestrators
+    to decide whether to restart the container."""
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+async def readyz():
+    """Readiness: can this instance actually serve traffic? Checks the
+    dependencies /v1/chat needs (Redis for rate limits/budgets, the DB for
+    the admin API/audit log) so a load balancer can route around an instance
+    that's up but can't reach them."""
+    checks: dict[str, str] = {}
+
+    try:
+        await get_redis().ping()
+        checks["redis"] = "ok"
+    except Exception as exc:  # noqa: BLE001 - report any failure, not just known types
+        checks["redis"] = f"error: {exc}"
+
+    try:
+        async with async_session() as session:
+            await session.execute(text("SELECT 1"))
+        checks["database"] = "ok"
+    except Exception as exc:  # noqa: BLE001
+        checks["database"] = f"error: {exc}"
+
+    healthy = all(v == "ok" for v in checks.values())
+    status_code = 200 if healthy else 503
+    return Response(
+        content=json.dumps({"status": "ok" if healthy else "unavailable", "checks": checks}),
+        status_code=status_code,
+        media_type="application/json",
+    )
 
 
 @app.get("/")
