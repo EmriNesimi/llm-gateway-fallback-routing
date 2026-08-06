@@ -1,4 +1,4 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, Response, status
 
 from app.budget.tracker import BudgetTracker
 from app.core.config import settings
@@ -11,10 +11,26 @@ tracker = BudgetTracker(
 )
 
 
-async def enforce_budget(api_key: str = Depends(enforce_rate_limit)) -> str:
-    if not await tracker.has_budget(api_key):
+async def enforce_budget(
+    request: Request,
+    response: Response,
+    api_key: str = Depends(enforce_rate_limit),
+) -> str:
+    spent = await tracker.spent_usd(api_key)
+    remaining = max(0.0, settings.monthly_budget_usd_per_key - spent)
+
+    # Stashed for endpoints (like streaming) that build their own Response
+    # object and can't rely on FastAPI merging headers set here automatically.
+    # Reflects budget remaining as of admission — a streaming response can't
+    # know this request's own cost until after it's fully sent.
+    request.state.budget_remaining_usd = remaining
+
+    if spent >= settings.monthly_budget_usd_per_key:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="monthly budget exceeded for this API key",
+            headers={"X-Budget-Remaining-USD": "0.0000"},
         )
+
+    response.headers["X-Budget-Remaining-USD"] = f"{remaining:.4f}"
     return api_key

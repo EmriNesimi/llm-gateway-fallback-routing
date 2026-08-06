@@ -208,8 +208,9 @@ async def chat_stream(
         _event_stream(router, messages, api_key, request.model),
         media_type="text/event-stream",
     )
-    # enforce_rate_limit (via enforce_budget) stashes these on request.state since
-    # this endpoint builds its own Response, bypassing FastAPI's usual header merge.
+    # enforce_rate_limit/enforce_budget stash these on request.state since this
+    # endpoint builds its own Response, bypassing FastAPI's usual header merge.
     response.headers["X-RateLimit-Limit"] = str(http_request.state.rate_limit_limit)
     response.headers["X-RateLimit-Remaining"] = str(http_request.state.rate_limit_remaining)
+    response.headers["X-Budget-Remaining-USD"] = f"{http_request.state.budget_remaining_usd:.4f}"
     return response
