@@ -4,7 +4,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import StreamingResponse
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -199,10 +199,17 @@ async def _event_stream(
 
 
 @app.post("/v1/chat/stream")
-async def chat_stream(request: ChatRequest, api_key: str = Depends(enforce_budget)):
+async def chat_stream(
+    request: ChatRequest, http_request: Request, api_key: str = Depends(enforce_budget)
+):
     router = build_router(request.model)
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
-    return StreamingResponse(
+    response = StreamingResponse(
         _event_stream(router, messages, api_key, request.model),
         media_type="text/event-stream",
     )
+    # enforce_rate_limit (via enforce_budget) stashes these on request.state since
+    # this endpoint builds its own Response, bypassing FastAPI's usual header merge.
+    response.headers["X-RateLimit-Limit"] = str(http_request.state.rate_limit_limit)
+    response.headers["X-RateLimit-Remaining"] = str(http_request.state.rate_limit_remaining)
+    return response
