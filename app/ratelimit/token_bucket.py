@@ -49,9 +49,19 @@ class TokenBucketLimiter:
         self._refill_rate = refill_rate
         self._script = redis.register_script(_LUA_TOKEN_BUCKET)
 
-    async def allow(self, key: str, cost: int = 1) -> bool:
-        allowed, _remaining = await self._script(
+    async def check(self, key: str, cost: int = 1) -> tuple[bool, float]:
+        """Like `allow`, but also returns the tokens remaining after this
+        check — used to surface X-RateLimit-Remaining on responses."""
+        allowed, remaining = await self._script(
             keys=[f"ratelimit:{key}"],
             args=[self._capacity, self._refill_rate, time.time(), cost],
         )
-        return bool(allowed)
+        return bool(allowed), float(remaining)
+
+    async def allow(self, key: str, cost: int = 1) -> bool:
+        allowed, _remaining = await self.check(key, cost)
+        return allowed
+
+    @property
+    def capacity(self) -> int:
+        return self._capacity
