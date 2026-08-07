@@ -47,7 +47,9 @@ class FallbackRouter:
 
         for attempt, (provider, model, breaker) in enumerate(self._chain):
             if not breaker.allow_request():
-                logger.warning("provider %s circuit open, skipping", provider.name)
+                logger.warning(
+                    "[request_id=%s] provider %s circuit open, skipping", request_id, provider.name
+                )
                 errors.append(f"{provider.name}: circuit open")
                 continue
 
@@ -79,7 +81,8 @@ class FallbackRouter:
                         PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="error").inc()
                         if retry < self._retry_attempts:
                             logger.warning(
-                                "provider %s failed (retry %d/%d): %s",
+                                "[request_id=%s] provider %s failed (retry %d/%d): %s",
+                                request_id,
                                 provider.name,
                                 retry + 1,
                                 self._retry_attempts,
@@ -89,12 +92,18 @@ class FallbackRouter:
 
             breaker.record_failure()
             logger.warning(
-                "provider %s exhausted retries, falling back: %s", provider.name, last_error
+                "[request_id=%s] provider %s exhausted retries, falling back: %s",
+                request_id,
+                provider.name,
+                last_error,
             )
             errors.append(f"{provider.name}: {last_error}")
 
         if not tried_any:
-            logger.error("all providers had open circuits, nothing was attempted")
+            logger.error(
+                "[request_id=%s] all providers had open circuits, nothing was attempted",
+                request_id,
+            )
 
         raise AllProvidersFailedError(
             f"all providers in fallback chain failed: {'; '.join(errors)}"
@@ -117,7 +126,9 @@ class FallbackRouter:
 
         for attempt, (provider, model, breaker) in enumerate(self._chain):
             if not breaker.allow_request():
-                logger.warning("provider %s circuit open, skipping", provider.name)
+                logger.warning(
+                    "[request_id=%s] provider %s circuit open, skipping", request_id, provider.name
+                )
                 errors.append(f"{provider.name}: circuit open")
                 continue
 
@@ -149,7 +160,9 @@ class FallbackRouter:
                         PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="error").inc()
                         if retry < self._retry_attempts:
                             logger.warning(
-                                "provider %s failed before first chunk (retry %d/%d): %s",
+                                "[request_id=%s] provider %s failed before first chunk"
+                                " (retry %d/%d): %s",
+                                request_id,
                                 provider.name,
                                 retry + 1,
                                 self._retry_attempts,
@@ -176,7 +189,8 @@ class FallbackRouter:
                     except ProviderError as exc:
                         breaker.record_failure()
                         logger.error(
-                            "provider %s failed mid-stream after committing: %s",
+                            "[request_id=%s] provider %s failed mid-stream after committing: %s",
+                            request_id,
                             provider.name,
                             exc,
                         )
@@ -188,14 +202,19 @@ class FallbackRouter:
             if not committed:
                 breaker.record_failure()
                 logger.warning(
-                    "provider %s exhausted retries before first chunk, falling back: %s",
+                    "[request_id=%s] provider %s exhausted retries before first chunk,"
+                    " falling back: %s",
+                    request_id,
                     provider.name,
                     last_error,
                 )
                 errors.append(f"{provider.name}: {last_error}")
 
         if not tried_any:
-            logger.error("all providers had open circuits, nothing was attempted")
+            logger.error(
+                "[request_id=%s] all providers had open circuits, nothing was attempted",
+                request_id,
+            )
 
         raise AllProvidersFailedError(
             f"all providers in fallback chain failed: {'; '.join(errors)}"
