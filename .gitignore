@@ -33,3 +33,9 @@ postgres-data/
 
 # Local SQLite database (default DATABASE_URL target)
 *.db
+
+# Local Redis dump from running redis-server directly (not via Docker) in this dir
+dump.rdb
+
+# ruff cache
+.ruff_cache/

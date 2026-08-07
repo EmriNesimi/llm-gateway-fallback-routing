@@ -1,0 +1,36 @@
+# Keep the build context small and make sure nothing sensitive or
+# unnecessary ever gets sent to the Docker daemon, even though the
+# Dockerfile's COPY steps are already explicit about what goes in the image.
+
+.git/
+.github/
+
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local data
+*.db
+dump.rdb
+data/
+grafana-data/
+prometheus-data/
+postgres-data/
+
+# Not needed inside the image
+tests/
+scripts/
+deploy/
+README.md
+docker-compose.yml
