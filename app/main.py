@@ -18,6 +18,7 @@ from app.core.redis_client import get_redis
 from app.db.audit import record_audit_log
 from app.db.session import async_session, init_db
 from app.observability.metrics import REQUEST_COUNT, REQUEST_LATENCY
+from app.observability.request_id import RequestIDMiddleware
 from app.observability.tracing import configure_tracing
 from app.providers.base import ChatMessage
 from app.routing.dependencies import build_router
@@ -41,6 +42,7 @@ app = FastAPI(
 )
 
 FastAPIInstrumentor.instrument_app(app)
+app.add_middleware(RequestIDMiddleware)
 app.include_router(admin_router)
 
 
