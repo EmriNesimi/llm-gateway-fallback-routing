@@ -108,6 +108,15 @@ Each key is independently rate-limited (token bucket: `RATE_LIMIT_CAPACITY` burs
 
 `POST /v1/chat/stream` takes the same request body and auth, but streams the response back as Server-Sent Events (`text/event-stream`) — each `data:` line is a JSON chunk, ending with `data: [DONE]`.
 
+Every response (success, `429`, or `402`) on both endpoints carries status headers so clients don't have to guess:
+
+| Header | Meaning |
+|---|---|
+| `X-RateLimit-Limit` | This key's token bucket capacity |
+| `X-RateLimit-Remaining` | Tokens left *after* this request |
+| `Retry-After` | Seconds to wait before retrying (`429` responses only) |
+| `X-Budget-Remaining-USD` | Monthly budget left as of this request's admission |
+
 ## 📡 streaming fallback
 
 Fallback and streaming don't naturally get along: once a client has started receiving tokens, silently switching providers mid-answer would produce garbled output. This gateway resolves it by **buffering only the first chunk** of a provider's response before committing:
