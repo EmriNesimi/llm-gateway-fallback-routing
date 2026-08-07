@@ -41,7 +41,7 @@ class FallbackRouter:
             else settings.provider_retry_backoff_seconds
         )
 
-    async def chat(self, messages: list[ChatMessage]) -> ChatResponse:
+    async def chat(self, messages: list[ChatMessage], request_id: str = "") -> ChatResponse:
         errors: list[str] = []
         tried_any = False
 
@@ -60,6 +60,7 @@ class FallbackRouter:
                     span.set_attribute("gateway.model", model)
                     span.set_attribute("gateway.attempt", attempt)
                     span.set_attribute("gateway.retry", retry)
+                    span.set_attribute("gateway.request_id", request_id)
                     try:
                         result = await provider.chat(model=model, messages=messages)
                         # Bill/log against the model we actually requested (e.g.
@@ -99,7 +100,9 @@ class FallbackRouter:
             f"all providers in fallback chain failed: {'; '.join(errors)}"
         )
 
-    async def chat_stream(self, messages: list[ChatMessage]) -> AsyncIterator[StreamChunk]:
+    async def chat_stream(
+        self, messages: list[ChatMessage], request_id: str = ""
+    ) -> AsyncIterator[StreamChunk]:
         """Like `chat`, but streams chunks as they arrive.
 
         Fallback only works up to the FIRST chunk of a provider's response: we
@@ -130,6 +133,7 @@ class FallbackRouter:
                     span.set_attribute("gateway.model", model)
                     span.set_attribute("gateway.attempt", attempt)
                     span.set_attribute("gateway.retry", retry)
+                    span.set_attribute("gateway.request_id", request_id)
 
                     generator = provider.chat_stream(model=model, messages=messages)
                     try:

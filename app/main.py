@@ -103,7 +103,7 @@ async def chat(
 
     start = time.perf_counter()
     try:
-        result = await router.chat(messages)
+        result = await router.chat(messages, request_id=request_id)
     except AllProvidersFailedError as exc:
         REQUEST_COUNT.labels(status="error").inc()
         await record_audit_log(
@@ -159,7 +159,7 @@ async def _event_stream(
     output_tokens = 0
 
     try:
-        async for chunk in router.chat_stream(messages):
+        async for chunk in router.chat_stream(messages, request_id=request_id):
             if chunk.done:
                 final_provider = chunk.provider
                 final_model = chunk.model
