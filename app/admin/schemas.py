@@ -26,6 +26,7 @@ class AuditLogEntryOut(BaseModel):
 
     id: int
     created_at: datetime.datetime
+    request_id: str
     api_key_hash: str
     team: str
     requested_model: str

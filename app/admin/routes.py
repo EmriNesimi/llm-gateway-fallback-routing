@@ -44,13 +44,20 @@ async def revoke_key(key_id: int, session: AsyncSession = Depends(get_session)) 
 @router.get("/audit-log", response_model=list[AuditLogEntryOut])
 async def list_audit_log(
     team: str | None = None,
+    request_id: str | None = None,
     limit: int = 100,
     session: AsyncSession = Depends(get_session),
 ) -> list[AuditLogEntry]:
+    """`request_id` is the sharpest filter here — pair it with the
+    X-Request-ID a caller reports to jump straight to the row (and, via
+    tracing spans tagged with the same ID, the exact provider attempts)
+    behind a specific failed or slow request."""
     limit = max(1, min(limit, 1000))
     query = select(AuditLogEntry).order_by(desc(AuditLogEntry.created_at)).limit(limit)
     if team:
         query = query.where(AuditLogEntry.team == team)
+    if request_id:
+        query = query.where(AuditLogEntry.request_id == request_id)
 
     result = await session.execute(query)
     return list(result.scalars().all())
