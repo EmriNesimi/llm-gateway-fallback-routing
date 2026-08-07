@@ -78,7 +78,7 @@ flowchart LR
 
 ## 🚧 build log
 
-Phase 4 (resilience) complete ✅ — next up: production polish (retries on the HTTP client level, alerting, deploy configs).
+Phase 4 (resilience) complete ✅ — production-hardening pass in progress: timeouts, readiness checks, rate-limit/budget headers, and request-ID tracing are done.
 
 - [x] Project scaffold, config, security foundations
 - [x] Provider adapters (OpenAI / Anthropic / Ollama) + fallback chain
@@ -89,7 +89,11 @@ Phase 4 (resilience) complete ✅ — next up: production polish (retries on the
 - [x] Retry with backoff before falling back
 - [x] Streaming support with fallback-before-first-chunk
 - [x] Admin API for teams/keys + audit log
-- [x] Tests for rate limiter, budget tracker, metrics, circuit breaker, fallback/retry, streaming, admin API, audit log, health endpoint
+- [x] Configurable per-provider request timeouts
+- [x] `/readyz` readiness checks (Redis + DB) + Docker `HEALTHCHECK`
+- [x] Rate limit / budget response headers
+- [x] Request ID correlation across headers, audit log, traces, and logs
+- [x] Tests for rate limiter, budget tracker, metrics, circuit breaker, fallback/retry, streaming, admin API, audit log, readiness, response headers, request ID, health endpoint
 - [x] CI (GitHub Actions: lint + tests + coverage on every push/PR)
 
 ## 🔌 calling the api
@@ -116,6 +120,7 @@ Every response (success, `429`, or `402`) on both endpoints carries status heade
 | `X-RateLimit-Remaining` | Tokens left *after* this request |
 | `Retry-After` | Seconds to wait before retrying (`429` responses only) |
 | `X-Budget-Remaining-USD` | Monthly budget left as of this request's admission |
+| `X-Request-ID` | Correlation ID for this request — see below |
 
 ## 📡 streaming fallback
 
@@ -146,10 +151,21 @@ Pass the admin secret via `X-Admin-Key`. Like the client-facing auth, this fails
 
 Every `/v1/chat` and `/v1/chat/stream` request — success or failure — is written to an **audit log** (SQLite by default, Postgres via `DATABASE_URL` in production): timestamp, hashed API key, team, model, provider, outcome, tokens, cost, and latency. That's the "why did this fail at 2am" record — keys issued through the admin API get their team attributed automatically; keys from the legacy `GATEWAY_API_KEYS` env var are logged under `team: "unlinked"`.
 
+## 🔍 tracing a single request
+
+Every request gets a correlation ID — either generated, or honored if the caller sends one via `X-Request-ID` — and it's threaded through everything that request touches:
+
+1. **Response header**: `X-Request-ID` on every response, success or error, so a caller always has something to hand to support.
+2. **Audit log**: `GET /admin/audit-log?request_id=<id>` jumps straight to that request's row — team, provider, outcome, cost, latency.
+3. **Traces**: the same ID is a `gateway.request_id` attribute on every OpenTelemetry span for that request, linking the audit row to the exact provider attempts (including retries and fallbacks) behind it.
+4. **Logs**: router log lines are prefixed `[request_id=<id>]`, so `grep`ing a support-reported ID surfaces the full story even without a tracing backend configured.
+
 ## 📊 observability
 
+- **`GET /healthz`** — liveness: is the process up? No dependency checks.
+- **`GET /readyz`** — readiness: can this instance actually reach Redis and the DB? Returns `503` with per-dependency detail if not — what a load balancer or orchestrator should actually probe.
 - **`GET /metrics`** — Prometheus-format metrics: request count/latency, per-provider attempt outcomes, fallback rate.
-- **Tracing** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to send traces to any OTLP collector. Each provider attempt gets its own span with provider/model/attempt attributes. If unset, or nothing is listening there, the app still runs fine — you'll just see a harmless retry warning in the logs.
+- **Tracing** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to send traces to any OTLP collector. Each provider attempt gets its own span with provider/model/attempt/request_id attributes. If unset, or nothing is listening there, the app still runs fine — you'll just see a harmless retry warning in the logs.
 - **Dashboards** — `docker compose up` brings up Prometheus (`:9090`) scraping the gateway and Grafana (`:3000`, default login `admin`/`admin`) ready to point at it.
 
 ## 🚀 getting started
@@ -182,7 +198,7 @@ Same commands CI runs on every push/PR to `main`.
 docker compose up --build
 ```
 
-Spins up the gateway, Redis, Prometheus, and Grafana together. Add `postgres` to `DATABASE_URL` in `.env` (`postgresql+asyncpg://gateway:changeme@postgres:5432/gateway`) to back the admin API/audit log with the bundled Postgres service instead of SQLite.
+Spins up the gateway, Redis, Prometheus, and Grafana together. Add `postgres` to `DATABASE_URL` in `.env` (`postgresql+asyncpg://gateway:changeme@postgres:5432/gateway`) to back the admin API/audit log with the bundled Postgres service instead of SQLite. The gateway container has a `HEALTHCHECK` against `/readyz`, and `.dockerignore` keeps secrets/caches/tests out of the build context.
 
 ### 🎬 run the guided demo
 
