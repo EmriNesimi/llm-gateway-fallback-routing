@@ -14,6 +14,7 @@ async def record_audit_log(
     output_tokens: int = 0,
     cost_usd: float = 0.0,
     latency_ms: float = 0.0,
+    request_id: str = "",
 ) -> None:
     key_hash = hash_key(api_key)
 
@@ -28,6 +29,7 @@ async def record_audit_log(
 
         session.add(
             AuditLogEntry(
+                request_id=request_id,
                 api_key_hash=key_hash,
                 team=team,
                 requested_model=requested_model,

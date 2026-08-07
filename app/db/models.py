@@ -33,6 +33,9 @@ class AuditLogEntry(Base):
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC)
     )
+    # Correlation ID from the X-Request-ID header/middleware — lets a support
+    # request ("call XYZ failed") be matched to this exact row and its traces.
+    request_id: Mapped[str] = mapped_column(String(64), index=True, default="")
     api_key_hash: Mapped[str] = mapped_column(String(64), index=True)
     team: Mapped[str] = mapped_column(String(255))
     requested_model: Mapped[str] = mapped_column(String(255))

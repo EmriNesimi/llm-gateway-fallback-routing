@@ -94,9 +94,12 @@ async def metrics():
 
 
 @app.post("/v1/chat", response_model=ChatResponseOut)
-async def chat(request: ChatRequest, api_key: str = Depends(enforce_budget)):
+async def chat(
+    request: ChatRequest, http_request: Request, api_key: str = Depends(enforce_budget)
+):
     router = build_router(request.model)
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
+    request_id = http_request.state.request_id
 
     start = time.perf_counter()
     try:
@@ -108,8 +111,11 @@ async def chat(request: ChatRequest, api_key: str = Depends(enforce_budget)):
             requested_model=request.model,
             outcome="error",
             latency_ms=(time.perf_counter() - start) * 1000,
+            request_id=request_id,
         )
-        raise HTTPException(status_code=502, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=502, detail={"error": str(exc), "request_id": request_id}
+        ) from exc
     finally:
         REQUEST_LATENCY.observe(time.perf_counter() - start)
 
@@ -131,6 +137,7 @@ async def chat(request: ChatRequest, api_key: str = Depends(enforce_budget)):
         output_tokens=result.output_tokens,
         cost_usd=cost,
         latency_ms=(time.perf_counter() - start) * 1000,
+        request_id=request_id,
     )
 
     return ChatResponseOut(
@@ -143,7 +150,7 @@ async def chat(request: ChatRequest, api_key: str = Depends(enforce_budget)):
 
 
 async def _event_stream(
-    router, messages: list[ChatMessage], api_key: str, requested_model: str
+    router, messages: list[ChatMessage], api_key: str, requested_model: str, request_id: str
 ) -> AsyncIterator[str]:
     start = time.perf_counter()
     final_provider = ""
@@ -168,8 +175,9 @@ async def _event_stream(
             requested_model=requested_model,
             outcome="error",
             latency_ms=(time.perf_counter() - start) * 1000,
+            request_id=request_id,
         )
-        yield f"event: error\ndata: {json.dumps({'error': str(exc)})}\n\n"
+        yield f"event: error\ndata: {json.dumps({'error': str(exc), 'request_id': request_id})}\n\n"
         return
     finally:
         REQUEST_LATENCY.observe(time.perf_counter() - start)
@@ -195,6 +203,7 @@ async def _event_stream(
         output_tokens=output_tokens,
         cost_usd=cost,
         latency_ms=(time.perf_counter() - start) * 1000,
+        request_id=request_id,
     )
 
     yield "data: [DONE]\n\n"
@@ -207,7 +216,7 @@ async def chat_stream(
     router = build_router(request.model)
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
     response = StreamingResponse(
-        _event_stream(router, messages, api_key, request.model),
+        _event_stream(router, messages, api_key, request.model, http_request.state.request_id),
         media_type="text/event-stream",
     )
     # enforce_rate_limit/enforce_budget stash these on request.state since this
