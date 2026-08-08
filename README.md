@@ -70,6 +70,7 @@ flowchart LR
 | Backend | Python, FastAPI |
 | Rate limiting / budgets | Redis (token bucket) |
 | API keys / audit log | SQLAlchemy async — SQLite by default, Postgres in production |
+| Schema migrations | Alembic |
 | Observability | OpenTelemetry, Prometheus |
 | Dashboards | Grafana |
 | Providers | OpenAI, Anthropic, Ollama |
@@ -151,6 +152,18 @@ Pass the admin secret via `X-Admin-Key`. Like the client-facing auth, this fails
 
 Every `/v1/chat` and `/v1/chat/stream` request — success or failure — is written to an **audit log** (SQLite by default, Postgres via `DATABASE_URL` in production): timestamp, hashed API key, team, model, provider, outcome, tokens, cost, and latency. That's the "why did this fail at 2am" record — keys issued through the admin API get their team attributed automatically; keys from the legacy `GATEWAY_API_KEYS` env var are logged under `team: "unlinked"`.
 
+### schema migrations
+
+Schema changes are managed with **Alembic**, not ad-hoc `create_all` calls, so a real (Postgres) database can be upgraded in place without losing data:
+
+```bash
+alembic upgrade head        # apply all pending migrations
+alembic revision --autogenerate -m "describe the change"   # after editing app/db/models.py
+alembic check                # fails if models.py drifted from committed migrations — this runs in CI
+```
+
+Against the default SQLite dev database, `create_all` still runs automatically at startup for zero-config convenience. For Postgres, that's skipped — `docker-entrypoint.sh` runs `alembic upgrade head` once before the app starts, rather than racing every replica into migrating on boot.
+
 ## 🔍 tracing a single request
 
 Every request gets a correlation ID — either generated, or honored if the caller sends one via `X-Request-ID` — and it's threaded through everything that request touches:
@@ -190,7 +203,7 @@ ruff check .
 pytest -q --cov=app --cov-report=term-missing
 ```
 
-Same commands CI runs on every push/PR to `main`.
+Same commands CI runs on every push/PR to `main` — CI also runs a real Redis service container, so the rate limiter's Lua script is tested against genuine Redis, not just `fakeredis`'s emulation of it.
 
 ### with docker
 
