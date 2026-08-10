@@ -194,21 +194,24 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
-Visit `http://localhost:8000/docs` for the interactive API docs, or `http://localhost:8000/healthz` for a health check.
+Visit `http://localhost:8000/docs` for the interactive API docs, or `http://localhost:8000/healthz` for a health check. `.python-version` pins this to Python 3.12, matching CI and the Dockerfile.
 
 ### running lint & tests locally
 
 ```bash
-ruff check .
-pytest -q --cov=app --cov-report=term-missing
+make lint
+make test
 ```
+
+(equivalent to `ruff check .` and `pytest -q --cov=app --cov-report=term-missing` — see the `Makefile` for the rest: `make run`, `make migrate`, `make up`/`down`, `make demo`)
 
 Same commands CI runs on every push/PR to `main` — CI also runs a real Redis service container, so the rate limiter's Lua script is tested against genuine Redis, not just `fakeredis`'s emulation of it.
 
 ### with docker
 
 ```bash
-docker compose up --build
+make up
+# or: docker compose up --build
 ```
 
 Spins up the gateway, Redis, Prometheus, and Grafana together. Add `postgres` to `DATABASE_URL` in `.env` (`postgresql+asyncpg://gateway:changeme@postgres:5432/gateway`) to back the admin API/audit log with the bundled Postgres service instead of SQLite. The gateway container has a `HEALTHCHECK` against `/readyz`, and `.dockerignore` keeps secrets/caches/tests out of the build context.
@@ -218,7 +221,8 @@ Spins up the gateway, Redis, Prometheus, and Grafana together. Add `postgres` to
 With the gateway up and `ADMIN_API_KEY` set, `scripts/demo.sh` walks the whole system end-to-end — issuing a key, routing a real request, tripping the rate limiter, and pulling the audit trail back out:
 
 ```bash
-DEMO_ADMIN_KEY=<your ADMIN_API_KEY> ./scripts/demo.sh
+DEMO_ADMIN_KEY=<your ADMIN_API_KEY> make demo
+# or: DEMO_ADMIN_KEY=<your ADMIN_API_KEY> ./scripts/demo.sh
 ```
 
 ```
