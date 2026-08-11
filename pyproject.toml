@@ -13,3 +13,13 @@ extend-exclude = ["migrations/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.12"
+files = ["app"]
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+# Alembic's generated migration scripts follow its own boilerplate, and
+# aren't hand-typed — same reasoning as the ruff exclude above.
+exclude = ["migrations/versions"]

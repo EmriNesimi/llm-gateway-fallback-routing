@@ -26,3 +26,4 @@ fakeredis>=2.23
 lupa>=2.2  # gives fakeredis EVAL/EVALSHA support, needed for our Lua-scripted token bucket
 ruff>=0.6
 pytest-cov>=5.0
+mypy>=1.11

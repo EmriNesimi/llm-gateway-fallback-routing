@@ -1,10 +1,13 @@
-.PHONY: install lint test run migrate up down demo
+.PHONY: install lint typecheck test run migrate up down demo
 
 install:
 	pip install -r requirements.txt
 
 lint:
 	ruff check .
+
+typecheck:
+	mypy
 
 test:
 	pytest -q --cov=app --cov-report=term-missing

@@ -39,6 +39,9 @@ jobs:
       - name: Lint
         run: ruff check .
 
+      - name: Type check
+        run: mypy
+
       - name: Run tests with coverage
         run: pytest -q --cov=app --cov-report=term-missing
 
