@@ -41,3 +41,45 @@ jobs:
 
       - name: Run tests with coverage
         run: pytest -q --cov=app --cov-report=term-missing
+
+  postgres-migrations:
+    runs-on: ubuntu-latest
+
+    # The test suite above runs entirely against an in-memory SQLite DB (see
+    # tests/conftest.py's isolated_db fixture), so it never actually proves
+    # the Postgres path works. This job closes that gap: it runs the real
+    # Alembic migrations against a real Postgres instance, the same way
+    # docker-entrypoint.sh does for a production deployment.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: gateway
+          POSTGRES_PASSWORD: changeme
+          POSTGRES_DB: gateway
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U gateway"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql+asyncpg://gateway:changeme@localhost:5432/gateway
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Apply migrations to Postgres
+        run: alembic upgrade head
+
+      - name: Verify migrations match current models
+        run: alembic check
