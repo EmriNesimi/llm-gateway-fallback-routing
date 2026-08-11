@@ -25,8 +25,13 @@ async def create_key(
 
 
 @router.get("/keys", response_model=list[ApiKeyOut])
-async def list_keys(session: AsyncSession = Depends(get_session)) -> list[ApiKeyRecord]:
-    result = await session.execute(select(ApiKeyRecord))
+async def list_keys(
+    limit: int = 100, offset: int = 0, session: AsyncSession = Depends(get_session)
+) -> list[ApiKeyRecord]:
+    limit = max(1, min(limit, 1000))
+    offset = max(0, offset)
+    query = select(ApiKeyRecord).order_by(desc(ApiKeyRecord.created_at)).limit(limit).offset(offset)
+    result = await session.execute(query)
     return list(result.scalars().all())
 
 

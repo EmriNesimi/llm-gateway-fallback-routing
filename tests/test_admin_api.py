@@ -75,3 +75,17 @@ def test_get_unknown_key_returns_404(isolated_db):
     with TestClient(app) as client:
         r = client.get("/admin/keys/999", headers={"X-Admin-Key": "test-admin-secret"})
         assert r.status_code == 404
+
+
+def test_list_keys_offset_paginates_past_limit(isolated_db):
+    headers = {"X-Admin-Key": "test-admin-secret"}
+    with TestClient(app) as client:
+        for i in range(3):
+            client.post("/admin/keys", json={"team": f"team-{i}"}, headers=headers)
+
+        page1 = client.get("/admin/keys", params={"limit": 2, "offset": 0}, headers=headers).json()
+        page2 = client.get("/admin/keys", params={"limit": 2, "offset": 2}, headers=headers).json()
+
+    assert len(page1) == 2
+    assert len(page2) == 1
+    assert {k["id"] for k in page1}.isdisjoint({k["id"] for k in page2})
