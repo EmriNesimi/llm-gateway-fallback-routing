@@ -55,3 +55,23 @@ def test_revoke_unknown_key_returns_404(isolated_db):
     with TestClient(app) as client:
         r = client.delete("/admin/keys/999", headers={"X-Admin-Key": "test-admin-secret"})
         assert r.status_code == 404
+
+
+def test_get_single_key(isolated_db):
+    with TestClient(app) as client:
+        r = client.post(
+            "/admin/keys", json={"team": "acme"}, headers={"X-Admin-Key": "test-admin-secret"}
+        )
+        key_id = client.get("/admin/keys", headers={"X-Admin-Key": "test-admin-secret"}).json()[
+            0
+        ]["id"]
+
+        r = client.get(f"/admin/keys/{key_id}", headers={"X-Admin-Key": "test-admin-secret"})
+        assert r.status_code == 200
+        assert r.json()["team"] == "acme"
+
+
+def test_get_unknown_key_returns_404(isolated_db):
+    with TestClient(app) as client:
+        r = client.get("/admin/keys/999", headers={"X-Admin-Key": "test-admin-secret"})
+        assert r.status_code == 404

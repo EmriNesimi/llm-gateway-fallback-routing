@@ -30,6 +30,14 @@ async def list_keys(session: AsyncSession = Depends(get_session)) -> list[ApiKey
     return list(result.scalars().all())
 
 
+@router.get("/keys/{key_id}", response_model=ApiKeyOut)
+async def get_key(key_id: int, session: AsyncSession = Depends(get_session)) -> ApiKeyRecord:
+    record = await session.get(ApiKeyRecord, key_id)
+    if record is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="key not found")
+    return record
+
+
 @router.delete("/keys/{key_id}")
 async def revoke_key(key_id: int, session: AsyncSession = Depends(get_session)) -> dict:
     record = await session.get(ApiKeyRecord, key_id)
