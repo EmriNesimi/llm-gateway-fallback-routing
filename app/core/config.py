@@ -30,6 +30,11 @@ class Settings(BaseSettings):
     gateway_api_keys: str = ""
     otel_exporter_otlp_endpoint: str | None = None
 
+    # Comma-separated allowed browser origins for CORS. Empty by default —
+    # this gateway is meant to be called server-to-server or via curl, so
+    # opening it to arbitrary browser origins is opt-in, not assumed.
+    cors_allowed_origins: str = ""
+
     # Token bucket: capacity = max burst size, refill_rate = tokens/sec sustained.
     rate_limit_capacity: int = 20
     rate_limit_refill_per_sec: float = 0.5  # 30 requests/min sustained
@@ -57,6 +62,9 @@ class Settings(BaseSettings):
 
     def allowed_api_keys(self) -> list[str]:
         return [k.strip() for k in self.gateway_api_keys.split(",") if k.strip()]
+
+    def allowed_cors_origins(self) -> list[str]:
+        return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
 
     def model_post_init(self, __context: object) -> None:
         if self.gateway_secret_key == _INSECURE_SECRET_DEFAULT:

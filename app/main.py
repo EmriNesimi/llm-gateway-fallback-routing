@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
@@ -14,6 +15,7 @@ from app.admin.routes import router as admin_router
 from app.budget.dependency import enforce_budget
 from app.budget.dependency import tracker as budget_tracker
 from app.budget.pricing import estimate_cost_usd
+from app.core.config import settings
 from app.core.redis_client import get_redis
 from app.db.audit import record_audit_log
 from app.db.session import async_session, init_db
@@ -45,6 +47,14 @@ app = FastAPI(
 FastAPIInstrumentor.instrument_app(app)
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
+
+if settings.allowed_cors_origins():
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.allowed_cors_origins(),
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 app.include_router(admin_router)
 
 
