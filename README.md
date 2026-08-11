@@ -144,7 +144,7 @@ Client API keys can be issued and revoked without editing `.env`, via an admin A
 
 ```
 POST   /admin/keys        {"team": "acme"}   → {"api_key": "...", "team": "acme"}  (shown once)
-GET    /admin/keys                            → [{"id", "team", "created_at", "revoked"}, ...]
+GET    /admin/keys                             → [{"id", "team", "created_at", "revoked"}, ...] (paginated: limit/offset)
 GET    /admin/keys/{id}                        → a single key's record
 DELETE /admin/keys/{id}                        → revokes the key immediately
 ```
@@ -167,6 +167,8 @@ alembic check                # fails if models.py drifted from committed migrati
 
 Against the default SQLite dev database, `create_all` still runs automatically at startup for zero-config convenience. For Postgres, that's skipped — `docker-entrypoint.sh` runs `alembic upgrade head` once before the app starts, rather than racing every replica into migrating on boot.
 
+CI runs these same migrations against a real Postgres service (not just SQLite) on every push, so the Postgres path is actually exercised, not just assumed to work.
+
 ## 🔍 tracing a single request
 
 Every request gets a correlation ID — either generated, or honored if the caller sends one via `X-Request-ID` — and it's threaded through everything that request touches:
@@ -182,8 +184,9 @@ Every request gets a correlation ID — either generated, or honored if the call
 - **`GET /readyz`** — readiness: can this instance actually reach Redis and the DB? Returns `503` with per-dependency detail if not — what a load balancer or orchestrator should actually probe.
 - **`GET /metrics`** — Prometheus-format metrics: request count/latency, per-provider attempt outcomes, fallback rate.
 - **Tracing** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to send traces to any OTLP collector. Each provider attempt gets its own span with provider/model/attempt/request_id attributes. If unset, or nothing is listening there, the app still runs fine — you'll just see a harmless retry warning in the logs.
-- **Dashboards** — `docker compose up` brings up Prometheus (`:9090`) scraping the gateway and Grafana (`:3000`, default login `admin`/`admin`) ready to point at it.
+- **Dashboards** — `docker compose up` brings up Prometheus (`:9090`) scraping the gateway and Grafana (`:3000`, default login `admin`/`admin`), auto-provisioned with a "LLM Gateway Overview" dashboard (request rate by status, p50/p95/p99 latency, provider attempts by outcome, fallback rate) — no manual setup, it's already there on first load.
 - **Logging** — plain text by default; set `LOG_FORMAT=json` for structured single-line logs a log aggregator (Loki, CloudWatch, etc.) can parse.
+- **Load testing** — `scripts/load_test.js` is a [k6](https://k6.io) script that drives sustained concurrent traffic at `/v1/chat` (ramping past the default rate limit on purpose) so you can watch the fallback chain, circuit breaker, and rate limiter behave under pressure live in the Grafana dashboard above: `GATEWAY_URL=http://localhost:8000 CLIENT_KEY=<your key> k6 run scripts/load_test.js`.
 
 ## 🚀 getting started
 
@@ -244,6 +247,14 @@ request 03 -> 429
 ```
 
 <img src="https://capsule-render.vercel.app/api?type=rect&color=0:0a0e27,100:00d9a3&height=3&width=100%25" width="100%"/>
+
+## 🧭 architecture decisions
+
+The non-obvious tradeoffs — why the circuit breaker gates retry rather than the other way around, why SQLite is the default and Postgres is opt-in, why streaming buffers just the first chunk before committing to a provider — are written up in [`docs/decisions/`](docs/decisions/), one file per decision, with the alternative considered and why it lost.
+
+## 🔢 api versioning
+
+Every client-facing route lives under `/v1/`; operational routes (`/healthz`, `/metrics`, `/admin/*`) aren't versioned since they're not part of the client contract. What counts as a breaking change, and what doesn't, is written down in [`docs/api-versioning.md`](docs/api-versioning.md).
 
 ## 🔒 security
 
