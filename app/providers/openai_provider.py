@@ -1,8 +1,20 @@
 from collections.abc import AsyncIterator
+from typing import cast
 
 from openai import APIError, APIStatusError, AsyncOpenAI
+from openai.types.chat import ChatCompletionMessageParam
 
 from app.providers.base import BaseProvider, ChatMessage, ChatResponse, ProviderError, StreamChunk
+
+
+def _to_openai_messages(messages: list[ChatMessage]) -> list[ChatCompletionMessageParam]:
+    # ChatMessage.role is a plain str (validated at the API boundary in
+    # app/schemas.py); the SDK wants one of its narrower per-role TypedDicts,
+    # so this cast documents "already validated" rather than re-checking here.
+    return cast(
+        "list[ChatCompletionMessageParam]",
+        [{"role": m.role, "content": m.content} for m in messages],
+    )
 
 
 class OpenAIProvider(BaseProvider):
@@ -15,7 +27,7 @@ class OpenAIProvider(BaseProvider):
         try:
             response = await self._client.chat.completions.create(
                 model=model,
-                messages=[{"role": m.role, "content": m.content} for m in messages],
+                messages=_to_openai_messages(messages),
             )
         except (APIError, APIStatusError) as exc:
             raise ProviderError(f"openai request failed: {exc}") from exc
@@ -37,7 +49,7 @@ class OpenAIProvider(BaseProvider):
         try:
             stream = await self._client.chat.completions.create(
                 model=model,
-                messages=[{"role": m.role, "content": m.content} for m in messages],
+                messages=_to_openai_messages(messages),
                 stream=True,
                 stream_options={"include_usage": True},
             )

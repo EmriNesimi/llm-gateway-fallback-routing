@@ -1,8 +1,19 @@
 from collections.abc import AsyncIterator
+from typing import cast
 
 from anthropic import AnthropicError, AsyncAnthropic
+from anthropic.types import MessageParam
 
 from app.providers.base import BaseProvider, ChatMessage, ChatResponse, ProviderError, StreamChunk
+
+
+def _to_anthropic_messages(messages: list[ChatMessage]) -> list[MessageParam]:
+    # ChatMessage.role is a plain str (validated at the API boundary in
+    # app/schemas.py); the SDK wants its narrower Literal["user", "assistant"],
+    # so this cast documents "already validated" rather than re-checking here.
+    return cast(
+        "list[MessageParam]", [{"role": m.role, "content": m.content} for m in messages]
+    )
 
 
 class AnthropicProvider(BaseProvider):
@@ -16,7 +27,7 @@ class AnthropicProvider(BaseProvider):
             response = await self._client.messages.create(
                 model=model,
                 max_tokens=1024,
-                messages=[{"role": m.role, "content": m.content} for m in messages],
+                messages=_to_anthropic_messages(messages),
             )
         except AnthropicError as exc:
             raise ProviderError(f"anthropic request failed: {exc}") from exc
@@ -38,7 +49,7 @@ class AnthropicProvider(BaseProvider):
             async with self._client.messages.stream(
                 model=model,
                 max_tokens=1024,
-                messages=[{"role": m.role, "content": m.content} for m in messages],
+                messages=_to_anthropic_messages(messages),
             ) as stream:
                 async for text in stream.text_stream:
                     yield StreamChunk(content=text)
