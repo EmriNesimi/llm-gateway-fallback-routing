@@ -75,7 +75,13 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> Respo
     themselves) — an unexpected bug, a DB or Redis outage that wasn't caught
     closer to its source, etc. Without this, such a failure would still
     return 500, but as FastAPI's bare default body with no request_id, making
-    it much harder to correlate a user's bug report with server-side logs."""
+    it much harder to correlate a user's bug report with server-side logs.
+
+    A handler registered for the bare `Exception` type is dispatched by
+    Starlette's ServerErrorMiddleware, which wraps *outside* every
+    add_middleware()'d layer (RequestIDMiddleware included) — so this
+    response never passes back through that middleware and must set its own
+    X-Request-ID header rather than relying on it."""
     request_id = getattr(request.state, "request_id", "")
     logger.error(
         "[request_id=%s] unhandled exception on %s %s: %s",
@@ -91,6 +97,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> Respo
         ),
         status_code=500,
         media_type="application/json",
+        headers={"X-Request-ID": request_id},
     )
 
 
