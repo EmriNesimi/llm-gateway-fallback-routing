@@ -19,6 +19,7 @@ from app.core.config import settings
 from app.core.redis_client import get_redis
 from app.db.audit import record_audit_log
 from app.db.session import async_session, engine, init_db
+from app.observability.logging_config import configure_logging
 from app.observability.metrics import REQUEST_COUNT, REQUEST_LATENCY
 from app.observability.request_id import RequestIDMiddleware
 from app.observability.security_headers import SecurityHeadersMiddleware
@@ -28,6 +29,7 @@ from app.routing.dependencies import build_router
 from app.routing.fallback import AllProvidersFailedError
 from app.schemas import ChatRequest, ChatResponseOut
 
+configure_logging()
 configure_tracing()
 
 

@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # opening it to arbitrary browser origins is opt-in, not assumed.
     cors_allowed_origins: str = ""
 
+    # "text" for human-readable local dev logs, "json" for structured
+    # single-line logs a log aggregator can parse in production.
+    log_format: str = "text"
+
     # Token bucket: capacity = max burst size, refill_rate = tokens/sec sustained.
     rate_limit_capacity: int = 20
     rate_limit_refill_per_sec: float = 0.5  # 30 requests/min sustained
