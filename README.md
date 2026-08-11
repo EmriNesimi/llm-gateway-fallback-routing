@@ -145,12 +145,15 @@ Client API keys can be issued and revoked without editing `.env`, via an admin A
 ```
 POST   /admin/keys        {"team": "acme"}   → {"api_key": "...", "team": "acme"}  (shown once)
 GET    /admin/keys                            → [{"id", "team", "created_at", "revoked"}, ...]
+GET    /admin/keys/{id}                        → a single key's record
 DELETE /admin/keys/{id}                        → revokes the key immediately
 ```
 
 Pass the admin secret via `X-Admin-Key`. Like the client-facing auth, this fails closed (`503`) if `ADMIN_API_KEY` isn't set, rather than being left open.
 
 Every `/v1/chat` and `/v1/chat/stream` request — success or failure — is written to an **audit log** (SQLite by default, Postgres via `DATABASE_URL` in production): timestamp, hashed API key, team, model, provider, outcome, tokens, cost, and latency. That's the "why did this fail at 2am" record — keys issued through the admin API get their team attributed automatically; keys from the legacy `GATEWAY_API_KEYS` env var are logged under `team: "unlinked"`.
+
+`GET /admin/audit-log` takes `team`, `request_id`, `limit` (max 1000), and `offset` — page through a wider window with `limit`/`offset` once a team has more rows than fit in one response.
 
 ### schema migrations
 
@@ -180,6 +183,7 @@ Every request gets a correlation ID — either generated, or honored if the call
 - **`GET /metrics`** — Prometheus-format metrics: request count/latency, per-provider attempt outcomes, fallback rate.
 - **Tracing** — set `OTEL_EXPORTER_OTLP_ENDPOINT` to send traces to any OTLP collector. Each provider attempt gets its own span with provider/model/attempt/request_id attributes. If unset, or nothing is listening there, the app still runs fine — you'll just see a harmless retry warning in the logs.
 - **Dashboards** — `docker compose up` brings up Prometheus (`:9090`) scraping the gateway and Grafana (`:3000`, default login `admin`/`admin`) ready to point at it.
+- **Logging** — plain text by default; set `LOG_FORMAT=json` for structured single-line logs a log aggregator (Loki, CloudWatch, etc.) can parse.
 
 ## 🚀 getting started
 
@@ -247,7 +251,10 @@ request 03 -> 429
 - **`/v1/chat` fails closed.** If no client keys are configured, the endpoint refuses all requests (503) rather than serving openly.
 - **Constant-time key comparison** (`hmac.compare_digest`) prevents timing attacks on API key checks.
 - **Structured logging** is scrubbed of tokens, keys, and Authorization headers.
+- **Security headers** (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) are set on every response.
+- **CORS is closed by default.** No `Access-Control-Allow-Origin` header at all unless `CORS_ALLOWED_ORIGINS` is explicitly set — this API is meant to be called server-to-server, not from arbitrary browser origins.
 - Dependency and secret scanning are enabled on this repository.
+- Licensed under [MIT](LICENSE).
 
 <div align="center">
 <br/>
