@@ -1,6 +1,7 @@
 import pytest
 from sqlalchemy import select
 
+import app.db.audit as audit_module
 from app.db.audit import record_audit_log
 from app.db.models import ApiKeyRecord, AuditLogEntry
 from app.security.api_keys import hash_key
@@ -40,3 +41,15 @@ async def test_record_audit_log_resolves_team_from_db_key(isolated_db):
         row = (await session.execute(select(AuditLogEntry))).scalar_one()
 
     assert row.team == "acme"
+
+
+@pytest.mark.asyncio
+async def test_record_audit_log_swallows_db_failures(isolated_db, monkeypatch):
+    def broken_session():
+        raise RuntimeError("db is down")
+
+    monkeypatch.setattr(audit_module, "async_session", broken_session)
+
+    # Must not raise — a DB outage here shouldn't take down whatever request
+    # already succeeded and is just trying to log itself.
+    await record_audit_log("raw-key-789", requested_model="default", outcome="success")
