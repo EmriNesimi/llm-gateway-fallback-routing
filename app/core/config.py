@@ -1,11 +1,16 @@
 import logging
+from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger("gateway.config")
 
 _INSECURE_SECRET_DEFAULT = "dev-only-insecure-key"
+# Schemes app/db/session.py and migrations/env.py actually know how to drive —
+# anything else would fail deep inside SQLAlchemy with a much less legible
+# error, well after startup, instead of here.
+_SUPPORTED_DATABASE_SCHEMES = ("sqlite+aiosqlite", "postgresql+asyncpg")
 
 
 class Settings(BaseSettings):
@@ -38,7 +43,7 @@ class Settings(BaseSettings):
 
     # "text" for human-readable local dev logs, "json" for structured
     # single-line logs a log aggregator can parse in production.
-    log_format: str = "text"
+    log_format: Literal["text", "json"] = "text"
 
     # Token bucket: capacity = max burst size, refill_rate = tokens/sec sustained.
     # capacity must be positive — zero would reject every request; negative
@@ -69,6 +74,16 @@ class Settings(BaseSettings):
     # what's intended here, so both are rejected outright.
     provider_request_timeout_seconds: float = Field(default=30.0, gt=0)
     ollama_request_timeout_seconds: float = Field(default=60.0, gt=0)
+
+    @field_validator("database_url")
+    @classmethod
+    def _validate_database_url_scheme(cls, value: str) -> str:
+        if not value.startswith(_SUPPORTED_DATABASE_SCHEMES):
+            raise ValueError(
+                f"DATABASE_URL must start with one of {_SUPPORTED_DATABASE_SCHEMES} "
+                f"(the async drivers this app is actually wired for), got: {value!r}"
+            )
+        return value
 
     def allowed_api_keys(self) -> list[str]:
         return [k.strip() for k in self.gateway_api_keys.split(",") if k.strip()]
