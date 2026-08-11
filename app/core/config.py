@@ -1,5 +1,6 @@
 import logging
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger("gateway.config")
@@ -40,29 +41,34 @@ class Settings(BaseSettings):
     log_format: str = "text"
 
     # Token bucket: capacity = max burst size, refill_rate = tokens/sec sustained.
-    rate_limit_capacity: int = 20
-    rate_limit_refill_per_sec: float = 0.5  # 30 requests/min sustained
+    # capacity must be positive — zero would reject every request; negative
+    # is nonsensical. refill_rate of 0 is valid (a fixed, non-refilling
+    # allowance) so it's only bounded below at zero.
+    rate_limit_capacity: int = Field(default=20, gt=0)
+    rate_limit_refill_per_sec: float = Field(default=0.5, ge=0)  # 30 requests/min sustained
 
     # Per-API-key spend cap in USD, reset monthly.
-    monthly_budget_usd_per_key: float = 5.0
+    monthly_budget_usd_per_key: float = Field(default=5.0, ge=0)
 
     # Circuit breaker: consecutive failures before a provider is skipped, and
     # how long to wait before trying it again.
-    circuit_breaker_failure_threshold: int = 3
-    circuit_breaker_cooldown_seconds: float = 30.0
+    circuit_breaker_failure_threshold: int = Field(default=3, gt=0)
+    circuit_breaker_cooldown_seconds: float = Field(default=30.0, ge=0)
 
     # Retries against the SAME provider before moving on to the next one in
     # the fallback chain. 0 = no retry, fail over immediately.
-    provider_retry_attempts: int = 1
-    provider_retry_backoff_seconds: float = 0.5
+    provider_retry_attempts: int = Field(default=1, ge=0)
+    provider_retry_backoff_seconds: float = Field(default=0.5, ge=0)
 
     # Per-request timeout to each provider's HTTP client. Without this, a
     # hung upstream connection could block a request (and its retries/
     # fallback) far longer than any caller would reasonably wait. Ollama gets
     # a separate, longer default since local generation is often slower than
-    # a hosted API.
-    provider_request_timeout_seconds: float = 30.0
-    ollama_request_timeout_seconds: float = 60.0
+    # a hosted API. Zero or negative would mean "no timeout" or an instantly
+    # expired request depending on the HTTP client, neither of which is ever
+    # what's intended here, so both are rejected outright.
+    provider_request_timeout_seconds: float = Field(default=30.0, gt=0)
+    ollama_request_timeout_seconds: float = Field(default=60.0, gt=0)
 
     def allowed_api_keys(self) -> list[str]:
         return [k.strip() for k in self.gateway_api_keys.split(",") if k.strip()]
