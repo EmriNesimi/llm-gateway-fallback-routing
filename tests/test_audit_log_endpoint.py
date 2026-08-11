@@ -67,3 +67,22 @@ def test_audit_log_endpoint_empty_when_no_requests(isolated_db):
         r = client.get("/admin/audit-log", headers={"X-Admin-Key": "test-admin-secret"})
     assert r.status_code == 200
     assert r.json() == []
+
+
+@pytest.mark.asyncio
+async def test_audit_log_endpoint_offset_paginates_past_limit(isolated_db):
+    for i in range(3):
+        await record_audit_log(f"key-{i}", requested_model="default", outcome="success")
+
+    headers = {"X-Admin-Key": "test-admin-secret"}
+    with TestClient(app) as client:
+        page1 = client.get(
+            "/admin/audit-log", params={"limit": 2, "offset": 0}, headers=headers
+        ).json()
+        page2 = client.get(
+            "/admin/audit-log", params={"limit": 2, "offset": 2}, headers=headers
+        ).json()
+
+    assert len(page1) == 2
+    assert len(page2) == 1
+    assert {e["id"] for e in page1}.isdisjoint({e["id"] for e in page2})

@@ -46,14 +46,19 @@ async def list_audit_log(
     team: str | None = None,
     request_id: str | None = None,
     limit: int = 100,
+    offset: int = 0,
     session: AsyncSession = Depends(get_session),
 ) -> list[AuditLogEntry]:
     """`request_id` is the sharpest filter here — pair it with the
     X-Request-ID a caller reports to jump straight to the row (and, via
     tracing spans tagged with the same ID, the exact provider attempts)
-    behind a specific failed or slow request."""
+    behind a specific failed or slow request. `offset` paginates past
+    `limit`'s 1000-row ceiling for callers paging through a wider window."""
     limit = max(1, min(limit, 1000))
-    query = select(AuditLogEntry).order_by(desc(AuditLogEntry.created_at)).limit(limit)
+    offset = max(0, offset)
+    query = (
+        select(AuditLogEntry).order_by(desc(AuditLogEntry.created_at)).limit(limit).offset(offset)
+    )
     if team:
         query = query.where(AuditLogEntry.team == team)
     if request_id:
