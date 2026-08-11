@@ -18,7 +18,7 @@ from app.budget.pricing import estimate_cost_usd
 from app.core.config import settings
 from app.core.redis_client import get_redis
 from app.db.audit import record_audit_log
-from app.db.session import async_session, init_db
+from app.db.session import async_session, engine, init_db
 from app.observability.metrics import REQUEST_COUNT, REQUEST_LATENCY
 from app.observability.request_id import RequestIDMiddleware
 from app.observability.security_headers import SecurityHeadersMiddleware
@@ -35,6 +35,11 @@ configure_tracing()
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     await init_db()
     yield
+    # Close pooled connections explicitly on shutdown rather than letting the
+    # process exit drop them — avoids noisy "connection reset" warnings from
+    # Redis/Postgres when the container is stopped.
+    await get_redis().aclose()
+    await engine.dispose()
 
 
 app = FastAPI(
