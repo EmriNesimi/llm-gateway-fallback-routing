@@ -254,7 +254,13 @@ request 03 -> 429
 
 ## 🧭 architecture decisions
 
-The non-obvious tradeoffs — why the circuit breaker gates retry rather than the other way around, why SQLite is the default and Postgres is opt-in, why streaming buffers just the first chunk before committing to a provider — are written up in [`docs/decisions/`](docs/decisions/), one file per decision, with the alternative considered and why it lost.
+The non-obvious tradeoffs — why the circuit breaker gates retry rather than the other way around, why SQLite is the default and Postgres is opt-in, why streaming buffers just the first chunk before committing to a provider, why post-hoc bookkeeping (audit log, spend recording) is best-effort while pre-flight enforcement (rate limit, budget) fails closed — are written up in [`docs/decisions/`](docs/decisions/), one file per decision, with the alternative considered and why it lost.
+
+## ⚠️ error handling
+
+- **Config is validated at startup, not discovered at runtime.** Nonsensical values — a negative rate limit capacity, a zero timeout, an unsupported `DATABASE_URL` scheme, an invalid `LOG_FORMAT` — fail the process immediately with a clear message, instead of the gateway starting up and misbehaving in a way that's harder to trace back to its cause.
+- **Unhandled exceptions return a structured `500`.** Anything not already handled by a specific `except` block (a bug, a backend outage that wasn't caught closer to its source) still gets logged with the request's correlation ID and returns `{"error": "internal server error", "request_id": "..."}` — not FastAPI's bare default body — so a report of "it 500'd" can always be traced to the matching server-side log line.
+- **Pre-flight checks fail closed; post-hoc bookkeeping doesn't fail the request.** If Redis is unreachable when checking the rate limit or budget, the request is rejected. But once a provider has already returned a response, a Redis or DB blip while recording the audit log entry or spend can't discard that response — it's logged and swallowed instead. See [decision 004](docs/decisions/004-best-effort-bookkeeping-vs-fail-closed-enforcement.md) for the reasoning.
 
 ## 🔢 api versioning
 
