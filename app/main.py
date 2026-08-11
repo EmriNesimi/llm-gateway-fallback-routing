@@ -1,4 +1,5 @@
 import json
+import logging
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -32,6 +33,8 @@ from app.schemas import ChatRequest, ChatResponseOut
 configure_logging()
 configure_tracing()
 
+logger = logging.getLogger("gateway.main")
+
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -63,6 +66,32 @@ if settings.allowed_cors_origins():
         allow_headers=["*"],
     )
 app.include_router(admin_router)
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> Response:
+    """Catches anything that isn't an HTTPException (which FastAPI already
+    handles) or AllProvidersFailedError (which the chat endpoints handle
+    themselves) — an unexpected bug, a DB or Redis outage that wasn't caught
+    closer to its source, etc. Without this, such a failure would still
+    return 500, but as FastAPI's bare default body with no request_id, making
+    it much harder to correlate a user's bug report with server-side logs."""
+    request_id = getattr(request.state, "request_id", "")
+    logger.error(
+        "[request_id=%s] unhandled exception on %s %s: %s",
+        request_id,
+        request.method,
+        request.url.path,
+        exc,
+        exc_info=exc,
+    )
+    return Response(
+        content=json.dumps(
+            {"error": "internal server error", "request_id": request_id}
+        ),
+        status_code=500,
+        media_type="application/json",
+    )
 
 
 @app.get("/healthz")
