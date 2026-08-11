@@ -205,6 +205,8 @@ uvicorn app.main:app --reload
 
 Visit `http://localhost:8000/docs` for the interactive API docs, or `http://localhost:8000/healthz` for a health check. `.python-version` pins this to Python 3.12, matching CI and the Dockerfile.
 
+Testing this in VS Code specifically (Test Explorer setup, a debug config with breakpoints, running the Docker stack)? See [`docs/testing-in-vscode.md`](docs/testing-in-vscode.md).
+
 ### running lint & tests locally
 
 ```bash
