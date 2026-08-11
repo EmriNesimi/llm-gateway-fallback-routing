@@ -7,6 +7,8 @@
 <br/><br/>
 
 [![CI](https://github.com/EmriNesimi/llm-gateway-fallback-routing/actions/workflows/ci.yml/badge.svg)](https://github.com/EmriNesimi/llm-gateway-fallback-routing/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-0a0e27?style=for-the-badge&labelColor=0a0e27&color=00ff9d)](LICENSE)
+[![Release](https://img.shields.io/github/v/tag/EmriNesimi/llm-gateway-fallback-routing?style=for-the-badge&label=release&labelColor=0a0e27&color=00ff9d)](https://github.com/EmriNesimi/llm-gateway-fallback-routing/tags)
 [![Python](https://img.shields.io/badge/Python-3.12-0a0e27?style=for-the-badge&logo=python&logoColor=00ff9d&labelColor=0a0e27)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0a0e27?style=for-the-badge&logo=fastapi&logoColor=00ff9d&labelColor=0a0e27)](https://fastapi.tiangolo.com/)
 [![Redis](https://img.shields.io/badge/Redis-0a0e27?style=for-the-badge&logo=redis&logoColor=00ff9d&labelColor=0a0e27)](https://redis.io/)
