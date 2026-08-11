@@ -25,6 +25,13 @@ if (!CLIENT_KEY) {
 const fallbackRate = new Rate("gateway_fallback_rate");
 const requestLatency = new Trend("gateway_request_latency_ms");
 
+// Without this, k6's built-in http_req_failed metric treats every non-2xx
+// response as a failure — including the 429s this test deliberately
+// provokes by bursting past the rate limit. Telling k6 that 200 and 429 are
+// both "expected" keeps that metric meaningful: it only trips on genuine
+// failures (5xx, connection errors), not on the rate limiter doing its job.
+http.setResponseCallback(http.expectedStatuses(200, 429));
+
 export const options = {
   // Ramp up, hold, ramp down — enough to push past the default
   // RATE_LIMIT_CAPACITY (20) per key and see 429s show up, then see the
