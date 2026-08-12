@@ -24,13 +24,20 @@ class OllamaProvider(BaseProvider):
             async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
                 response = await client.post(f"{self._base_url}/api/chat", json=payload)
                 response.raise_for_status()
+            data = response.json()
+            content = data["message"]["content"]
         except httpx.HTTPError as exc:
             raise ProviderError(f"ollama request failed: {exc}") from exc
-
-        data = response.json()
+        except (KeyError, TypeError, json.JSONDecodeError) as exc:
+            # A 2xx response with an unexpected shape (wrong Ollama version,
+            # a proxy mangling the body, etc.) is just as much "this provider
+            # isn't usable right now" as an HTTP error — it must also raise
+            # ProviderError so FallbackRouter falls back instead of letting
+            # a raw KeyError/JSONDecodeError skip the fallback chain entirely.
+            raise ProviderError(f"ollama returned an unexpected response shape: {exc}") from exc
 
         return ChatResponse(
-            content=data["message"]["content"],
+            content=content,
             provider=self.name,
             model=data.get("model", model),
             input_tokens=data.get("prompt_eval_count", 0),
@@ -64,6 +71,12 @@ class OllamaProvider(BaseProvider):
                                 output_tokens=data.get("eval_count", 0),
                             )
                         else:
-                            yield StreamChunk(content=data.get("message", {}).get("content", ""))
+                            yield StreamChunk(content=data["message"]["content"])
         except httpx.HTTPError as exc:
             raise ProviderError(f"ollama stream failed: {exc}") from exc
+        except (KeyError, TypeError, json.JSONDecodeError) as exc:
+            # Same reasoning as chat(): a malformed line mid-stream must still
+            # surface as ProviderError so FallbackRouter's fallback-before-
+            # first-chunk logic (see docs/decisions/003) can act on it, rather
+            # than an unhandled exception skipping the fallback chain.
+            raise ProviderError(f"ollama returned an unexpected stream chunk shape: {exc}") from exc
