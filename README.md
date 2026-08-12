@@ -225,7 +225,7 @@ make up
 # or: docker compose up --build
 ```
 
-Spins up the gateway, Redis, Prometheus, and Grafana together. Add `postgres` to `DATABASE_URL` in `.env` (`postgresql+asyncpg://gateway:changeme@postgres:5432/gateway`) to back the admin API/audit log with the bundled Postgres service instead of SQLite. The gateway container has a `HEALTHCHECK` against `/readyz`, and `.dockerignore` keeps secrets/caches/tests out of the build context.
+Spins up the gateway, Redis, Prometheus, and Grafana together. Add `postgres` to `DATABASE_URL` in `.env` (`postgresql+asyncpg://gateway:changeme@postgres:5432/gateway`) to back the admin API/audit log with the bundled Postgres service instead of SQLite. The gateway container has a `HEALTHCHECK` against `/readyz`, waits for Postgres to be healthy before running migrations (with its own retry loop in `docker-entrypoint.sh` as a second line of defense — orchestrators other than Compose don't all offer that dependency ordering), and `.dockerignore` keeps secrets/caches/tests out of the build context.
 
 ### 🎬 run the guided demo
 
@@ -261,6 +261,9 @@ The non-obvious tradeoffs — why the circuit breaker gates retry rather than th
 - **Config is validated at startup, not discovered at runtime.** Nonsensical values — a negative rate limit capacity, a zero timeout, an unsupported `DATABASE_URL` scheme, an invalid `LOG_FORMAT` — fail the process immediately with a clear message, instead of the gateway starting up and misbehaving in a way that's harder to trace back to its cause.
 - **Unhandled exceptions return a structured `500`.** Anything not already handled by a specific `except` block (a bug, a backend outage that wasn't caught closer to its source) still gets logged with the request's correlation ID and returns `{"error": "internal server error", "request_id": "..."}` — not FastAPI's bare default body — so a report of "it 500'd" can always be traced to the matching server-side log line.
 - **Pre-flight checks fail closed; post-hoc bookkeeping doesn't fail the request.** If Redis is unreachable when checking the rate limit or budget, the request is rejected. But once a provider has already returned a response, a Redis or DB blip while recording the audit log entry or spend can't discard that response — it's logged and swallowed instead. See [decision 004](docs/decisions/004-best-effort-bookkeeping-vs-fail-closed-enforcement.md) for the reasoning.
+- **Requests are validated before they reach a provider.** An empty `messages` array or an invalid `role` fails fast with a `422` at the API boundary, instead of burning a real call against every provider in the fallback chain (each rejecting it identically) before surfacing as an opaque `502`.
+- **A malformed 2xx is treated as a failure, not a crash.** An unexpected response shape from a provider — Ollama returning JSON without a `message` key, OpenAI returning an empty `choices` array — raises the same `ProviderError` a network failure would, so `FallbackRouter` falls back to the next provider instead of an unhandled `KeyError`/`IndexError` skipping the fallback chain entirely and surfacing as a raw `500`.
+- **Retries are skipped on errors that won't change on retry.** A 4xx from a provider (other than 429) fails identically every time; the router falls back to the next provider immediately instead of burning `PROVIDER_RETRY_ATTEMPTS` retries and their backoff delay for no chance of a different outcome. See [decision 005](docs/decisions/005-retryable-vs-non-retryable-provider-errors.md).
 
 ## 🔢 api versioning
 
