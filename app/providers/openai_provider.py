@@ -32,6 +32,14 @@ class OpenAIProvider(BaseProvider):
         except (APIError, APIStatusError) as exc:
             raise ProviderError(f"openai request failed: {exc}") from exc
 
+        if not response.choices:
+            # A 2xx with an empty choices array (seen from some proxies/
+            # gateways sitting in front of the real API) is as unusable as an
+            # HTTP error — it must raise ProviderError so FallbackRouter
+            # falls back, rather than an IndexError skipping the fallback
+            # chain entirely.
+            raise ProviderError("openai response contained no choices")
+
         choice = response.choices[0]
         usage = response.usage
 
