@@ -3,7 +3,21 @@ from collections.abc import AsyncIterator
 
 import httpx
 
-from app.providers.base import BaseProvider, ChatMessage, ChatResponse, ProviderError, StreamChunk
+from app.providers.base import (
+    BaseProvider,
+    ChatMessage,
+    ChatResponse,
+    ProviderError,
+    StreamChunk,
+    is_retryable_status_code,
+)
+
+
+def _provider_error(prefix: str, exc: httpx.HTTPError) -> ProviderError:
+    retryable = True
+    if isinstance(exc, httpx.HTTPStatusError):
+        retryable = is_retryable_status_code(exc.response.status_code)
+    return ProviderError(f"{prefix}: {exc}", retryable=retryable)
 
 
 class OllamaProvider(BaseProvider):
@@ -27,7 +41,7 @@ class OllamaProvider(BaseProvider):
             data = response.json()
             content = data["message"]["content"]
         except httpx.HTTPError as exc:
-            raise ProviderError(f"ollama request failed: {exc}") from exc
+            raise _provider_error("ollama request failed", exc) from exc
         except (KeyError, TypeError, json.JSONDecodeError) as exc:
             # A 2xx response with an unexpected shape (wrong Ollama version,
             # a proxy mangling the body, etc.) is just as much "this provider
@@ -73,7 +87,7 @@ class OllamaProvider(BaseProvider):
                         else:
                             yield StreamChunk(content=data["message"]["content"])
         except httpx.HTTPError as exc:
-            raise ProviderError(f"ollama stream failed: {exc}") from exc
+            raise _provider_error("ollama stream failed", exc) from exc
         except (KeyError, TypeError, json.JSONDecodeError) as exc:
             # Same reasoning as chat(): a malformed line mid-stream must still
             # surface as ProviderError so FallbackRouter's fallback-before-

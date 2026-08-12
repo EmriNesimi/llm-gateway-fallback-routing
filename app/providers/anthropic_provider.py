@@ -1,10 +1,17 @@
 from collections.abc import AsyncIterator
 from typing import cast
 
-from anthropic import AnthropicError, AsyncAnthropic
+from anthropic import AnthropicError, APIStatusError, AsyncAnthropic
 from anthropic.types import MessageParam
 
-from app.providers.base import BaseProvider, ChatMessage, ChatResponse, ProviderError, StreamChunk
+from app.providers.base import (
+    BaseProvider,
+    ChatMessage,
+    ChatResponse,
+    ProviderError,
+    StreamChunk,
+    is_retryable_status_code,
+)
 
 
 def _to_anthropic_messages(messages: list[ChatMessage]) -> list[MessageParam]:
@@ -14,6 +21,13 @@ def _to_anthropic_messages(messages: list[ChatMessage]) -> list[MessageParam]:
     return cast(
         "list[MessageParam]", [{"role": m.role, "content": m.content} for m in messages]
     )
+
+
+def _provider_error(prefix: str, exc: AnthropicError) -> ProviderError:
+    retryable = True
+    if isinstance(exc, APIStatusError):
+        retryable = is_retryable_status_code(exc.status_code)
+    return ProviderError(f"{prefix}: {exc}", retryable=retryable)
 
 
 class AnthropicProvider(BaseProvider):
@@ -30,7 +44,7 @@ class AnthropicProvider(BaseProvider):
                 messages=_to_anthropic_messages(messages),
             )
         except AnthropicError as exc:
-            raise ProviderError(f"anthropic request failed: {exc}") from exc
+            raise _provider_error("anthropic request failed", exc) from exc
 
         text = "".join(block.text for block in response.content if block.type == "text")
 
@@ -62,4 +76,4 @@ class AnthropicProvider(BaseProvider):
                     output_tokens=final.usage.output_tokens,
                 )
         except AnthropicError as exc:
-            raise ProviderError(f"anthropic stream failed: {exc}") from exc
+            raise _provider_error("anthropic stream failed", exc) from exc

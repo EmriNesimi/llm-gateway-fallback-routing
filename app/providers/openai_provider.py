@@ -4,7 +4,21 @@ from typing import cast
 from openai import APIError, APIStatusError, AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 
-from app.providers.base import BaseProvider, ChatMessage, ChatResponse, ProviderError, StreamChunk
+from app.providers.base import (
+    BaseProvider,
+    ChatMessage,
+    ChatResponse,
+    ProviderError,
+    StreamChunk,
+    is_retryable_status_code,
+)
+
+
+def _provider_error(prefix: str, exc: APIError) -> ProviderError:
+    retryable = True
+    if isinstance(exc, APIStatusError):
+        retryable = is_retryable_status_code(exc.status_code)
+    return ProviderError(f"{prefix}: {exc}", retryable=retryable)
 
 
 def _to_openai_messages(messages: list[ChatMessage]) -> list[ChatCompletionMessageParam]:
@@ -30,7 +44,7 @@ class OpenAIProvider(BaseProvider):
                 messages=_to_openai_messages(messages),
             )
         except (APIError, APIStatusError) as exc:
-            raise ProviderError(f"openai request failed: {exc}") from exc
+            raise _provider_error("openai request failed", exc) from exc
 
         if not response.choices:
             # A 2xx with an empty choices array (seen from some proxies/
@@ -73,4 +87,4 @@ class OpenAIProvider(BaseProvider):
                 elif event.choices and event.choices[0].delta.content:
                     yield StreamChunk(content=event.choices[0].delta.content)
         except (APIError, APIStatusError) as exc:
-            raise ProviderError(f"openai stream failed: {exc}") from exc
+            raise _provider_error("openai stream failed", exc) from exc

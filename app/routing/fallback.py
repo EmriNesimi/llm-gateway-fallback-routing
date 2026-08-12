@@ -78,7 +78,22 @@ class FallbackRouter:
                     except ProviderError as exc:
                         last_error = exc
                         span.set_attribute("gateway.error", str(exc))
+                        span.set_attribute("gateway.retryable", exc.retryable)
                         PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="error").inc()
+                        if not exc.retryable:
+                            # A 4xx-class client error fails identically on
+                            # every retry — skip straight to the next
+                            # provider instead of burning the remaining
+                            # retries and their backoff for no chance of a
+                            # different outcome.
+                            logger.warning(
+                                "[request_id=%s] provider %s failed with a non-retryable"
+                                " error, falling back immediately: %s",
+                                request_id,
+                                provider.name,
+                                exc,
+                            )
+                            break
                         if retry < self._retry_attempts:
                             logger.warning(
                                 "[request_id=%s] provider %s failed (retry %d/%d): %s",
@@ -157,7 +172,17 @@ class FallbackRouter:
                     if failure is not None:
                         last_error = failure
                         span.set_attribute("gateway.error", str(failure))
+                        span.set_attribute("gateway.retryable", failure.retryable)
                         PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="error").inc()
+                        if not failure.retryable:
+                            logger.warning(
+                                "[request_id=%s] provider %s failed before first chunk with a"
+                                " non-retryable error, falling back immediately: %s",
+                                request_id,
+                                provider.name,
+                                failure,
+                            )
+                            break
                         if retry < self._retry_attempts:
                             logger.warning(
                                 "[request_id=%s] provider %s failed before first chunk"

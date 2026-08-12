@@ -37,7 +37,31 @@ class StreamChunk:
 
 
 class ProviderError(Exception):
-    """Raised when a provider call fails in a way that should trigger fallback."""
+    """Raised when a provider call fails in a way that should trigger fallback.
+
+    `retryable` distinguishes two very different failure shapes: a timeout or
+    connection drop is worth retrying against the SAME provider (it might
+    just be transient noise), but a 4xx client error (bad request, unknown
+    model, invalid API key) will fail identically on every retry — burning
+    `provider_retry_attempts` retries against it before falling back wastes
+    real latency for zero chance of a different outcome. Defaults to True so
+    provider code that doesn't reason about this explicitly keeps today's
+    retry-then-fallback behavior; provider adapters set it to False when they
+    can positively identify a non-transient failure.
+    """
+
+    def __init__(self, message: str, *, retryable: bool = True):
+        super().__init__(message)
+        self.retryable = retryable
+
+
+def is_retryable_status_code(status_code: int) -> bool:
+    """429 (rate limited) and 5xx are worth retrying — the same request might
+    succeed a moment later. Any other 4xx (bad request, invalid model,
+    auth failure) will fail identically every time; retrying it is pure
+    wasted latency. Shared by every provider adapter so the rule is defined
+    once, not reimplemented slightly differently per provider."""
+    return status_code == 429 or status_code >= 500
 
 
 class BaseProvider(ABC):
