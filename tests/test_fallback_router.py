@@ -94,6 +94,58 @@ async def test_raises_when_all_providers_exhausted():
         await router.chat([ChatMessage(role="user", content="hi")])
 
 
+class NonRetryableProvider(BaseProvider):
+    """Simulates a provider rejecting the request outright (e.g. a 400 for
+    an invalid model) — every call fails identically, so retrying is pure
+    waste. Tracks call count to prove the router doesn't burn retries here."""
+
+    name = "non_retryable"
+
+    def __init__(self):
+        self.calls = 0
+
+    async def chat(self, model, messages):
+        self.calls += 1
+        raise ProviderError("bad request", retryable=False)
+
+    async def chat_stream(self, model, messages):
+        raise NotImplementedError("not exercised by these tests")
+        yield  # pragma: no cover - makes this an async generator
+
+
+@pytest.mark.asyncio
+async def test_non_retryable_error_skips_remaining_retries():
+    bad = NonRetryableProvider()
+    backup = FakeProvider("backup", fail_times=0)
+    router = FallbackRouter(
+        chain=[(bad, "model-a", _breaker()), (backup, "model-b", _breaker())],
+        retry_attempts=3,
+        retry_backoff_seconds=0,
+    )
+
+    result = await router.chat([ChatMessage(role="user", content="hi")])
+
+    assert result.provider == "backup"
+    # Exactly one call — none of the 3 configured retries were burned
+    # against a provider whose failure was never going to change.
+    assert bad.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_retryable_error_still_retries_before_falling_back():
+    flaky = FakeProvider("flaky", fail_times=1)  # default ProviderError is retryable
+    router = FallbackRouter(
+        chain=[(flaky, "model-a", _breaker())],
+        retry_attempts=1,
+        retry_backoff_seconds=0,
+    )
+
+    result = await router.chat([ChatMessage(role="user", content="hi")])
+
+    assert result.provider == "flaky"
+    assert flaky.calls == 2
+
+
 @pytest.mark.asyncio
 async def test_result_model_is_requested_model_not_providers_echo():
     provider = DatedSnapshotProvider()
