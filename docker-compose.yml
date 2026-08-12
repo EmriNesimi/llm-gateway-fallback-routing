@@ -38,6 +38,14 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      # postgres is already started unconditionally by `docker compose up`
+      # (no profiles gate it), so this costs nothing even when DATABASE_URL
+      # points at SQLite — but without it, a DATABASE_URL pointed at the
+      # bundled postgres service (as documented above) could race
+      # docker-entrypoint.sh's `alembic upgrade head` against postgres still
+      # starting up, crashing the gateway container on a cold `up`.
+      postgres:
+        condition: service_healthy
 
   prometheus:
     image: prom/prometheus:latest
