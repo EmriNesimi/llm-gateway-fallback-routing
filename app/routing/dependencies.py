@@ -1,6 +1,6 @@
 from app.core.config import settings
 from app.providers.anthropic_provider import AnthropicProvider
-from app.providers.base import BaseProvider
+from app.providers.base import BaseProvider, UnconfiguredProvider
 from app.providers.ollama_provider import OllamaProvider
 from app.providers.openai_provider import OpenAIProvider
 from app.routing.circuit_breaker import CircuitBreaker
@@ -16,15 +16,21 @@ def _get_provider(name: str) -> BaseProvider:
         return _PROVIDER_INSTANCES[name]
 
     if name == "openai":
-        provider: BaseProvider = OpenAIProvider(
-            api_key=settings.openai_api_key or "",
-            timeout_seconds=settings.provider_request_timeout_seconds,
-        )
+        if not settings.openai_api_key:
+            provider: BaseProvider = UnconfiguredProvider(name)
+        else:
+            provider = OpenAIProvider(
+                api_key=settings.openai_api_key,
+                timeout_seconds=settings.provider_request_timeout_seconds,
+            )
     elif name == "anthropic":
-        provider = AnthropicProvider(
-            api_key=settings.anthropic_api_key or "",
-            timeout_seconds=settings.provider_request_timeout_seconds,
-        )
+        if not settings.anthropic_api_key:
+            provider = UnconfiguredProvider(name)
+        else:
+            provider = AnthropicProvider(
+                api_key=settings.anthropic_api_key,
+                timeout_seconds=settings.provider_request_timeout_seconds,
+            )
     elif name == "ollama":
         provider = OllamaProvider(
             base_url=settings.ollama_base_url,

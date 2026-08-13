@@ -76,3 +76,26 @@ class BaseProvider(ABC):
         self, model: str, messages: list[ChatMessage]
     ) -> AsyncIterator[StreamChunk]:
         ...
+
+
+class UnconfiguredProvider(BaseProvider):
+    """Stand-in for a provider with no API key set (e.g. OPENAI_API_KEY
+    unset). Fails instantly and non-retryably, with zero network calls —
+    the alternative, constructing the real SDK client with an empty key, is
+    actively dangerous: the OpenAI SDK raises at *construction* time on a
+    missing key, which previously crashed build_router() outright and took
+    the whole fallback chain down with it (Anthropic/Ollama never even got a
+    chance), rather than the intended "skip this one, fall back" behavior.
+    """
+
+    def __init__(self, name: str):
+        self.name = name
+
+    async def chat(self, model: str, messages: list[ChatMessage]) -> ChatResponse:
+        raise ProviderError(f"{self.name} is not configured (no API key set)", retryable=False)
+
+    async def chat_stream(
+        self, model: str, messages: list[ChatMessage]
+    ) -> AsyncIterator[StreamChunk]:
+        raise ProviderError(f"{self.name} is not configured (no API key set)", retryable=False)
+        yield  # pragma: no cover - unreachable, makes this an async generator
