@@ -1,10 +1,21 @@
 import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class CreateKeyRequest(BaseModel):
     team: str
+
+    @field_validator("team")
+    @classmethod
+    def _team_must_be_meaningful(cls, value: str) -> str:
+        # Without this, "" or "   " passed validation and silently produced
+        # a usable key with no meaningful team attribution — defeating the
+        # entire point of the admin API's per-team audit log/spend tracking.
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("team must not be empty or whitespace-only")
+        return stripped
 
 
 class CreateKeyResponse(BaseModel):
