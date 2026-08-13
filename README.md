@@ -197,6 +197,8 @@ git clone https://github.com/EmriNesimi/llm-gateway-fallback-routing.git
 cd llm-gateway-fallback-routing
 
 cp .env.example .env   # fill in your real API keys — .env is git-ignored
+# you don't need all of OpenAI/Anthropic/Ollama — an unset provider is
+# skipped cleanly and the fallback chain still works with whatever you have
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
@@ -264,6 +266,7 @@ The non-obvious tradeoffs — why the circuit breaker gates retry rather than th
 - **Requests are validated before they reach a provider.** An empty `messages` array or an invalid `role` fails fast with a `422` at the API boundary, instead of burning a real call against every provider in the fallback chain (each rejecting it identically) before surfacing as an opaque `502`.
 - **A malformed 2xx is treated as a failure, not a crash.** An unexpected response shape from a provider — Ollama returning JSON without a `message` key, OpenAI returning an empty `choices` array — raises the same `ProviderError` a network failure would, so `FallbackRouter` falls back to the next provider instead of an unhandled `KeyError`/`IndexError` skipping the fallback chain entirely and surfacing as a raw `500`.
 - **Retries are skipped on errors that won't change on retry.** A 4xx from a provider (other than 429) fails identically every time; the router falls back to the next provider immediately instead of burning `PROVIDER_RETRY_ATTEMPTS` retries and their backoff delay for no chance of a different outcome. See [decision 005](docs/decisions/005-retryable-vs-non-retryable-provider-errors.md).
+- **Running with only some providers configured just works.** You don't need all three of `OPENAI_API_KEY`/`ANTHROPIC_API_KEY`/a running Ollama — an unset key skips that provider cleanly and falls back to the next one, rather than crashing the whole chain. (This one was a real bug, not a hypothetical: the OpenAI SDK raises at client-construction time on a missing key, which briefly meant an unset `OPENAI_API_KEY` took down every provider in the chain, not just OpenAI. See [decision 006](docs/decisions/006-unconfigured-providers-fail-fast-not-crash.md).)
 
 ## 🔢 api versioning
 
