@@ -3,6 +3,10 @@
 Ollama is local/free, so it has no entry and costs $0.
 """
 
+import logging
+
+logger = logging.getLogger("gateway.pricing")
+
 # (input_price_per_token, output_price_per_token)
 _PRICING: dict[str, tuple[float, float]] = {
     "openai:gpt-4o-mini": (0.15 / 1_000_000, 0.60 / 1_000_000),
@@ -13,5 +17,22 @@ _PRICING: dict[str, tuple[float, float]] = {
 def estimate_cost_usd(
     provider: str, model: str, input_tokens: int, output_tokens: int
 ) -> float:
-    input_price, output_price = _PRICING.get(f"{provider}:{model}", (0.0, 0.0))
+    key = f"{provider}:{model}"
+    pricing = _PRICING.get(key)
+    if pricing is None:
+        if provider != "ollama":
+            # Ollama has no entry by design (local/free) — anything else
+            # missing means a model was added to app/routing/model_map.py
+            # without a matching pricing entry here. Silently returning $0
+            # would make that invisible: budget enforcement (a core safety
+            # feature) would stop working for this model with no signal
+            # anything's wrong, since spend would never accumulate.
+            logger.warning(
+                "no pricing entry for %s — cost for this request will be recorded as"
+                " $0, and budget enforcement will not see it. Add an entry to"
+                " app/budget/pricing.py's _PRICING.",
+                key,
+            )
+        pricing = (0.0, 0.0)
+    input_price, output_price = pricing
     return input_tokens * input_price + output_tokens * output_price
