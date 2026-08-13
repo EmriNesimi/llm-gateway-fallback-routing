@@ -77,6 +77,26 @@ def test_get_unknown_key_returns_404(isolated_db):
         assert r.status_code == 404
 
 
+@pytest.mark.parametrize("team", ["", "   ", "\t\n"])
+def test_create_key_rejects_empty_or_whitespace_team(isolated_db, team):
+    with TestClient(app) as client:
+        r = client.post(
+            "/admin/keys", json={"team": team}, headers={"X-Admin-Key": "test-admin-secret"}
+        )
+    assert r.status_code == 422
+
+
+def test_create_key_strips_surrounding_whitespace_from_team(isolated_db):
+    with TestClient(app) as client:
+        r = client.post(
+            "/admin/keys",
+            json={"team": "  acme  "},
+            headers={"X-Admin-Key": "test-admin-secret"},
+        )
+    assert r.status_code == 200
+    assert r.json()["team"] == "acme"
+
+
 def test_list_keys_offset_paginates_past_limit(isolated_db):
     headers = {"X-Admin-Key": "test-admin-secret"}
     with TestClient(app) as client:
