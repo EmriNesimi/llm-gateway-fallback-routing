@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import time
@@ -108,26 +109,37 @@ async def healthz():
     return {"status": "ok"}
 
 
+async def _check_redis() -> str:
+    try:
+        await get_redis().ping()
+        return "ok"
+    except Exception as exc:  # noqa: BLE001 - report any failure, not just known types
+        return f"error: {exc}"
+
+
+async def _check_database() -> str:
+    try:
+        async with async_session() as session:
+            await session.execute(text("SELECT 1"))
+        return "ok"
+    except Exception as exc:  # noqa: BLE001
+        return f"error: {exc}"
+
+
 @app.get("/readyz")
 async def readyz():
     """Readiness: can this instance actually serve traffic? Checks the
     dependencies /v1/chat needs (Redis for rate limits/budgets, the DB for
     the admin API/audit log) so a load balancer can route around an instance
-    that's up but can't reach them."""
-    checks: dict[str, str] = {}
+    that's up but can't reach them.
 
-    try:
-        await get_redis().ping()
-        checks["redis"] = "ok"
-    except Exception as exc:  # noqa: BLE001 - report any failure, not just known types
-        checks["redis"] = f"error: {exc}"
-
-    try:
-        async with async_session() as session:
-            await session.execute(text("SELECT 1"))
-        checks["database"] = "ok"
-    except Exception as exc:  # noqa: BLE001
-        checks["database"] = f"error: {exc}"
+    Run concurrently, not sequentially — with both backends now carrying
+    their own bounded timeouts (see decision 007), a naive sequential await
+    would mean this endpoint's own worst-case latency is the SUM of both
+    timeouts instead of the max of the two, undermining the point of a fast
+    readiness probe."""
+    redis_status, database_status = await asyncio.gather(_check_redis(), _check_database())
+    checks = {"redis": redis_status, "database": database_status}
 
     healthy = all(v == "ok" for v in checks.values())
     status_code = 200 if healthy else 503
