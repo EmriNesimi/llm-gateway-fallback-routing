@@ -1,3 +1,5 @@
+import logging
+
 import pytest
 from pydantic import ValidationError
 
@@ -66,3 +68,23 @@ def test_unsupported_database_scheme_is_rejected():
 )
 def test_supported_database_schemes_are_accepted(database_url):
     assert _settings(database_url=database_url).database_url == database_url
+
+
+def test_warns_when_no_hosted_provider_is_configured(caplog):
+    with caplog.at_level(logging.WARNING, logger="gateway.config"):
+        _settings(openai_api_key=None, anthropic_api_key=None)
+    assert any("OPENAI_API_KEY" in r.message for r in caplog.records)
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"openai_api_key": "sk-test", "anthropic_api_key": None},
+        {"openai_api_key": None, "anthropic_api_key": "sk-ant-test"},
+        {"openai_api_key": "sk-test", "anthropic_api_key": "sk-ant-test"},
+    ],
+)
+def test_no_warning_when_at_least_one_hosted_provider_is_configured(caplog, kwargs):
+    with caplog.at_level(logging.WARNING, logger="gateway.config"):
+        _settings(**kwargs)
+    assert not any("OPENAI_API_KEY" in r.message for r in caplog.records)
