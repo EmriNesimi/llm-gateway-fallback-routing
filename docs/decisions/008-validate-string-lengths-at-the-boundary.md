@@ -62,3 +62,17 @@ row.
   decision 007's "verify against real Postgres, not just SQLite" discipline
   exist to catch — all three were found by doing that, not by reading the
   code.
+- **The test suite itself still only ever runs against SQLite.** Making
+  `tests/conftest.py`'s `isolated_db` fixture run the same test suite
+  against real Postgres in CI was attempted and reverted: sharing one
+  asyncpg connection across a test (for savepoint-based transactional
+  rollback, the standard isolation pattern) breaks under FastAPI
+  `TestClient` + `BaseHTTPMiddleware`, which spawns the request into a
+  separate task — asyncpg connections aren't safe for concurrent use
+  across tasks, producing `RuntimeError`/`InterfaceError` failures unrelated
+  to the code under test. A correct version would need per-request
+  connection pooling still scoped to one outer transaction (e.g. a
+  contextvar-scoped connection), which is a bigger, riskier change than
+  fit this pass. Until that exists, this exact class of bug (SQLite
+  accepts, Postgres rejects) can still only be caught by deliberate manual
+  verification against real Postgres — not by CI automatically.
