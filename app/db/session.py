@@ -8,20 +8,29 @@ from app.db.models import Base
 
 logger = logging.getLogger("gateway.db")
 
-# asyncpg-specific connect/command timeouts — meaningless to (and rejected
-# by) aiosqlite, so only passed for a Postgres DATABASE_URL. See
-# app/core/config.py for why these exist: asyncpg's own defaults either
-# aren't set (command_timeout) or are too long for a request path (connect).
-_connect_args = (
-    {
-        "timeout": settings.database_connect_timeout_seconds,
-        "command_timeout": settings.database_command_timeout_seconds,
-    }
-    if settings.database_url.startswith("postgresql")
-    else {}
-)
 
-engine = create_async_engine(settings.database_url, connect_args=_connect_args)
+def build_connect_args(
+    database_url: str, connect_timeout_seconds: float, command_timeout_seconds: float
+) -> dict[str, float]:
+    """asyncpg-specific connect/command timeouts — meaningless to (and
+    rejected by) aiosqlite, so only returned for a Postgres DATABASE_URL. See
+    app/core/config.py for why these exist: asyncpg's own defaults either
+    aren't set (command_timeout) or are too long for a request path
+    (connect). A plain function so this logic is testable without reloading
+    the module (`engine` below is built once at import time)."""
+    if not database_url.startswith("postgresql"):
+        return {}
+    return {"timeout": connect_timeout_seconds, "command_timeout": command_timeout_seconds}
+
+
+engine = create_async_engine(
+    settings.database_url,
+    connect_args=build_connect_args(
+        settings.database_url,
+        settings.database_connect_timeout_seconds,
+        settings.database_command_timeout_seconds,
+    ),
+)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 
