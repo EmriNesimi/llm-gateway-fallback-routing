@@ -213,10 +213,12 @@ Testing this in VS Code specifically (Test Explorer setup, a debug config with b
 
 ```bash
 make lint
+make typecheck
+make audit
 make test
 ```
 
-(equivalent to `ruff check .` and `pytest -q --cov=app --cov-report=term-missing` — see the `Makefile` for the rest: `make run`, `make migrate`, `make up`/`down`, `make demo`)
+(equivalent to `ruff check .`, `mypy`, `pip-audit -r requirements.txt`, and `pytest -q --cov=app --cov-report=term-missing` — see the `Makefile` for the rest: `make run`, `make migrate`, `make up`/`down`, `make demo`)
 
 Same commands CI runs on every push/PR to `main` — CI also runs a real Redis service container, so the rate limiter's Lua script is tested against genuine Redis, not just `fakeredis`'s emulation of it.
 
@@ -280,7 +282,8 @@ Every client-facing route lives under `/v1/`; operational routes (`/healthz`, `/
 - **Structured logging** is scrubbed of tokens, keys, and Authorization headers.
 - **Security headers** (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`) are set on every response.
 - **CORS is closed by default.** No `Access-Control-Allow-Origin` header at all unless `CORS_ALLOWED_ORIGINS` is explicitly set — this API is meant to be called server-to-server, not from arbitrary browser origins.
-- Dependency and secret scanning are enabled on this repository.
+- **`pip-audit` runs in CI** (`make audit` locally) on every push, checking every pinned dependency against known CVE databases — a vulnerable transitive dependency fails the build instead of going unnoticed.
+- Secret scanning is enabled on this repository (auto-enabled for public GitHub repos).
 - Licensed under [MIT](LICENSE).
 
 <div align="center">
