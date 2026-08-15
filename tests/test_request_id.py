@@ -35,6 +35,29 @@ def _client_key(monkeypatch):
     monkeypatch.setattr(admin_auth.settings, "admin_api_key", "test-admin-secret")
 
 
+def test_oversized_request_id_is_replaced_not_honored():
+    # Regression test: AuditLogEntry.request_id is a String(64) column — on
+    # Postgres, inserting anything longer raises StringDataRightTruncationError
+    # at the DB layer. record_audit_log catches that (decision 004) so the
+    # request itself never fails, but a caller sending an oversized ID on
+    # every request would silently lose audit logging for all of it. Capped
+    # at the source instead of relying on that safety net.
+    oversized = "x" * 500
+    with TestClient(app) as client:
+        r = client.get("/healthz", headers={"X-Request-ID": oversized})
+
+    assert r.headers["X-Request-ID"] != oversized
+    assert len(r.headers["X-Request-ID"]) <= 64
+
+
+def test_max_length_request_id_is_still_honored():
+    exactly_64 = "a" * 64
+    with TestClient(app) as client:
+        r = client.get("/healthz", headers={"X-Request-ID": exactly_64})
+
+    assert r.headers["X-Request-ID"] == exactly_64
+
+
 def test_request_id_is_generated_when_not_supplied(isolated_db, isolated_redis, monkeypatch):
     monkeypatch.setattr(main_module, "build_router", lambda model: FakeRouter())
 
