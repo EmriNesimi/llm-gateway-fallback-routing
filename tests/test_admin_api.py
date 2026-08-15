@@ -97,6 +97,30 @@ def test_create_key_strips_surrounding_whitespace_from_team(isolated_db):
     assert r.json()["team"] == "acme"
 
 
+def test_create_key_rejects_oversized_team(isolated_db):
+    # Regression test: ApiKeyRecord.team / AuditLogEntry.team are both
+    # String(255) columns. SQLite (used here) doesn't enforce VARCHAR
+    # length, so this would silently succeed without the max_length
+    # validation — and only fail on Postgres in production.
+    with TestClient(app) as client:
+        r = client.post(
+            "/admin/keys",
+            json={"team": "x" * 256},
+            headers={"X-Admin-Key": "test-admin-secret"},
+        )
+    assert r.status_code == 422
+
+
+def test_create_key_accepts_team_at_exactly_the_length_limit(isolated_db):
+    with TestClient(app) as client:
+        r = client.post(
+            "/admin/keys",
+            json={"team": "x" * 255},
+            headers={"X-Admin-Key": "test-admin-secret"},
+        )
+    assert r.status_code == 200
+
+
 def test_list_keys_offset_paginates_past_limit(isolated_db):
     headers = {"X-Admin-Key": "test-admin-secret"}
     with TestClient(app) as client:

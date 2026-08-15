@@ -51,6 +51,25 @@ def test_empty_message_content_is_rejected(_client):
     assert r.status_code == 422
 
 
+def test_empty_model_is_rejected(_client):
+    r = _client.post(
+        "/v1/chat",
+        json={"model": "", "messages": [{"role": "user", "content": "hi"}]},
+    )
+    assert r.status_code == 422
+
+
+def test_oversized_model_is_rejected(_client):
+    # Regression test: AuditLogEntry.requested_model is a String(255)
+    # column. SQLite doesn't enforce VARCHAR length, so this would silently
+    # succeed without the max_length validation, only failing on Postgres.
+    r = _client.post(
+        "/v1/chat",
+        json={"model": "x" * 256, "messages": [{"role": "user", "content": "hi"}]},
+    )
+    assert r.status_code == 422
+
+
 def test_valid_roles_are_accepted_by_validation(_client):
     # Not asserting a 200 here — no real provider is reachable in this test
     # environment — just that these roles pass schema validation and the
