@@ -9,7 +9,12 @@ class ChatMessageIn(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    model: str
+    # max_length matches AuditLogEntry.requested_model's String(255) column.
+    # An oversized value wouldn't break /v1/chat itself (record_audit_log
+    # catches DB failures — see decision 004) but would silently and
+    # permanently lose audit logging for that caller's traffic on Postgres,
+    # same class of gap as the X-Request-ID length cap.
+    model: str = Field(min_length=1, max_length=255)
     # Must be non-empty: an empty list is a client mistake, not something
     # any provider can usefully answer. Without this, it was passing our
     # validation, burning a real call against every provider in the fallback

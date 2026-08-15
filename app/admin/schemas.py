@@ -1,10 +1,17 @@
 import datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CreateKeyRequest(BaseModel):
-    team: str
+    # max_length matches ApiKeyRecord.team / AuditLogEntry.team's
+    # String(255) column. Without this, SQLite (used in dev/tests) silently
+    # accepts an oversized value — VARCHAR length isn't enforced there — but
+    # the same request against Postgres in production is a hard INSERT
+    # failure (StringDataRightTruncationError), a "works in dev, breaks in
+    # prod" gap only caught by testing against real Postgres (see decision
+    # 007 and the CI job that does exactly that).
+    team: str = Field(max_length=255)
 
     @field_validator("team")
     @classmethod
