@@ -107,6 +107,16 @@ class Settings(BaseSettings):
                 "ADMIN_API_KEY is not set; the admin API (key issuance/revocation) "
                 "will refuse all requests rather than being left open."
             )
+        if not self.openai_api_key and not self.anthropic_api_key:
+            # Not necessarily broken (Ollama alone is a valid setup) but
+            # easy to hit by accident — an empty .env still starts cleanly
+            # and /readyz still reports "ok" (it checks Redis/DB, not
+            # providers), so without this warning every /v1/chat request
+            # failing would be the first sign anything's wrong.
+            logger.warning(
+                "Neither OPENAI_API_KEY nor ANTHROPIC_API_KEY is set; only Ollama "
+                "(if reachable at OLLAMA_BASE_URL) will be able to serve requests."
+            )
 
 
 settings = Settings()
