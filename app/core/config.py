@@ -21,9 +21,23 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://localhost:11434"
 
     redis_url: str = "redis://localhost:6379/0"
+    # Without these, redis-py blocks on the OS-level TCP timeout to connect
+    # (platform-dependent, often 30s+) and indefinitely on socket_timeout for
+    # a connection that accepted but never responds — meaning a Redis that's
+    # merely unresponsive (not cleanly refusing connections) could hang
+    # /readyz and every rate-limit/budget check instead of failing fast.
+    redis_connect_timeout_seconds: float = Field(default=5.0, gt=0)
+    redis_socket_timeout_seconds: float = Field(default=5.0, gt=0)
     # SQLite by default so the gateway runs with zero external setup; point at
     # Postgres in production via DATABASE_URL (e.g. postgresql+asyncpg://...).
     database_url: str = "sqlite+aiosqlite:///./gateway.db"
+    # Only applied for Postgres (see app/db/session.py) — SQLite is a local
+    # file with no network involved. asyncpg's own default connect timeout is
+    # 60s (too long for a request path) and its command_timeout is unset
+    # entirely by default, meaning a hung Postgres backend (a stuck lock, a
+    # network partition after connect) could block a query indefinitely.
+    database_connect_timeout_seconds: float = Field(default=5.0, gt=0)
+    database_command_timeout_seconds: float = Field(default=10.0, gt=0)
 
     # Shared secret for the admin API (key issuance/revocation). Separate from
     # GATEWAY_API_KEYS since admin access is a different trust level.

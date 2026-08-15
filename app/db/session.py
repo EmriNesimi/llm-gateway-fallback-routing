@@ -8,7 +8,20 @@ from app.db.models import Base
 
 logger = logging.getLogger("gateway.db")
 
-engine = create_async_engine(settings.database_url)
+# asyncpg-specific connect/command timeouts — meaningless to (and rejected
+# by) aiosqlite, so only passed for a Postgres DATABASE_URL. See
+# app/core/config.py for why these exist: asyncpg's own defaults either
+# aren't set (command_timeout) or are too long for a request path (connect).
+_connect_args = (
+    {
+        "timeout": settings.database_connect_timeout_seconds,
+        "command_timeout": settings.database_command_timeout_seconds,
+    }
+    if settings.database_url.startswith("postgresql")
+    else {}
+)
+
+engine = create_async_engine(settings.database_url, connect_args=_connect_args)
 async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 
