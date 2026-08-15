@@ -31,6 +31,11 @@ def _settings(**overrides):
         ("provider_request_timeout_seconds", 0),
         ("provider_request_timeout_seconds", -5),
         ("ollama_request_timeout_seconds", 0),
+        ("redis_connect_timeout_seconds", 0),
+        ("redis_connect_timeout_seconds", -1),
+        ("redis_socket_timeout_seconds", 0),
+        ("database_connect_timeout_seconds", 0),
+        ("database_command_timeout_seconds", 0),
     ],
 )
 def test_out_of_range_numeric_settings_are_rejected(field, value):
