@@ -1,10 +1,19 @@
 import logging
+import os
 from typing import Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger("gateway.config")
+
+# Which env file to read, if any. Overridable so a caller can opt out of file
+# loading entirely by setting GATEWAY_ENV_FILE="" — which the test suite does,
+# because Settings is constructed at import time and would otherwise pick up
+# whichever .env the developer happens to have (real API keys, real budget
+# caps, a live OTLP endpoint). That made the suite exercise one configuration
+# locally and a different one in CI, where no .env exists.
+_ENV_FILE = os.environ.get("GATEWAY_ENV_FILE", ".env") or None
 
 _INSECURE_SECRET_DEFAULT = "dev-only-insecure-key"
 # Schemes app/db/session.py and migrations/env.py actually know how to drive —
@@ -14,7 +23,7 @@ _SUPPORTED_DATABASE_SCHEMES = ("sqlite+aiosqlite", "postgresql+asyncpg")
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
     openai_api_key: str | None = None
     anthropic_api_key: str | None = None
