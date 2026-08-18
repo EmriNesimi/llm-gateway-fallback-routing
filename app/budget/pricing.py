@@ -7,9 +7,22 @@ import logging
 
 logger = logging.getLogger("gateway.pricing")
 
-# (input_price_per_token, output_price_per_token)
+# (input_price_per_token, output_price_per_token), quoted per 1M tokens below
+# to match how both providers publish their rates.
+#
+# Anthropic rates are first-party API list prices. Bedrock and Vertex are
+# partner-operated and priced separately, so these would be wrong for a
+# deployment routed through either.
 _PRICING: dict[str, tuple[float, float]] = {
     "openai:gpt-4o-mini": (0.15 / 1_000_000, 0.60 / 1_000_000),
+    # TODO(verify): confirm against https://openai.com/api/pricing before
+    # trusting budget enforcement on the "smart" chain. Every other rate here
+    # came from a provider reference; this one is the odd one out.
+    "openai:gpt-4o": (2.50 / 1_000_000, 10.00 / 1_000_000),
+    "anthropic:claude-haiku-4-5": (1.00 / 1_000_000, 5.00 / 1_000_000),
+    "anthropic:claude-opus-5": (5.00 / 1_000_000, 25.00 / 1_000_000),
+    # No longer in any chain, kept so audit rows written against the previous
+    # default chain still price correctly if they're ever recomputed.
     "anthropic:claude-3-5-haiku-20241022": (0.80 / 1_000_000, 4.00 / 1_000_000),
 }
 
