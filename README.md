@@ -126,6 +126,29 @@ Every response (success, `429`, or `402`) on both endpoints carries status heade
 | `X-Request-ID` | Correlation ID for this request — see below |
 | `X-Gateway-Chain` | Which fallback chain actually served this request — see below |
 
+## 🔁 drop-in openai compatibility
+
+`POST /v1/chat/completions` speaks OpenAI's Chat Completions format, so an application already built against the `openai` SDK gets the fallback chain, rate limiting, budgets, and audit trail by changing one line — its `base_url`:
+
+```python
+from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:8000/v1", api_key="<your gateway key>")
+
+completion = client.chat.completions.create(
+    model="fast",                                    # a chain name, see below
+    messages=[{"role": "user", "content": "hello"}],
+)
+print(completion.choices[0].message.content)
+```
+
+`stream=True` works the same way, emitting `chat.completion.chunk` deltas. `GET /v1/models` is compatible too, so `client.models.list()` returns the routable chains. The test suite drives all three with the real SDK rather than hand-built JSON — see `tests/test_openai_compat.py`.
+
+Two deliberate differences from OpenAI:
+
+- **Unknown models are rejected**, not substituted. This endpoint is new, so it has no callers to break and doesn't inherit the compatibility constraint `/v1/chat` is stuck with ([decision 009](docs/decisions/009-unknown-model-handling.md)).
+- **Sampling parameters aren't forwarded.** `temperature`, `top_p` and friends are accepted so clients don't break, but the provider adapters don't pass them through yet — so rather than dropping them silently, the response carries `X-Gateway-Ignored-Params` and the gateway logs a warning naming each one.
+
 ## 🎚️ picking a chain
 
 The `model` field selects a **fallback chain**, not a specific model. Chains are capability tiers, so a chain can be re-pointed at a newer model without any client changing:

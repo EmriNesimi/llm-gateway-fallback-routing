@@ -1,6 +1,7 @@
 # API versioning policy
 
-Every route lives under `/v1/` (`/v1/chat`, `/v1/chat/stream`). Everything
+Every route lives under `/v1/` (`/v1/chat`, `/v1/chat/stream`,
+`/v1/chat/completions`, `/v1/models`). Everything
 outside that prefix — `/healthz`, `/readyz`, `/metrics`, `/admin/*` — is
 operational or administrative, not part of the versioned client contract, and
 can change without a version bump.
@@ -21,6 +22,10 @@ can change without a version bump.
 - Adding a new field to a response body (clients that don't know about it
   should ignore it, per normal JSON client behavior).
 - Adding new virtual model names to the fallback map.
+- Adding a whole new route under `/v1/`. `/v1/chat/completions` shipped this
+  way. A route with no callers has no compatibility obligations, which is why
+  it can reject unroutable models outright while `/v1/chat` can't — see
+  [decision 009](decisions/009-unknown-model-handling.md).
 - Adding new response headers (`X-RateLimit-*`, `X-Budget-*`, `X-Request-ID`
   all shipped this way).
 - Internal routing/fallback/retry behavior changes that don't alter the
