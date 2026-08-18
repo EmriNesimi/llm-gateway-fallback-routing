@@ -124,6 +124,24 @@ Every response (success, `429`, or `402`) on both endpoints carries status heade
 | `Retry-After` | Seconds to wait before retrying (`429` responses only) |
 | `X-Budget-Remaining-USD` | Monthly budget left as of this request's admission |
 | `X-Request-ID` | Correlation ID for this request — see below |
+| `X-Gateway-Chain` | Which fallback chain actually served this request — see below |
+
+## 🎚️ picking a chain
+
+The `model` field selects a **fallback chain**, not a specific model. Chains are capability tiers, so a chain can be re-pointed at a newer model without any client changing:
+
+| `model` | Chain | Notes |
+|---|---|---|
+| `default` | OpenAI `gpt-4o-mini` → Anthropic `claude-haiku-4-5` → Ollama `llama3` | What you get if you don't pick |
+| `fast` | same as `default` | Named explicitly, so the intent is in the request rather than implied |
+| `smart` | Anthropic `claude-opus-5` → OpenAI `gpt-4o` | No local hop on purpose — a caller who asked for the strongest model deserves a `502` rather than an 8B model quietly answering in its place |
+| `local` | Ollama `llama3` | Nothing leaves the host, nothing is billed |
+
+`GET /v1/models` returns this list at runtime (same `object`/`data` envelope as OpenAI's, plus the providers behind each name), so a client can discover the routable names instead of guessing.
+
+**A model this gateway can't route is served by `default`** — the behavior it's always had — but no longer silently: the response carries `X-Gateway-Chain: default`, and the substitution is logged with the request ID. Set `STRICT_MODEL_ROUTING=true` to get a `404` listing the routable names instead. It defaults to `false` because turning a `200` into a `404` is a breaking change under [`docs/api-versioning.md`](docs/api-versioning.md), and that policy doesn't get suspended just because it's inconvenient — the reasoning is in [decision 009](docs/decisions/009-unknown-model-handling.md).
+
+Every model in a chain needs a matching entry in `app/budget/pricing.py`. An unpriced model costs `$0.00`, so spend never accumulates and the monthly budget cap silently stops applying to it — `tests/test_pricing.py` fails the build rather than letting that ship.
 
 ## 📡 streaming fallback
 
