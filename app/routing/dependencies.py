@@ -5,7 +5,7 @@ from app.providers.ollama_provider import OllamaProvider
 from app.providers.openai_provider import OpenAIProvider
 from app.routing.circuit_breaker import CircuitBreaker
 from app.routing.fallback import FallbackRouter
-from app.routing.model_map import get_chain
+from app.routing.model_map import resolve_chain
 
 _PROVIDER_INSTANCES: dict[str, BaseProvider] = {}
 _BREAKERS: dict[str, CircuitBreaker] = {}
@@ -52,9 +52,12 @@ def _get_breaker(name: str) -> CircuitBreaker:
     return _BREAKERS[name]
 
 
-def build_router(virtual_model: str) -> FallbackRouter:
+def build_router(virtual_model: str) -> tuple[str, FallbackRouter]:
+    """Build the router for a requested model, and report which chain it
+    resolved to. The caller needs the name to tell the client what actually
+    served the request when the requested model wasn't routable."""
+    chain_name, chain_spec = resolve_chain(virtual_model)
     chain = [
-        (_get_provider(name), model, _get_breaker(name))
-        for name, model in get_chain(virtual_model)
+        (_get_provider(name), model, _get_breaker(name)) for name, model in chain_spec
     ]
-    return FallbackRouter(chain)
+    return chain_name, FallbackRouter(chain)

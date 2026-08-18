@@ -28,8 +28,15 @@ from app.observability.security_headers import SecurityHeadersMiddleware
 from app.observability.tracing import configure_tracing
 from app.providers.base import ChatMessage
 from app.routing.dependencies import build_router
-from app.routing.fallback import AllProvidersFailedError
+from app.routing.fallback import AllProvidersFailedError, FallbackRouter
+from app.routing.model_map import (
+    DEFAULT_CHAIN_NAME,
+    FALLBACK_CHAINS,
+    is_routable,
+    routable_models,
+)
 from app.schemas import ChatRequest, ChatResponseOut
+from app.security.auth import require_api_key
 
 configure_logging()
 configure_tracing()
@@ -160,13 +167,68 @@ async def metrics():
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
+@app.get("/v1/models")
+async def list_models(_: str = Depends(require_api_key)):
+    """The model names this gateway will route, so a client can discover them
+    instead of guessing and silently landing on the default chain.
+
+    Shaped like OpenAI's /v1/models (an object/data envelope) so the same
+    client code works against either, with the provider chain added since
+    knowing what a name actually resolves to is the useful part here."""
+    return {
+        "object": "list",
+        "data": [
+            {
+                "id": name,
+                "object": "model",
+                "owned_by": "llm-gateway",
+                "providers": [provider for provider, _ in FALLBACK_CHAINS[name]],
+            }
+            for name in routable_models()
+        ],
+    }
+
+
+def _route(requested_model: str, request_id: str) -> tuple[str, FallbackRouter]:
+    """Pick the chain for a requested model, and decide what to do when there
+    isn't one.
+
+    Unrecognized names resolve to the default chain by default — that's what
+    this gateway has always done, and turning it into an error would break
+    /v1 under docs/api-versioning.md. What changes is that the substitution is
+    now reported rather than silent. Operators who'd rather have the error can
+    set STRICT_MODEL_ROUTING=true. See docs/decisions/009."""
+    if not is_routable(requested_model):
+        if settings.strict_model_routing:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "error": f"unknown model {requested_model!r}",
+                    "routable": routable_models(),
+                    "request_id": request_id,
+                },
+            )
+        logger.warning(
+            "[request_id=%s] requested model %r is not routable; serving it on the"
+            " %r chain. Set STRICT_MODEL_ROUTING=true to reject instead.",
+            request_id,
+            requested_model,
+            DEFAULT_CHAIN_NAME,
+        )
+    return build_router(requested_model)
+
+
 @app.post("/v1/chat", response_model=ChatResponseOut)
 async def chat(
-    request: ChatRequest, http_request: Request, api_key: str = Depends(enforce_budget)
+    request: ChatRequest,
+    http_request: Request,
+    response: Response,
+    api_key: str = Depends(enforce_budget),
 ):
-    router = build_router(request.model)
-    messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
     request_id = http_request.state.request_id
+    chain_name, router = _route(request.model, request_id)
+    response.headers["X-Gateway-Chain"] = chain_name
+    messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
 
     start = time.perf_counter()
     try:
@@ -280,12 +342,14 @@ async def _event_stream(
 async def chat_stream(
     request: ChatRequest, http_request: Request, api_key: str = Depends(enforce_budget)
 ):
-    router = build_router(request.model)
+    request_id = http_request.state.request_id
+    chain_name, router = _route(request.model, request_id)
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
     response = StreamingResponse(
-        _event_stream(router, messages, api_key, request.model, http_request.state.request_id),
+        _event_stream(router, messages, api_key, request.model, request_id),
         media_type="text/event-stream",
     )
+    response.headers["X-Gateway-Chain"] = chain_name
     # enforce_rate_limit/enforce_budget stash these on request.state since this
     # endpoint builds its own Response, bypassing FastAPI's usual header merge.
     response.headers["X-RateLimit-Limit"] = str(http_request.state.rate_limit_limit)

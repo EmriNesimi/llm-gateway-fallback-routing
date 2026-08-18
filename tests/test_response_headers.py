@@ -22,7 +22,7 @@ class FakeRouter:
 @pytest.fixture(autouse=True)
 def _client_key(monkeypatch):
     monkeypatch.setattr(settings, "gateway_api_keys", "test-client-key")
-    monkeypatch.setattr(main_module, "build_router", lambda model: FakeRouter())
+    monkeypatch.setattr(main_module, "build_router", lambda model: ("default", FakeRouter()))
 
 
 def test_chat_response_includes_rate_limit_and_budget_headers(isolated_db, isolated_redis):

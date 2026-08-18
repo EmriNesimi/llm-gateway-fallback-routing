@@ -78,6 +78,17 @@ class Settings(BaseSettings):
     # Per-API-key spend cap in USD, reset monthly.
     monthly_budget_usd_per_key: float = Field(default=5.0, ge=0)
 
+    # How to treat a `model` the routing table doesn't know. False (the
+    # default) preserves this gateway's long-standing behavior: serve it on
+    # the default chain, but say so via the X-Gateway-Chain response header,
+    # a warning log, and the audit row. True rejects it with a 404 instead.
+    #
+    # Defaulting to False keeps /v1 non-breaking — turning a request that used
+    # to return 200 into a 404 is a breaking change under
+    # docs/api-versioning.md, and would otherwise demand a whole /v2.
+    # See docs/decisions/009-unknown-model-handling.md.
+    strict_model_routing: bool = False
+
     # Circuit breaker: consecutive failures before a provider is skipped, and
     # how long to wait before trying it again.
     circuit_breaker_failure_threshold: int = Field(default=3, gt=0)

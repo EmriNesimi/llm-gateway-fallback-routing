@@ -59,7 +59,7 @@ def test_max_length_request_id_is_still_honored():
 
 
 def test_request_id_is_generated_when_not_supplied(isolated_db, isolated_redis, monkeypatch):
-    monkeypatch.setattr(main_module, "build_router", lambda model: FakeRouter())
+    monkeypatch.setattr(main_module, "build_router", lambda model: ("default", FakeRouter()))
 
     with TestClient(app) as client:
         r = client.post(
@@ -73,7 +73,7 @@ def test_request_id_is_generated_when_not_supplied(isolated_db, isolated_redis, 
 
 
 def test_client_supplied_request_id_is_honored(isolated_db, isolated_redis, monkeypatch):
-    monkeypatch.setattr(main_module, "build_router", lambda model: FakeRouter())
+    monkeypatch.setattr(main_module, "build_router", lambda model: ("default", FakeRouter()))
 
     with TestClient(app) as client:
         r = client.post(
@@ -86,7 +86,7 @@ def test_client_supplied_request_id_is_honored(isolated_db, isolated_redis, monk
 
 
 def test_request_id_links_response_to_audit_log_row(isolated_db, isolated_redis, monkeypatch):
-    monkeypatch.setattr(main_module, "build_router", lambda model: FakeRouter())
+    monkeypatch.setattr(main_module, "build_router", lambda model: ("default", FakeRouter()))
 
     with TestClient(app) as client:
         r = client.post(
@@ -111,7 +111,7 @@ def test_request_id_links_response_to_audit_log_row(isolated_db, isolated_redis,
 def test_request_id_included_in_error_response_and_audit_log(
     isolated_db, isolated_redis, monkeypatch
 ):
-    monkeypatch.setattr(main_module, "build_router", lambda model: FailingRouter())
+    monkeypatch.setattr(main_module, "build_router", lambda model: ("default", FailingRouter()))
 
     with TestClient(app) as client:
         r = client.post(
@@ -134,7 +134,7 @@ def test_request_id_included_in_error_response_and_audit_log(
 
 
 def test_stream_request_id_header_and_error_event(isolated_db, isolated_redis, monkeypatch):
-    monkeypatch.setattr(main_module, "build_router", lambda model: FailingRouter())
+    monkeypatch.setattr(main_module, "build_router", lambda model: ("default", FailingRouter()))
 
     with TestClient(app) as client:
         r = client.post(
