@@ -23,7 +23,7 @@ from app.core.redis_client import get_redis
 from app.db.audit import record_audit_log
 from app.db.session import async_session, engine, init_db
 from app.observability.logging_config import configure_logging
-from app.observability.metrics import REQUEST_COUNT, REQUEST_LATENCY
+from app.observability.metrics import COST_USD, REQUEST_COUNT, REQUEST_LATENCY, TOKENS
 from app.observability.request_id import RequestIDMiddleware
 from app.observability.security_headers import SecurityHeadersMiddleware
 from app.observability.tracing import configure_tracing
@@ -233,6 +233,21 @@ def _route(
     return build_router(requested_model)
 
 
+def _record_usage(
+    provider: str, model: str, input_tokens: int, output_tokens: int, cost_usd: float
+) -> None:
+    """Publish spend and token counts to Prometheus.
+
+    These already reach the audit table, but a table can't fire an alert. A
+    provider is only absent when every one of them failed, in which case there
+    was no usage to record."""
+    if not provider:
+        return
+    COST_USD.labels(provider=provider, model=model).inc(cost_usd)
+    TOKENS.labels(provider=provider, model=model, direction="input").inc(input_tokens)
+    TOKENS.labels(provider=provider, model=model, direction="output").inc(output_tokens)
+
+
 async def _serve_chat(
     router, messages: list[ChatMessage], api_key: str, requested_model: str, request_id: str
 ):
@@ -267,6 +282,9 @@ async def _serve_chat(
         model=result.model,
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,
+    )
+    _record_usage(
+        result.provider, result.model, result.input_tokens, result.output_tokens, cost
     )
     await budget_tracker.record_spend(api_key, cost)
     await record_audit_log(
@@ -349,6 +367,7 @@ async def _event_stream(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
         )
+        _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
         await budget_tracker.record_spend(api_key, cost)
 
     await record_audit_log(
@@ -467,6 +486,7 @@ async def _openai_event_stream(
             input_tokens=input_tokens,
             output_tokens=output_tokens,
         )
+        _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
         await budget_tracker.record_spend(api_key, cost)
 
     await record_audit_log(
