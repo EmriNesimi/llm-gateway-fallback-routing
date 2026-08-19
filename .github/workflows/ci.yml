@@ -46,8 +46,12 @@ jobs:
       - name: Audit dependencies for known vulnerabilities
         run: pip-audit -r requirements.txt
 
+      # The floor sits one point under the current 94% rather than exactly at
+      # it: at-current fails on rounding after any harmless refactor, while no
+      # floor at all — the previous state — means coverage can only be
+      # discovered to have dropped, never prevented from dropping.
       - name: Run tests with coverage
-        run: pytest -q --cov=app --cov-report=term-missing
+        run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=93
 
   postgres-migrations:
     runs-on: ubuntu-latest

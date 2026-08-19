@@ -13,7 +13,7 @@ audit:
 	pip-audit -r requirements.txt
 
 test:
-	pytest -q --cov=app --cov-report=term-missing
+	pytest -q --cov=app --cov-report=term-missing --cov-fail-under=93
 
 run:
 	uvicorn app.main:app --reload
