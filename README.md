@@ -81,7 +81,7 @@ flowchart LR
 
 ## 🚧 build log
 
-Phase 4 (resilience) complete ✅ — production-hardening pass in progress: timeouts, readiness checks, rate-limit/budget headers, and request-ID tracing are done.
+Phase 5 complete ✅ — the gateway is now something an existing application can actually be pointed at: a drop-in OpenAI-compatible endpoint, real multi-chain routing, and the observability to see what any of it is doing. 218 tests, 94% coverage with a floor in CI.
 
 - [x] Project scaffold, config, security foundations
 - [x] Provider adapters (OpenAI / Anthropic / Ollama) + fallback chain
@@ -98,6 +98,18 @@ Phase 4 (resilience) complete ✅ — production-hardening pass in progress: tim
 - [x] Request ID correlation across headers, audit log, traces, and logs
 - [x] Tests for rate limiter, budget tracker, metrics, circuit breaker, fallback/retry, streaming, admin API, audit log, readiness, response headers, request ID, health endpoint
 - [x] CI (GitHub Actions: lint + tests + coverage on every push/PR)
+
+**Phase 5 — usable by a real client, and observable**
+
+- [x] OpenAI-compatible `/v1/chat/completions` incl. streaming, tested against the real `openai` SDK
+- [x] Named fallback chains (`default` / `fast` / `smart` / `local`) instead of one chain every model collapsed onto
+- [x] `GET /v1/models` discovery, `X-Gateway-Chain` header, opt-in `STRICT_MODEL_ROUTING`
+- [x] Circuit breaker state, spend, tokens, and per-provider latency exported to Prometheus + 5 new Grafana panels
+- [x] Jaeger in the compose stack, so tracing is visible on first `make up` rather than needing a collector assembled
+- [x] Test suite isolated from the developer's `.env` (it was reading real keys and a live OTLP endpoint)
+- [x] Guards against silent rot: unpriced routable models, dashboard panels querying metrics that don't exist, config settings escaping test isolation
+- [x] Coverage floor enforced in CI (93%), auth and provider streaming paths brought to full coverage
+- [x] Multi-arch container image published to GHCR on tag
 
 ## 🔌 calling the api
 
