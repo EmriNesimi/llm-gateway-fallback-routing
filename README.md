@@ -235,6 +235,15 @@ Every request gets a correlation ID — either generated, or honored if the call
 
 ## 🚀 getting started
 
+Tagged releases publish a multi-arch image (amd64 + arm64) to GHCR, so you can run the gateway without cloning anything:
+
+```bash
+docker run --rm -p 8000:8000 --env-file .env \
+  ghcr.io/emrinesimi/llm-gateway-fallback-routing:latest
+```
+
+That gets you the gateway alone. For the full stack — Redis, Prometheus, Grafana, Jaeger — clone and use `make up` instead:
+
 ```bash
 git clone https://github.com/EmriNesimi/llm-gateway-fallback-routing.git
 cd llm-gateway-fallback-routing
