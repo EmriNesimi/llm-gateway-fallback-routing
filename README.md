@@ -175,6 +175,8 @@ Fallback and streaming don't naturally get along: once a client has started rece
 
 ## ⚡ circuit breaker
 
+Breaker state is **per process**, not shared through Redis the way rate limits and budgets are. That asymmetry is deliberate rather than an oversight: a shared breaker would let a single sick replica — a wedged connection pool, a bad DNS answer, a stale credential — trip the circuit for the entire fleet, turning a local fault into a global outage. The cost is that each replica spends `CIRCUIT_BREAKER_FAILURE_THRESHOLD` requests discovering an outage independently, so scale the threshold down as replica count goes up. Full reasoning in [decision 010](docs/decisions/010-per-process-circuit-breakers.md).
+
 Each provider gets its own breaker: `CIRCUIT_BREAKER_FAILURE_THRESHOLD` consecutive failures trips it open, and it stays open (skipped, no network call) for `CIRCUIT_BREAKER_COOLDOWN_SECONDS` before a single trial request is allowed through (half-open). That trial succeeding closes the circuit; failing re-opens it. This keeps a dead provider from adding latency to every single request while it's down.
 
 ## 🔁 retry before fallback
