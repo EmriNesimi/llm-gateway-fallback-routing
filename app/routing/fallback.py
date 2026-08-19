@@ -1,14 +1,38 @@
 import asyncio
 import logging
+import time
 from collections.abc import AsyncIterator
 
 from app.core.config import settings
-from app.observability.metrics import FALLBACK_TRIGGERED, PROVIDER_ATTEMPTS
+from app.observability.metrics import (
+    CIRCUIT_STATE,
+    FALLBACK_TRIGGERED,
+    PROVIDER_ATTEMPTS,
+    PROVIDER_LATENCY,
+)
 from app.observability.tracing import tracer
 from app.providers.base import BaseProvider, ChatMessage, ChatResponse, ProviderError, StreamChunk
-from app.routing.circuit_breaker import CircuitBreaker
+from app.routing.circuit_breaker import CircuitBreaker, CircuitState
 
 logger = logging.getLogger("gateway.router")
+
+# A gauge carries a number, so the state enum needs an ordering. Ascending
+# severity means a Grafana threshold or an alert rule can just say "> 0".
+_CIRCUIT_STATE_VALUES = {
+    CircuitState.CLOSED: 0,
+    CircuitState.HALF_OPEN: 1,
+    CircuitState.OPEN: 2,
+}
+
+
+def publish_circuit_state(provider_name: str, breaker: CircuitBreaker) -> None:
+    """Mirror a breaker's state onto its gauge.
+
+    Called wherever the state could have changed, which includes reads: the
+    OPEN -> HALF_OPEN transition happens lazily on inspection rather than on a
+    timer, so without publishing on the read path a cooled-down breaker would
+    keep reporting OPEN until its next recorded success or failure."""
+    CIRCUIT_STATE.labels(provider=provider_name).set(_CIRCUIT_STATE_VALUES[breaker.state])
 
 
 class AllProvidersFailedError(Exception):
@@ -46,7 +70,9 @@ class FallbackRouter:
         tried_any = False
 
         for attempt, (provider, model, breaker) in enumerate(self._chain):
-            if not breaker.allow_request():
+            allowed = breaker.allow_request()
+            publish_circuit_state(provider.name, breaker)
+            if not allowed:
                 logger.warning(
                     "[request_id=%s] provider %s circuit open, skipping", request_id, provider.name
                 )
@@ -63,19 +89,34 @@ class FallbackRouter:
                     span.set_attribute("gateway.attempt", attempt)
                     span.set_attribute("gateway.retry", retry)
                     span.set_attribute("gateway.request_id", request_id)
+                    attempt_started = time.perf_counter()
                     try:
                         result = await provider.chat(model=model, messages=messages)
+                        PROVIDER_LATENCY.labels(provider=provider.name).observe(
+                            time.perf_counter() - attempt_started
+                        )
                         # Bill/log against the model we actually requested (e.g.
                         # "gpt-4o-mini"), not whatever dated snapshot the provider
                         # echoes back (e.g. "gpt-4o-mini-2024-07-18") — otherwise
                         # cost lookups in app/budget/pricing.py silently miss.
                         result.model = model
                         breaker.record_success()
+                        publish_circuit_state(provider.name, breaker)
                         PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="success").inc()
                         if attempt > 0:
                             FALLBACK_TRIGGERED.inc()
                         return result
                     except ProviderError as exc:
+                        # Observed here rather than in a finally: the retry
+                        # backoff below is inside this block, and folding a
+                        # deliberate sleep into a provider's latency would
+                        # make a healthy-but-retried provider look slow.
+                        # Failures are timed as well as successes on purpose —
+                        # a provider that fails slowly is a different problem
+                        # from one that fails fast.
+                        PROVIDER_LATENCY.labels(provider=provider.name).observe(
+                            time.perf_counter() - attempt_started
+                        )
                         last_error = exc
                         span.set_attribute("gateway.error", str(exc))
                         span.set_attribute("gateway.retryable", exc.retryable)
@@ -106,6 +147,7 @@ class FallbackRouter:
                             await asyncio.sleep(self._retry_backoff_seconds)
 
             breaker.record_failure()
+            publish_circuit_state(provider.name, breaker)
             logger.warning(
                 "[request_id=%s] provider %s exhausted retries, falling back: %s",
                 request_id,
@@ -140,7 +182,9 @@ class FallbackRouter:
         tried_any = False
 
         for attempt, (provider, model, breaker) in enumerate(self._chain):
-            if not breaker.allow_request():
+            allowed = breaker.allow_request()
+            publish_circuit_state(provider.name, breaker)
+            if not allowed:
                 logger.warning(
                     "[request_id=%s] provider %s circuit open, skipping", request_id, provider.name
                 )
@@ -199,6 +243,7 @@ class FallbackRouter:
                     # Committed: first chunk arrived, hand it and everything after to the caller.
                     committed = True
                     breaker.record_success()
+                    publish_circuit_state(provider.name, breaker)
                     PROVIDER_ATTEMPTS.labels(provider=provider.name, outcome="success").inc()
                     if attempt > 0:
                         FALLBACK_TRIGGERED.inc()
@@ -213,6 +258,7 @@ class FallbackRouter:
                             yield chunk
                     except ProviderError as exc:
                         breaker.record_failure()
+                        publish_circuit_state(provider.name, breaker)
                         logger.error(
                             "[request_id=%s] provider %s failed mid-stream after committing: %s",
                             request_id,
@@ -226,6 +272,7 @@ class FallbackRouter:
 
             if not committed:
                 breaker.record_failure()
+                publish_circuit_state(provider.name, breaker)
                 logger.warning(
                     "[request_id=%s] provider %s exhausted retries before first chunk,"
                     " falling back: %s",
