@@ -29,14 +29,43 @@ services:
       timeout: 3s
       retries: 5
 
+  # Traces have been fully instrumented for a while — every provider attempt
+  # gets a span with provider, model, attempt and request_id — but nothing in
+  # this stack listened for them, so the documented setup was "point
+  # OTEL_EXPORTER_OTLP_ENDPOINT at any collector" and go assemble one.
+  # all-in-one is collector plus UI in a single container, the right tradeoff
+  # for a dev stack: it keeps traces in memory and loses them on restart,
+  # which is fine here and not something to deploy.
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    ports:
+      - "16686:16686"  # web UI
+      - "4317:4317"    # OTLP/gRPC, what app/observability/tracing.py exports to
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:14269/"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   gateway:
     build: .
     ports:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      # Overrides whatever .env says, because .env is written for running the
+      # gateway on the host, where a collector would be on localhost. Inside
+      # the container localhost is the container itself, so a host-shaped
+      # value here means traces silently go nowhere. compose's `environment`
+      # wins over `env_file`, so the stack works without editing .env.
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4317
     depends_on:
       redis:
+        condition: service_healthy
+      jaeger:
         condition: service_healthy
       # postgres is already started unconditionally by `docker compose up`
       # (no profiles gate it), so this costs nothing even when DATABASE_URL
