@@ -7,6 +7,10 @@ from app.routing.circuit_breaker import CircuitBreaker
 from app.routing.fallback import FallbackRouter
 from app.routing.model_map import resolve_chain
 
+# Per-process, unlike the Redis-backed rate limiter and budget tracker. The
+# asymmetry is deliberate: a shared breaker would let one sick replica trip
+# the circuit for the whole fleet, turning a local fault into a global
+# outage. See docs/decisions/010-per-process-circuit-breakers.md.
 _PROVIDER_INSTANCES: dict[str, BaseProvider] = {}
 _BREAKERS: dict[str, CircuitBreaker] = {}
 
