@@ -15,9 +15,7 @@ logger = logging.getLogger("gateway.pricing")
 # deployment routed through either.
 _PRICING: dict[str, tuple[float, float]] = {
     "openai:gpt-4o-mini": (0.15 / 1_000_000, 0.60 / 1_000_000),
-    # TODO(verify): confirm against https://openai.com/api/pricing before
-    # trusting budget enforcement on the "smart" chain. Every other rate here
-    # came from a provider reference; this one is the odd one out.
+    # Verified 2026-08-20 against developers.openai.com/api/docs/pricing.
     "openai:gpt-4o": (2.50 / 1_000_000, 10.00 / 1_000_000),
     "anthropic:claude-haiku-4-5": (1.00 / 1_000_000, 5.00 / 1_000_000),
     "anthropic:claude-opus-5": (5.00 / 1_000_000, 25.00 / 1_000_000),
