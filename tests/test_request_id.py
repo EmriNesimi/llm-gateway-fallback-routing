@@ -10,21 +10,21 @@ from app.routing.fallback import AllProvidersFailedError
 
 
 class FakeRouter:
-    async def chat(self, messages, request_id=""):
+    async def chat(self, messages, request_id="", params=None):
         return ChatResponse(
             content="hi", provider="openai", model="gpt-4o-mini", input_tokens=5, output_tokens=5
         )
 
-    async def chat_stream(self, messages, request_id=""):
+    async def chat_stream(self, messages, request_id="", params=None):
         yield StreamChunk(content="hi")
         yield StreamChunk(content="", done=True, input_tokens=5, output_tokens=5)
 
 
 class FailingRouter:
-    async def chat(self, messages, request_id=""):
+    async def chat(self, messages, request_id="", params=None):
         raise AllProvidersFailedError("all providers down")
 
-    async def chat_stream(self, messages, request_id=""):
+    async def chat_stream(self, messages, request_id="", params=None):
         raise AllProvidersFailedError("all providers down")
         yield  # pragma: no cover - makes this an async generator
 

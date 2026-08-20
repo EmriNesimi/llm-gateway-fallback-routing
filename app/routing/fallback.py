@@ -11,7 +11,14 @@ from app.observability.metrics import (
     PROVIDER_LATENCY,
 )
 from app.observability.tracing import tracer
-from app.providers.base import BaseProvider, ChatMessage, ChatResponse, ProviderError, StreamChunk
+from app.providers.base import (
+    BaseProvider,
+    ChatMessage,
+    ChatResponse,
+    ProviderError,
+    SamplingParams,
+    StreamChunk,
+)
 from app.routing.circuit_breaker import CircuitBreaker, CircuitState
 
 logger = logging.getLogger("gateway.router")
@@ -65,7 +72,12 @@ class FallbackRouter:
             else settings.provider_retry_backoff_seconds
         )
 
-    async def chat(self, messages: list[ChatMessage], request_id: str = "") -> ChatResponse:
+    async def chat(
+        self,
+        messages: list[ChatMessage],
+        request_id: str = "",
+        params: SamplingParams | None = None,
+    ) -> ChatResponse:
         errors: list[str] = []
         tried_any = False
 
@@ -91,7 +103,9 @@ class FallbackRouter:
                     span.set_attribute("gateway.request_id", request_id)
                     attempt_started = time.perf_counter()
                     try:
-                        result = await provider.chat(model=model, messages=messages)
+                        result = await provider.chat(
+                            model=model, messages=messages, params=params
+                        )
                         PROVIDER_LATENCY.labels(provider=provider.name).observe(
                             time.perf_counter() - attempt_started
                         )
@@ -167,7 +181,10 @@ class FallbackRouter:
         )
 
     async def chat_stream(
-        self, messages: list[ChatMessage], request_id: str = ""
+        self,
+        messages: list[ChatMessage],
+        request_id: str = "",
+        params: SamplingParams | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Like `chat`, but streams chunks as they arrive.
 
@@ -205,7 +222,9 @@ class FallbackRouter:
                     span.set_attribute("gateway.retry", retry)
                     span.set_attribute("gateway.request_id", request_id)
 
-                    generator = provider.chat_stream(model=model, messages=messages)
+                    generator = provider.chat_stream(
+                        model=model, messages=messages, params=params
+                    )
                     try:
                         first_chunk = await generator.__anext__()
                     except StopAsyncIteration:

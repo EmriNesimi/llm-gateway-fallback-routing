@@ -11,7 +11,7 @@ class FakeProvider(BaseProvider):
         self._fail_times = fail_times
         self.calls = 0
 
-    async def chat(self, model, messages):
+    async def chat(self, model, messages, params=None):
         self.calls += 1
         if self.calls <= self._fail_times:
             raise ProviderError(f"{self.name} transient failure #{self.calls}")
@@ -19,7 +19,7 @@ class FakeProvider(BaseProvider):
             content="ok", provider=self.name, model=model, input_tokens=1, output_tokens=1
         )
 
-    async def chat_stream(self, model, messages):
+    async def chat_stream(self, model, messages, params=None):
         raise NotImplementedError("not exercised by these tests")
         yield  # pragma: no cover - makes this an async generator
 
@@ -32,7 +32,7 @@ class DatedSnapshotProvider(BaseProvider):
 
     name = "dated"
 
-    async def chat(self, model, messages):
+    async def chat(self, model, messages, params=None):
         return ChatResponse(
             content="ok",
             provider=self.name,
@@ -41,7 +41,7 @@ class DatedSnapshotProvider(BaseProvider):
             output_tokens=1,
         )
 
-    async def chat_stream(self, model, messages):
+    async def chat_stream(self, model, messages, params=None):
         raise NotImplementedError("not exercised by these tests")
         yield  # pragma: no cover - makes this an async generator
 
@@ -104,11 +104,11 @@ class NonRetryableProvider(BaseProvider):
     def __init__(self):
         self.calls = 0
 
-    async def chat(self, model, messages):
+    async def chat(self, model, messages, params=None):
         self.calls += 1
         raise ProviderError("bad request", retryable=False)
 
-    async def chat_stream(self, model, messages):
+    async def chat_stream(self, model, messages, params=None):
         raise NotImplementedError("not exercised by these tests")
         yield  # pragma: no cover - makes this an async generator
 

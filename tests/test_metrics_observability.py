@@ -20,7 +20,7 @@ class StubProvider:
         self.name = name
         self._fail = fail
 
-    async def chat(self, model, messages):
+    async def chat(self, model, messages, params=None):
         if self._fail:
             raise ProviderError(f"{self.name} is down")
         return ChatResponse(
