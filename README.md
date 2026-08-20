@@ -110,6 +110,7 @@ Phase 5 complete ✅ — the gateway is now something an existing application ca
 - [x] Guards against silent rot: unpriced routable models, dashboard panels querying metrics that don't exist, config settings escaping test isolation
 - [x] Coverage floor enforced in CI (93%), auth and provider streaming paths brought to full coverage
 - [x] Multi-arch container image published to GHCR on tag
+- [x] `temperature` / `top_p` / `max_tokens` / `stop` forwarded to every provider in its own dialect, including the Claude models that reject two of them outright
 
 ## 🔌 calling the api
 
@@ -156,10 +157,27 @@ print(completion.choices[0].message.content)
 
 `stream=True` works the same way, emitting `chat.completion.chunk` deltas. `GET /v1/models` is compatible too, so `client.models.list()` returns the routable chains. The test suite drives all three with the real SDK rather than hand-built JSON — see `tests/test_openai_compat.py`.
 
+`temperature`, `top_p`, `max_tokens` and `stop` are forwarded to whichever provider serves the request, translated into that provider's own dialect. Anything more OpenAI-specific (`seed`, `presence_penalty`, `n`, …) is accepted so clients don't break, but never silently: the response carries `X-Gateway-Ignored-Params` and the gateway logs a warning naming each one.
+
 Two deliberate differences from OpenAI:
 
 - **Unknown models are rejected**, not substituted. This endpoint is new, so it has no callers to break and doesn't inherit the compatibility constraint `/v1/chat` is stuck with ([decision 009](docs/decisions/009-unknown-model-handling.md)).
-- **Sampling parameters aren't forwarded.** `temperature`, `top_p` and friends are accepted so clients don't break, but the provider adapters don't pass them through yet — so rather than dropping them silently, the response carries `X-Gateway-Ignored-Params` and the gateway logs a warning naming each one.
+- **Out-of-range values are a `422`, not a provider error.** The bounds match OpenAI's own, and checking them here rather than letting the provider do it matters for a specific reason: the router classifies a `4xx` as non-retryable, so a value the provider rejected would look like a *dead provider*, and the request would quietly be served by the next one in the chain instead of telling you what was wrong.
+
+### 🎛️ how each provider spells them
+
+The three providers disagree about nearly everything here, and the differences are exactly where values get silently lost:
+
+| | OpenAI | Anthropic | Ollama |
+|---|---|---|---|
+| `temperature` / `top_p` | as-is | as-is, **but see below** | nested under `options` |
+| `max_tokens` | as-is | required on every request | `options.num_predict` |
+| `stop` | as-is | `stop_sequences` | `options.stop` |
+
+Two things worth knowing:
+
+- **Anthropic's `max_tokens` used to be hardcoded to 1024**, so every Anthropic response was silently truncated there regardless of what the caller asked for. It now honours the request, and 1024 is only the fallback when nothing is set.
+- **Claude's 4.7+ and 5-family models removed `temperature` and `top_p`** — sending either is a hard `400`. Since a `4xx` is non-retryable, forwarding one wouldn't merely fail the call, it would fall through to the next provider — so the `smart` chain, which leads with `claude-opus-5`, would quietly serve every temperature-bearing request from its OpenAI fallback. Those two controls are dropped with a warning for those models instead; `max_tokens` and `stop` still apply.
 
 ## 🎚️ picking a chain
 
