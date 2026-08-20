@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.providers.base import SamplingParams
+
 
 class ChatMessageIn(BaseModel):
     role: Literal["system", "user", "assistant"]
@@ -45,7 +47,9 @@ class ChatResponseOut(BaseModel):
 # whole point — but reported rather than silently dropped, on the same
 # reasoning as decision 009: a caller shouldn't have to guess that the
 # temperature they set never reached a provider.
-FORWARDED_COMPLETION_FIELDS = frozenset({"model", "messages", "stream"})
+FORWARDED_COMPLETION_FIELDS = frozenset(
+    {"model", "messages", "stream", "temperature", "top_p", "max_tokens", "stop"}
+)
 
 
 class ChatCompletionRequest(BaseModel):
@@ -56,6 +60,26 @@ class ChatCompletionRequest(BaseModel):
     # OpenAI drives streaming with a body field rather than a separate path,
     # and its SDK relies on that, so this endpoint handles both modes.
     stream: bool = False
+
+    # Bounds match OpenAI's own, so a request this gateway accepts is one the
+    # upstream would have accepted too. Better a 422 naming the offending
+    # field than a provider 400, which the router reads as a dead provider and
+    # falls away from — the caller would get an answer from somewhere else
+    # entirely rather than being told their value was out of range.
+    temperature: float | None = Field(default=None, ge=0, le=2)
+    top_p: float | None = Field(default=None, gt=0, le=1)
+    max_tokens: int | None = Field(default=None, gt=0)
+    stop: list[str] | str | None = None
+
+    def sampling_params(self) -> SamplingParams:
+        return SamplingParams(
+            temperature=self.temperature,
+            top_p=self.top_p,
+            max_tokens=self.max_tokens,
+            # OpenAI accepts either a bare string or a list here; every
+            # provider downstream wants a list.
+            stop=[self.stop] if isinstance(self.stop, str) else self.stop,
+        )
 
     def ignored_params(self) -> list[str]:
         """Parameters the client set that this gateway won't act on."""

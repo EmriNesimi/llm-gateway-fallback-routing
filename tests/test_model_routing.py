@@ -19,7 +19,7 @@ from app.security.auth import require_api_key
 
 
 class FakeRouter:
-    async def chat(self, messages, request_id=""):
+    async def chat(self, messages, request_id="", params=None):
         return ChatResponse(
             content="ok",
             provider="openai",

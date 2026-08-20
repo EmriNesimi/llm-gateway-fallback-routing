@@ -15,10 +15,10 @@ class FakeStreamProvider(BaseProvider):
         self._content = ["hello", " world"]
         self.calls = 0
 
-    async def chat(self, model, messages):
+    async def chat(self, model, messages, params=None):
         raise NotImplementedError
 
-    async def chat_stream(self, model, messages):
+    async def chat_stream(self, model, messages, params=None):
         self.calls += 1
         if self.calls <= self._fail_before_first_chunk:
             raise ProviderError(f"{self.name} failed before first chunk (call {self.calls})")

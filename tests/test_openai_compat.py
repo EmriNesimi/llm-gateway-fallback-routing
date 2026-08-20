@@ -22,7 +22,7 @@ from app.security.auth import require_api_key
 
 
 class FakeRouter:
-    async def chat(self, messages, request_id=""):
+    async def chat(self, messages, request_id="", params=None):
         return ChatResponse(
             content="hello from the gateway",
             provider="openai",
@@ -31,7 +31,7 @@ class FakeRouter:
             output_tokens=7,
         )
 
-    async def chat_stream(self, messages, request_id=""):
+    async def chat_stream(self, messages, request_id="", params=None):
         for piece in ("hel", "lo"):
             yield StreamChunk(
                 content=piece, provider="openai", model="gpt-4o-mini", done=False
@@ -180,12 +180,22 @@ def test_unknown_model_is_rejected_even_in_lenient_mode(client, monkeypatch):
 
 
 def test_unsupported_parameters_are_accepted_but_reported(client, caplog):
+    """temperature and top_p used to be listed here. They're forwarded now, so
+    what's left is the genuinely OpenAI-specific set the provider adapters
+    have no equivalent for."""
     with caplog.at_level("WARNING", logger="gateway.main"):
-        r = client.post("/v1/chat/completions", json=_body(temperature=0.7, top_p=0.9))
+        r = client.post("/v1/chat/completions", json=_body(seed=42, presence_penalty=0.5))
 
     assert r.status_code == 200
-    assert r.headers["X-Gateway-Ignored-Params"] == "temperature,top_p"
-    assert any("temperature" in rec.message for rec in caplog.records)
+    assert r.headers["X-Gateway-Ignored-Params"] == "presence_penalty,seed"
+    assert any("seed" in rec.message for rec in caplog.records)
+
+
+def test_forwarded_parameters_are_not_reported_as_ignored(client):
+    r = client.post("/v1/chat/completions", json=_body(temperature=0.7, top_p=0.9))
+
+    assert r.status_code == 200
+    assert "X-Gateway-Ignored-Params" not in r.headers
 
 
 def test_no_ignored_header_when_everything_was_understood(client):

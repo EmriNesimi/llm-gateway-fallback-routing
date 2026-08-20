@@ -27,7 +27,7 @@ from app.observability.metrics import COST_USD, REQUEST_COUNT, REQUEST_LATENCY, 
 from app.observability.request_id import RequestIDMiddleware
 from app.observability.security_headers import SecurityHeadersMiddleware
 from app.observability.tracing import configure_tracing
-from app.providers.base import ChatMessage
+from app.providers.base import ChatMessage, SamplingParams
 from app.routing.dependencies import build_router
 from app.routing.fallback import AllProvidersFailedError, FallbackRouter
 from app.routing.model_map import (
@@ -249,7 +249,12 @@ def _record_usage(
 
 
 async def _serve_chat(
-    router, messages: list[ChatMessage], api_key: str, requested_model: str, request_id: str
+    router,
+    messages: list[ChatMessage],
+    api_key: str,
+    requested_model: str,
+    request_id: str,
+    params: SamplingParams | None = None,
 ):
     """Run a non-streaming request through the router and do the bookkeeping.
 
@@ -259,7 +264,7 @@ async def _serve_chat(
     request that gets served but never billed."""
     start = time.perf_counter()
     try:
-        result = await router.chat(messages, request_id=request_id)
+        result = await router.chat(messages, request_id=request_id, params=params)
     except AllProvidersFailedError as exc:
         REQUEST_COUNT.labels(status="error").inc()
         await record_audit_log(
@@ -418,6 +423,7 @@ async def _openai_event_stream(
     request_id: str,
     completion_id: str,
     created: int,
+    params: SamplingParams | None = None,
 ) -> AsyncIterator[str]:
     """SSE in OpenAI's `chat.completion.chunk` shape.
 
@@ -443,7 +449,9 @@ async def _openai_event_stream(
         return f"data: {json.dumps(payload)}\n\n"
 
     try:
-        async for chunk in router.chat_stream(messages, request_id=request_id):
+        async for chunk in router.chat_stream(
+            messages, request_id=request_id, params=params
+        ):
             if chunk.done:
                 final_provider = chunk.provider
                 final_model = chunk.model
@@ -523,10 +531,11 @@ async def chat_completions(
     chain_name, router = _route(request.model, request_id, strict=True)
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
 
+    params = request.sampling_params()
     ignored = request.ignored_params()
     if ignored:
-        # Accepted for compatibility, but never silently: a caller who set
-        # temperature deserves to know it went nowhere.
+        # Whatever's left after the forwarded ones: n, seed, presence_penalty
+        # and the like. Accepted for compatibility, but never silently.
         logger.warning(
             "[request_id=%s] ignoring unsupported completion parameters: %s",
             request_id,
@@ -543,6 +552,7 @@ async def chat_completions(
                 request_id,
                 completion_id=f"chatcmpl-{uuid.uuid4().hex}",
                 created=int(time.time()),
+                params=params,
             ),
             media_type="text/event-stream",
         )
@@ -562,7 +572,9 @@ async def chat_completions(
     if ignored:
         response.headers["X-Gateway-Ignored-Params"] = ",".join(ignored)
 
-    result = await _serve_chat(router, messages, api_key, request.model, request_id)
+    result = await _serve_chat(
+        router, messages, api_key, request.model, request_id, params=params
+    )
 
     return ChatCompletionResponse(
         id=f"chatcmpl-{uuid.uuid4().hex}",
