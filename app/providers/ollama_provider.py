@@ -8,9 +8,30 @@ from app.providers.base import (
     ChatMessage,
     ChatResponse,
     ProviderError,
+    SamplingParams,
     StreamChunk,
     is_retryable_status_code,
 )
+
+
+def _sampling_payload(params: SamplingParams | None) -> dict:
+    """Ollama nests generation controls under `options` and names the output
+    cap `num_predict` rather than `max_tokens`. Returns an empty dict when
+    nothing was set, so the key is absent rather than present-and-empty —
+    Ollama treats an explicit empty options block differently from no block.
+    """
+    if params is None:
+        return {}
+    options: dict = {}
+    if params.temperature is not None:
+        options["temperature"] = params.temperature
+    if params.top_p is not None:
+        options["top_p"] = params.top_p
+    if params.max_tokens is not None:
+        options["num_predict"] = params.max_tokens
+    if params.stop is not None:
+        options["stop"] = params.stop
+    return {"options": options} if options else {}
 
 
 def _provider_error(prefix: str, exc: httpx.HTTPError) -> ProviderError:
@@ -27,11 +48,17 @@ class OllamaProvider(BaseProvider):
         self._base_url = base_url.rstrip("/")
         self._timeout_seconds = timeout_seconds
 
-    async def chat(self, model: str, messages: list[ChatMessage]) -> ChatResponse:
+    async def chat(
+        self,
+        model: str,
+        messages: list[ChatMessage],
+        params: SamplingParams | None = None,
+    ) -> ChatResponse:
         payload = {
             "model": model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "stream": False,
+            **_sampling_payload(params),
         }
 
         try:
@@ -59,12 +86,16 @@ class OllamaProvider(BaseProvider):
         )
 
     async def chat_stream(
-        self, model: str, messages: list[ChatMessage]
+        self,
+        model: str,
+        messages: list[ChatMessage],
+        params: SamplingParams | None = None,
     ) -> AsyncIterator[StreamChunk]:
         payload = {
             "model": model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
             "stream": True,
+            **_sampling_payload(params),
         }
 
         try:

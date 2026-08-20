@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from typing import cast
 
@@ -9,9 +10,65 @@ from app.providers.base import (
     ChatMessage,
     ChatResponse,
     ProviderError,
+    SamplingParams,
     StreamChunk,
     is_retryable_status_code,
 )
+
+logger = logging.getLogger("gateway.provider.anthropic")
+
+# Anthropic requires max_tokens on every request, unlike the other two
+# providers, so an unset one still needs a number.
+DEFAULT_MAX_TOKENS = 1024
+
+# Sampling controls were removed from the Claude 4.7+ and 5-family models:
+# sending temperature or top_p to one is a 400, not a warning. That matters
+# beyond the failed call — is_retryable_status_code treats 4xx as
+# non-retryable, so the router falls straight through to the next provider.
+# The "smart" chain leads with claude-opus-5, so forwarding a temperature
+# naively would silently demote every such request to its OpenAI fallback, at
+# several times the cost, with only a log line to say why.
+_MODEL_PREFIXES_WITHOUT_SAMPLING_CONTROLS = (
+    "claude-opus-5",
+    "claude-opus-4-7",
+    "claude-opus-4-8",
+    "claude-sonnet-5",
+    "claude-fable-5",
+    "claude-mythos-5",
+)
+
+
+def _accepts_sampling_controls(model: str) -> bool:
+    return not model.startswith(_MODEL_PREFIXES_WITHOUT_SAMPLING_CONTROLS)
+
+
+def _sampling_kwargs(model: str, params: SamplingParams | None) -> dict:
+    kwargs: dict = {"max_tokens": DEFAULT_MAX_TOKENS}
+    if params is None:
+        return kwargs
+
+    if params.max_tokens is not None:
+        kwargs["max_tokens"] = params.max_tokens
+    if params.stop is not None:
+        kwargs["stop_sequences"] = params.stop
+
+    wanted = [n for n in ("temperature", "top_p") if getattr(params, n) is not None]
+    if not wanted:
+        return kwargs
+
+    if _accepts_sampling_controls(model):
+        for name in wanted:
+            kwargs[name] = getattr(params, name)
+    else:
+        # Dropped rather than forwarded: forwarding is a hard 400, and a
+        # silently-skipped provider is worse than a silently-ignored knob.
+        logger.warning(
+            "%s does not accept %s; dropping them rather than sending a request"
+            " the API would reject",
+            model,
+            ", ".join(wanted),
+        )
+    return kwargs
 
 
 def _to_anthropic_messages(messages: list[ChatMessage]) -> list[MessageParam]:
@@ -36,12 +93,17 @@ class AnthropicProvider(BaseProvider):
     def __init__(self, api_key: str, timeout_seconds: float = 30.0):
         self._client = AsyncAnthropic(api_key=api_key, timeout=timeout_seconds)
 
-    async def chat(self, model: str, messages: list[ChatMessage]) -> ChatResponse:
+    async def chat(
+        self,
+        model: str,
+        messages: list[ChatMessage],
+        params: SamplingParams | None = None,
+    ) -> ChatResponse:
         try:
             response = await self._client.messages.create(
                 model=model,
-                max_tokens=1024,
                 messages=_to_anthropic_messages(messages),
+                **_sampling_kwargs(model, params),
             )
         except AnthropicError as exc:
             raise _provider_error("anthropic request failed", exc) from exc
@@ -57,13 +119,16 @@ class AnthropicProvider(BaseProvider):
         )
 
     async def chat_stream(
-        self, model: str, messages: list[ChatMessage]
+        self,
+        model: str,
+        messages: list[ChatMessage],
+        params: SamplingParams | None = None,
     ) -> AsyncIterator[StreamChunk]:
         try:
             async with self._client.messages.stream(
                 model=model,
-                max_tokens=1024,
                 messages=_to_anthropic_messages(messages),
+                **_sampling_kwargs(model, params),
             ) as stream:
                 async for text in stream.text_stream:
                     yield StreamChunk(content=text)
