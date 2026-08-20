@@ -1,12 +1,38 @@
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 
 
 @dataclass
 class ChatMessage:
     role: str
     content: str
+
+
+@dataclass
+class SamplingParams:
+    """Generation controls a caller can set, in provider-neutral form.
+
+    Every field is optional, and `None` means "don't send it" rather than
+    "send our default". That distinction matters: each provider has its own
+    default for these, and substituting one of ours would silently change the
+    behavior of every caller who never asked to change it. Only the four
+    controls that map cleanly onto all three providers live here — anything
+    more OpenAI-specific is reported back to the client as unsupported rather
+    than quietly approximated.
+    """
+
+    temperature: float | None = None
+    top_p: float | None = None
+    max_tokens: int | None = None
+    stop: list[str] | None = None
+
+    def is_empty(self) -> bool:
+        return all(getattr(self, f.name) is None for f in fields(self))
+
+    def set_names(self) -> list[str]:
+        """Which controls the caller actually set, for logging and headers."""
+        return [f.name for f in fields(self) if getattr(self, f.name) is not None]
 
 
 @dataclass
@@ -68,12 +94,20 @@ class BaseProvider(ABC):
     name: str
 
     @abstractmethod
-    async def chat(self, model: str, messages: list[ChatMessage]) -> ChatResponse:
+    async def chat(
+        self,
+        model: str,
+        messages: list[ChatMessage],
+        params: SamplingParams | None = None,
+    ) -> ChatResponse:
         ...
 
     @abstractmethod
     def chat_stream(
-        self, model: str, messages: list[ChatMessage]
+        self,
+        model: str,
+        messages: list[ChatMessage],
+        params: SamplingParams | None = None,
     ) -> AsyncIterator[StreamChunk]:
         ...
 
@@ -91,11 +125,19 @@ class UnconfiguredProvider(BaseProvider):
     def __init__(self, name: str):
         self.name = name
 
-    async def chat(self, model: str, messages: list[ChatMessage]) -> ChatResponse:
+    async def chat(
+        self,
+        model: str,
+        messages: list[ChatMessage],
+        params: SamplingParams | None = None,
+    ) -> ChatResponse:
         raise ProviderError(f"{self.name} is not configured (no API key set)", retryable=False)
 
     async def chat_stream(
-        self, model: str, messages: list[ChatMessage]
+        self,
+        model: str,
+        messages: list[ChatMessage],
+        params: SamplingParams | None = None,
     ) -> AsyncIterator[StreamChunk]:
         raise ProviderError(f"{self.name} is not configured (no API key set)", retryable=False)
         yield  # pragma: no cover - unreachable, makes this an async generator
