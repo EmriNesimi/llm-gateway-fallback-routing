@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import time
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -35,7 +36,15 @@ from app.routing.model_map import (
     is_routable,
     routable_models,
 )
-from app.schemas import ChatRequest, ChatResponseOut
+from app.schemas import (
+    ChatCompletionChoice,
+    ChatCompletionMessage,
+    ChatCompletionRequest,
+    ChatCompletionResponse,
+    ChatCompletionUsage,
+    ChatRequest,
+    ChatResponseOut,
+)
 from app.security.auth import require_api_key
 
 configure_logging()
@@ -189,7 +198,9 @@ async def list_models(_: str = Depends(require_api_key)):
     }
 
 
-def _route(requested_model: str, request_id: str) -> tuple[str, FallbackRouter]:
+def _route(
+    requested_model: str, request_id: str, *, strict: bool | None = None
+) -> tuple[str, FallbackRouter]:
     """Pick the chain for a requested model, and decide what to do when there
     isn't one.
 
@@ -197,9 +208,13 @@ def _route(requested_model: str, request_id: str) -> tuple[str, FallbackRouter]:
     this gateway has always done, and turning it into an error would break
     /v1 under docs/api-versioning.md. What changes is that the substitution is
     now reported rather than silent. Operators who'd rather have the error can
-    set STRICT_MODEL_ROUTING=true. See docs/decisions/009."""
+    set STRICT_MODEL_ROUTING=true. See docs/decisions/009.
+
+    `strict` overrides that setting for callers with no back-compat debt —
+    /v1/chat/completions is new, so nothing depends on it substituting."""
     if not is_routable(requested_model):
-        if settings.strict_model_routing:
+        reject = settings.strict_model_routing if strict is None else strict
+        if reject:
             raise HTTPException(
                 status_code=404,
                 detail={
@@ -218,18 +233,15 @@ def _route(requested_model: str, request_id: str) -> tuple[str, FallbackRouter]:
     return build_router(requested_model)
 
 
-@app.post("/v1/chat", response_model=ChatResponseOut)
-async def chat(
-    request: ChatRequest,
-    http_request: Request,
-    response: Response,
-    api_key: str = Depends(enforce_budget),
+async def _serve_chat(
+    router, messages: list[ChatMessage], api_key: str, requested_model: str, request_id: str
 ):
-    request_id = http_request.state.request_id
-    chain_name, router = _route(request.model, request_id)
-    response.headers["X-Gateway-Chain"] = chain_name
-    messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
+    """Run a non-streaming request through the router and do the bookkeeping.
 
+    Shared by /v1/chat and /v1/chat/completions so there's exactly one
+    implementation of spend recording, audit logging, and the metrics around
+    them. Two copies would drift, and the direction they'd drift in is a
+    request that gets served but never billed."""
     start = time.perf_counter()
     try:
         result = await router.chat(messages, request_id=request_id)
@@ -237,7 +249,7 @@ async def chat(
         REQUEST_COUNT.labels(status="error").inc()
         await record_audit_log(
             api_key,
-            requested_model=request.model,
+            requested_model=requested_model,
             outcome="error",
             latency_ms=(time.perf_counter() - start) * 1000,
             request_id=request_id,
@@ -259,7 +271,7 @@ async def chat(
     await budget_tracker.record_spend(api_key, cost)
     await record_audit_log(
         api_key,
-        requested_model=request.model,
+        requested_model=requested_model,
         outcome="success",
         provider=result.provider,
         input_tokens=result.input_tokens,
@@ -268,6 +280,22 @@ async def chat(
         latency_ms=(time.perf_counter() - start) * 1000,
         request_id=request_id,
     )
+    return result
+
+
+@app.post("/v1/chat", response_model=ChatResponseOut)
+async def chat(
+    request: ChatRequest,
+    http_request: Request,
+    response: Response,
+    api_key: str = Depends(enforce_budget),
+):
+    request_id = http_request.state.request_id
+    chain_name, router = _route(request.model, request_id)
+    response.headers["X-Gateway-Chain"] = chain_name
+    messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
+
+    result = await _serve_chat(router, messages, api_key, request.model, request_id)
 
     return ChatResponseOut(
         content=result.content,
@@ -356,3 +384,178 @@ async def chat_stream(
     response.headers["X-RateLimit-Remaining"] = str(http_request.state.rate_limit_remaining)
     response.headers["X-Budget-Remaining-USD"] = f"{http_request.state.budget_remaining_usd:.4f}"
     return response
+
+
+# ---------------------------------------------------------------------------
+# OpenAI-compatible surface
+# ---------------------------------------------------------------------------
+
+
+async def _openai_event_stream(
+    router,
+    messages: list[ChatMessage],
+    api_key: str,
+    requested_model: str,
+    request_id: str,
+    completion_id: str,
+    created: int,
+) -> AsyncIterator[str]:
+    """SSE in OpenAI's `chat.completion.chunk` shape.
+
+    Differs from _event_stream in wire format only — same router, same
+    first-chunk-buffered fallback, same bookkeeping. The role arrives in the
+    first delta and the last delta carries finish_reason, which is the
+    sequence the OpenAI SDK's stream parser expects."""
+    start = time.perf_counter()
+    final_provider = ""
+    final_model = requested_model
+    input_tokens = 0
+    output_tokens = 0
+    first = True
+
+    def envelope(delta: dict, finish_reason: str | None, model: str) -> str:
+        payload = {
+            "id": completion_id,
+            "object": "chat.completion.chunk",
+            "created": created,
+            "model": model,
+            "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}],
+        }
+        return f"data: {json.dumps(payload)}\n\n"
+
+    try:
+        async for chunk in router.chat_stream(messages, request_id=request_id):
+            if chunk.done:
+                final_provider = chunk.provider
+                final_model = chunk.model
+                input_tokens = chunk.input_tokens
+                output_tokens = chunk.output_tokens
+                continue
+            if first:
+                yield envelope({"role": "assistant"}, None, chunk.model or requested_model)
+                first = False
+            yield envelope({"content": chunk.content}, None, chunk.model or requested_model)
+    except AllProvidersFailedError as exc:
+        # Status is already committed to 200 once streaming has begun, so this
+        # is reported in-band. OpenAI's SDK surfaces an `error` field on a
+        # chunk as an exception, which is the closest thing to the 502 a
+        # non-streaming caller would have received.
+        REQUEST_COUNT.labels(status="error").inc()
+        await record_audit_log(
+            api_key,
+            requested_model=requested_model,
+            outcome="error",
+            latency_ms=(time.perf_counter() - start) * 1000,
+            request_id=request_id,
+        )
+        yield (
+            "data: "
+            + json.dumps({"error": {"message": str(exc), "request_id": request_id}})
+            + "\n\n"
+        )
+        return
+    finally:
+        REQUEST_LATENCY.observe(time.perf_counter() - start)
+
+    REQUEST_COUNT.labels(status="success").inc()
+
+    cost = 0.0
+    if final_provider:
+        cost = estimate_cost_usd(
+            provider=final_provider,
+            model=final_model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+        await budget_tracker.record_spend(api_key, cost)
+
+    await record_audit_log(
+        api_key,
+        requested_model=requested_model,
+        outcome="success",
+        provider=final_provider,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cost_usd=cost,
+        latency_ms=(time.perf_counter() - start) * 1000,
+        request_id=request_id,
+    )
+
+    yield envelope({}, "stop", final_model)
+    yield "data: [DONE]\n\n"
+
+
+@app.post("/v1/chat/completions")
+async def chat_completions(
+    request: ChatCompletionRequest,
+    http_request: Request,
+    response: Response,
+    api_key: str = Depends(enforce_budget),
+):
+    """OpenAI Chat Completions, so an unmodified `openai` client can point its
+    base_url here and get the fallback chain, rate limiting, budgets, and audit
+    trail without changing a line of application code.
+
+    Routes strictly: this endpoint has no existing callers, so unlike
+    /v1/chat it can reject an unroutable model from day one rather than
+    inheriting the silent substitution /v1 is stuck with. See decision 009."""
+    request_id = http_request.state.request_id
+    chain_name, router = _route(request.model, request_id, strict=True)
+    messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
+
+    ignored = request.ignored_params()
+    if ignored:
+        # Accepted for compatibility, but never silently: a caller who set
+        # temperature deserves to know it went nowhere.
+        logger.warning(
+            "[request_id=%s] ignoring unsupported completion parameters: %s",
+            request_id,
+            ", ".join(ignored),
+        )
+
+    if request.stream:
+        stream_response = StreamingResponse(
+            _openai_event_stream(
+                router,
+                messages,
+                api_key,
+                request.model,
+                request_id,
+                completion_id=f"chatcmpl-{uuid.uuid4().hex}",
+                created=int(time.time()),
+            ),
+            media_type="text/event-stream",
+        )
+        stream_response.headers["X-Gateway-Chain"] = chain_name
+        stream_response.headers["X-RateLimit-Limit"] = str(http_request.state.rate_limit_limit)
+        stream_response.headers["X-RateLimit-Remaining"] = str(
+            http_request.state.rate_limit_remaining
+        )
+        stream_response.headers["X-Budget-Remaining-USD"] = (
+            f"{http_request.state.budget_remaining_usd:.4f}"
+        )
+        if ignored:
+            stream_response.headers["X-Gateway-Ignored-Params"] = ",".join(ignored)
+        return stream_response
+
+    response.headers["X-Gateway-Chain"] = chain_name
+    if ignored:
+        response.headers["X-Gateway-Ignored-Params"] = ",".join(ignored)
+
+    result = await _serve_chat(router, messages, api_key, request.model, request_id)
+
+    return ChatCompletionResponse(
+        id=f"chatcmpl-{uuid.uuid4().hex}",
+        created=int(time.time()),
+        model=result.model,
+        choices=[
+            ChatCompletionChoice(
+                message=ChatCompletionMessage(content=result.content),
+            )
+        ],
+        usage=ChatCompletionUsage(
+            prompt_tokens=result.input_tokens,
+            completion_tokens=result.output_tokens,
+            total_tokens=result.input_tokens + result.output_tokens,
+        ),
+    )
