@@ -81,7 +81,7 @@ flowchart LR
 
 ## 🚧 build log
 
-Phase 5 complete ✅ — the gateway is now something an existing application can actually be pointed at: a drop-in OpenAI-compatible endpoint, real multi-chain routing, and the observability to see what any of it is doing. 218 tests, 94% coverage with a floor in CI.
+Phase 5 complete ✅ — the gateway is now something an existing application can actually be pointed at: a drop-in OpenAI-compatible endpoint, real multi-chain routing, sampling controls that reach the provider, and the observability to see what any of it is doing. 251 tests, 95% coverage against a 93% floor enforced in CI.
 
 - [x] Project scaffold, config, security foundations
 - [x] Provider adapters (OpenAI / Anthropic / Ollama) + fallback chain
@@ -109,7 +109,7 @@ Phase 5 complete ✅ — the gateway is now something an existing application ca
 - [x] Test suite isolated from the developer's `.env` (it was reading real keys and a live OTLP endpoint)
 - [x] Guards against silent rot: unpriced routable models, dashboard panels querying metrics that don't exist, config settings escaping test isolation
 - [x] Coverage floor enforced in CI (93%), auth and provider streaming paths brought to full coverage
-- [x] Multi-arch container image published to GHCR on tag
+- [x] Release workflow to build and push a multi-arch image to GHCR on a `v*` tag — awaiting its first tag, so no image is published yet
 - [x] `temperature` / `top_p` / `max_tokens` / `stop` forwarded to every provider in its own dialect, including the Claude models that reject two of them outright
 
 ## 🔌 calling the api
@@ -265,14 +265,16 @@ Every request gets a correlation ID — either generated, or honored if the call
 
 ## 🚀 getting started
 
-Tagged releases publish a multi-arch image (amd64 + arm64) to GHCR, so you can run the gateway without cloning anything:
+Tagged releases publish a multi-arch image (amd64 + arm64) to GHCR, so the gateway can be run without cloning anything:
 
 ```bash
 docker run --rm -p 8000:8000 --env-file .env \
   ghcr.io/emrinesimi/llm-gateway-fallback-routing:latest
 ```
 
-That gets you the gateway alone. For the full stack — Redis, Prometheus, Grafana, Jaeger — clone and use `make up` instead:
+> **Not yet available.** The workflow is in place but no `v*` tag has triggered it, so nothing has been pushed to GHCR — the command above will fail until the first release is cut. Build locally with `docker build -t llm-gateway .` in the meantime.
+
+For the full stack — Redis, Prometheus, Grafana, Jaeger — clone and use `make up`:
 
 ```bash
 git clone https://github.com/EmriNesimi/llm-gateway-fallback-routing.git
