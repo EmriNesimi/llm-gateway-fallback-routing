@@ -1,11 +1,32 @@
 import logging
 import os
+import re
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, ValidationInfo, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger("gateway.config")
+
+# A provider key that is present but obviously not real — the placeholder
+# copied out of .env.example, most often — is worse than one that's missing.
+# An unset key is caught by `if not settings.<provider>_api_key` and the
+# provider is replaced with UnconfiguredProvider, which fails instantly and
+# non-retryably. A placeholder passes that check: a real SDK client gets
+# built, every call 401s, and because a 4xx is classified non-retryable (see
+# is_retryable_status_code) the router falls straight past to the next
+# provider. The chain still answers, so nothing looks broken, and the
+# provider you thought you configured is quietly never used.
+#
+# Blanking these to None routes them back into the missing-key path, which
+# already does the right thing and already warns.
+_PLACEHOLDER_RUN = re.compile(r"x{8,}", re.IGNORECASE)
+
+# Both providers issue keys far longer than this; the shipped placeholders are
+# 24 and 28 characters. Set well below any real key rather than just above the
+# placeholders, so a provider changing its key length can't produce a false
+# positive that skips a working provider.
+_MIN_PLAUSIBLE_KEY_LENGTH = 40
 
 # Which env file to read, if any. Overridable so a caller can opt out of file
 # loading entirely by setting GATEWAY_ENV_FILE="" — which the test suite does,
@@ -108,6 +129,34 @@ class Settings(BaseSettings):
     # what's intended here, so both are rejected outright.
     provider_request_timeout_seconds: float = Field(default=30.0, gt=0)
     ollama_request_timeout_seconds: float = Field(default=60.0, gt=0)
+
+    @field_validator("openai_api_key", "anthropic_api_key")
+    @classmethod
+    def _blank_out_placeholder_keys(cls, value: str | None, info: ValidationInfo) -> str | None:
+        """Treat an obviously-fake key as no key at all.
+
+        Warn rather than raise: this gateway is explicitly designed to run
+        with only some providers configured (decision 006), so one bad key
+        shouldn't stop the process booting — it should just take that
+        provider out of the chain, loudly.
+        """
+        if value is None or not value.strip():
+            return None
+
+        if _PLACEHOLDER_RUN.search(value):
+            reason = "looks like the placeholder from .env.example"
+        elif len(value) < _MIN_PLAUSIBLE_KEY_LENGTH:
+            reason = f"is only {len(value)} characters, far shorter than a real key"
+        else:
+            return value
+
+        logger.warning(
+            "%s %s. Treating it as unset, so that provider is skipped cleanly instead"
+            " of being called and failing every request with a 401.",
+            (info.field_name or "provider key").upper(),
+            reason,
+        )
+        return None
 
     @field_validator("database_url")
     @classmethod

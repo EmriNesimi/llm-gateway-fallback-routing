@@ -81,12 +81,20 @@ def test_warns_when_no_hosted_provider_is_configured(caplog):
     assert any("OPENAI_API_KEY" in r.message for r in caplog.records)
 
 
+# Long enough to be plausible keys. These used to be "sk-test"/"sk-ant-test",
+# which the placeholder check in config.py now correctly rejects as far too
+# short to be real — so under the current rules those fixtures described an
+# *unconfigured* provider, the opposite of what this test is about.
+_PLAUSIBLE_OPENAI = "sk-proj-" + "aB3dEf9_hJ2lMn5pQr8tUv1wXy4z" * 3
+_PLAUSIBLE_ANTHROPIC = "sk-ant-api03-" + "Ab3dEf9_hJ2lMn5pQr8tUv1wXy4z" * 3
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
-        {"openai_api_key": "sk-test", "anthropic_api_key": None},
-        {"openai_api_key": None, "anthropic_api_key": "sk-ant-test"},
-        {"openai_api_key": "sk-test", "anthropic_api_key": "sk-ant-test"},
+        {"openai_api_key": _PLAUSIBLE_OPENAI, "anthropic_api_key": None},
+        {"openai_api_key": None, "anthropic_api_key": _PLAUSIBLE_ANTHROPIC},
+        {"openai_api_key": _PLAUSIBLE_OPENAI, "anthropic_api_key": _PLAUSIBLE_ANTHROPIC},
     ],
 )
 def test_no_warning_when_at_least_one_hosted_provider_is_configured(caplog, kwargs):
