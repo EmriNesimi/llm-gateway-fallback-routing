@@ -1,13 +1,31 @@
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.providers.base import SamplingParams
+
+# Every provider bills by the token, so an unbounded request is an unbounded
+# bill. These caps exist for cost control, not correctness — decision 008
+# capped `model` and `team` because they hit fixed-width DB columns, and
+# `content` fell outside that reasoning precisely because it doesn't touch the
+# database. It is, however, the field that actually costs money.
+#
+# Sized for what this gateway is for rather than for what the models accept:
+# roughly 25k tokens of prompt and 4k of completion. Raising either raises the
+# worst-case cost of a single request, which is the figure the provider budget
+# reserves against before admitting anything.
+# Per message, and across the whole request. The total is the one that
+# matters for cost — a per-message cap alone lets 100 messages multiply into a
+# request nobody could afford.
+MAX_CONTENT_CHARS = 50_000
+MAX_TOTAL_CONTENT_CHARS = 50_000
+MAX_MESSAGES = 50
+MAX_OUTPUT_TOKENS = 2048
 
 
 class ChatMessageIn(BaseModel):
     role: Literal["system", "user", "assistant"]
-    content: str = Field(min_length=1)
+    content: str = Field(min_length=1, max_length=MAX_CONTENT_CHARS)
 
 
 class ChatRequest(BaseModel):
@@ -22,7 +40,24 @@ class ChatRequest(BaseModel):
     # validation, burning a real call against every provider in the fallback
     # chain (each rejecting it for the same reason), and only then surfacing
     # as an opaque 502 — instead of failing fast here with a clear 422.
-    messages: list[ChatMessageIn] = Field(min_length=1)
+    messages: list[ChatMessageIn] = Field(min_length=1, max_length=MAX_MESSAGES)
+
+    @model_validator(mode="after")
+    def _cap_total_content(self):
+        """Bound the whole request, not just each message.
+
+        MAX_CONTENT_CHARS alone is multiplied by MAX_MESSAGES, which is how a
+        request that passes every individual field check still costs more than
+        the entire provider budget. This is the number the budget reservation
+        is sized against.
+        """
+        total = sum(len(m.content) for m in self.messages)
+        if total > MAX_TOTAL_CONTENT_CHARS:
+            raise ValueError(
+                f"total message content is {total} characters, over the"
+                f" {MAX_TOTAL_CONTENT_CHARS} limit"
+            )
+        return self
 
 
 class ChatResponseOut(BaseModel):
@@ -56,7 +91,7 @@ class ChatCompletionRequest(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     model: str = Field(min_length=1, max_length=255)
-    messages: list[ChatMessageIn] = Field(min_length=1)
+    messages: list[ChatMessageIn] = Field(min_length=1, max_length=MAX_MESSAGES)
     # OpenAI drives streaming with a body field rather than a separate path,
     # and its SDK relies on that, so this endpoint handles both modes.
     stream: bool = False
@@ -68,8 +103,26 @@ class ChatCompletionRequest(BaseModel):
     # entirely rather than being told their value was out of range.
     temperature: float | None = Field(default=None, ge=0, le=2)
     top_p: float | None = Field(default=None, gt=0, le=1)
-    max_tokens: int | None = Field(default=None, gt=0)
+    max_tokens: int | None = Field(default=None, gt=0, le=MAX_OUTPUT_TOKENS)
     stop: list[str] | str | None = None
+
+
+    @model_validator(mode="after")
+    def _cap_total_content(self):
+        """Bound the whole request, not just each message.
+
+        MAX_CONTENT_CHARS alone is multiplied by MAX_MESSAGES, which is how a
+        request that passes every individual field check still costs more than
+        the entire provider budget. This is the number the budget reservation
+        is sized against.
+        """
+        total = sum(len(m.content) for m in self.messages)
+        if total > MAX_TOTAL_CONTENT_CHARS:
+            raise ValueError(
+                f"total message content is {total} characters, over the"
+                f" {MAX_TOTAL_CONTENT_CHARS} limit"
+            )
+        return self
 
     def sampling_params(self) -> SamplingParams:
         return SamplingParams(
