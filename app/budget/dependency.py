@@ -1,5 +1,6 @@
 from fastapi import Depends, HTTPException, Request, Response, status
 
+from app.budget.provider_budget import ProviderBudget
 from app.budget.tracker import BudgetTracker
 from app.core.config import settings
 from app.core.redis_client import get_redis
@@ -8,6 +9,14 @@ from app.ratelimit.dependency import enforce_rate_limit
 tracker = BudgetTracker(
     redis=get_redis(),
     monthly_cap_usd=settings.monthly_budget_usd_per_key,
+)
+
+# The ceiling on the operator's own money, as opposed to `tracker`'s ceiling
+# on any one caller's monthly share. Issuing more client keys multiplies the
+# latter and cannot touch this one.
+provider_budget = ProviderBudget(
+    redis=get_redis(),
+    cap_usd=settings.provider_lifetime_budget_usd,
 )
 
 

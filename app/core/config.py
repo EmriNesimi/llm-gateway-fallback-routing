@@ -99,6 +99,13 @@ class Settings(BaseSettings):
     # Per-API-key spend cap in USD, reset monthly.
     monthly_budget_usd_per_key: float = Field(default=5.0, ge=0)
 
+    # Hard LIFETIME ceiling on what may ever be spent with each hosted
+    # provider. Unlike the cap above this one never resets and isn't attached
+    # to a caller, so issuing more client keys cannot raise it — it's a limit
+    # on the operator's actual balance, not on any one caller's share. Ollama
+    # is exempt; it bills nothing.
+    provider_lifetime_budget_usd: float = Field(default=4.0, ge=0)
+
     # How to treat a `model` the routing table doesn't know. False (the
     # default) preserves this gateway's long-standing behavior: serve it on
     # the default chain, but say so via the X-Gateway-Chain response header,

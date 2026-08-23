@@ -15,9 +15,10 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from sqlalchemy import text
 
 from app.admin.routes import router as admin_router
-from app.budget.dependency import enforce_budget
+from app.budget.dependency import enforce_budget, provider_budget
 from app.budget.dependency import tracker as budget_tracker
-from app.budget.pricing import estimate_cost_usd
+from app.budget.pricing import estimate_cost_usd, worst_case_cost_usd
+from app.budget.provider_budget import FREE_PROVIDERS, ProviderBudgetExhausted
 from app.core.config import settings
 from app.core.redis_client import get_redis
 from app.db.audit import record_audit_log
@@ -37,6 +38,7 @@ from app.routing.model_map import (
     routable_models,
 )
 from app.schemas import (
+    MAX_OUTPUT_TOKENS,
     ChatCompletionChoice,
     ChatCompletionMessage,
     ChatCompletionRequest,
@@ -250,6 +252,129 @@ def _record_usage(
     TOKENS.labels(provider=provider, model=model, direction="output").inc(output_tokens)
 
 
+async def _reserve_chain(
+    chain_name: str, messages: list[ChatMessage], params: SamplingParams | None, request_id: str
+) -> tuple[dict[str, float], set[str]]:
+    """Claim worst-case budget on every billable provider the chain may reach.
+
+    Reserving up front rather than checking-then-calling is what makes the
+    ceiling hold under concurrency: with a burst allowance of 20, twenty
+    simultaneous requests would otherwise all observe the same pre-call total
+    and all proceed.
+
+    Every provider in the chain is reserved against, not just the first,
+    because fallback decides at call time which one actually answers. The
+    surplus is refunded in _settle_chain — which every caller must reach, on
+    success and on failure alike, or the reservation leaks out of the budget
+    permanently.
+
+    Returns (reservations, skip) — `skip` being providers already at their
+    ceiling, which the router drops from the chain without calling them.
+    """
+    chars = sum(len(m.content) for m in messages)
+    max_out = (params.max_tokens if params and params.max_tokens else MAX_OUTPUT_TOKENS)
+
+    reservations: dict[str, float] = {}
+    skip: set[str] = set()
+    billable = 0
+
+    for provider, model in FALLBACK_CHAINS[chain_name]:
+        if provider in FREE_PROVIDERS:
+            continue
+        billable += 1
+        cost = worst_case_cost_usd(provider, model, chars, max_out)
+        try:
+            await provider_budget.reserve(provider, cost)
+            reservations[provider] = cost
+        except ProviderBudgetExhausted:
+            skip.add(provider)
+
+    has_free_hop = any(p in FREE_PROVIDERS for p, _ in FALLBACK_CHAINS[chain_name])
+    if billable and len(skip) == billable and not has_free_hop:
+        logger.error(
+            "[request_id=%s] refusing: every provider in chain %r is out of budget",
+            request_id,
+            chain_name,
+        )
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "error": "provider budget exhausted",
+                "spent": await provider_budget.snapshot(),
+                "cap_usd": provider_budget.cap_usd,
+                "request_id": request_id,
+            },
+        )
+    return reservations, skip
+
+
+async def _settle_stream_on_abort(
+    api_key: str,
+    requested_model: str,
+    provider: str,
+    model: str,
+    input_tokens: int,
+    streamed_chars: int,
+    reservations: dict[str, float] | None,
+    request_id: str,
+    start: float,
+) -> None:
+    """Charge for a stream that ended without its usage totals.
+
+    Two ways to get here: the client hung up, or the provider died after
+    committing. Either way tokens were generated and billed upstream, and the
+    `done` chunk carrying the real counts never arrived — so previously
+    nothing was recorded at all and the budget cap simply never advanced.
+
+    Output is estimated from the characters actually streamed. Deliberately
+    approximate and biased high (see _CHARS_PER_TOKEN): under-charging here is
+    exactly how a ceiling quietly stops being one.
+    """
+    if not provider:
+        await _settle_chain(reservations or {}, "", 0.0)
+        return
+
+    estimated_output = max(1, streamed_chars // 3)
+    cost = estimate_cost_usd(
+        provider=provider,
+        model=model,
+        input_tokens=input_tokens,
+        output_tokens=estimated_output,
+    )
+    logger.warning(
+        "[request_id=%s] stream ended without usage totals; charging an estimate"
+        " of $%.6f against %s from %d streamed characters",
+        request_id,
+        cost,
+        provider,
+        streamed_chars,
+    )
+    await _settle_chain(reservations or {}, provider, cost)
+    _record_usage(provider, model, input_tokens, estimated_output, cost)
+    await budget_tracker.record_spend(api_key, cost)
+    await record_audit_log(
+        api_key,
+        requested_model=requested_model,
+        outcome="aborted",
+        provider=provider,
+        input_tokens=input_tokens,
+        output_tokens=estimated_output,
+        cost_usd=cost,
+        latency_ms=(time.perf_counter() - start) * 1000,
+        request_id=request_id,
+    )
+
+
+async def _settle_chain(
+    reservations: dict[str, float], served_provider: str, actual_usd: float
+) -> None:
+    """Swap reservations for the real cost. Unused providers get a full refund."""
+    for provider, reserved in reservations.items():
+        await provider_budget.settle(
+            provider, reserved, actual_usd if provider == served_provider else 0.0
+        )
+
+
 async def _serve_chat(
     router,
     messages: list[ChatMessage],
@@ -257,6 +382,8 @@ async def _serve_chat(
     requested_model: str,
     request_id: str,
     params: SamplingParams | None = None,
+    reservations: dict[str, float] | None = None,
+    skip_providers: set[str] | None = None,
 ):
     """Run a non-streaming request through the router and do the bookkeeping.
 
@@ -265,9 +392,15 @@ async def _serve_chat(
     them. Two copies would drift, and the direction they'd drift in is a
     request that gets served but never billed."""
     start = time.perf_counter()
+    settled = False
     try:
-        result = await router.chat(messages, request_id=request_id, params=params)
+        result = await router.chat(
+            messages, request_id=request_id, params=params, skip_providers=skip_providers
+        )
     except AllProvidersFailedError as exc:
+        # Nothing was served, so every reservation comes straight back.
+        await _settle_chain(reservations or {}, "", 0.0)
+        settled = True
         REQUEST_COUNT.labels(status="error").inc()
         await record_audit_log(
             api_key,
@@ -281,6 +414,11 @@ async def _serve_chat(
         ) from exc
     finally:
         REQUEST_LATENCY.observe(time.perf_counter() - start)
+        if not settled and reservations:
+            # A reservation that outlives its request is a permanent hole in
+            # the ceiling, so anything escaping by an unexpected route (a
+            # cancellation, a bug) still hands the money back here.
+            await _settle_chain(reservations, "", 0.0)
 
     REQUEST_COUNT.labels(status="success").inc()
 
@@ -290,6 +428,8 @@ async def _serve_chat(
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,
     )
+    await _settle_chain(reservations or {}, result.provider, cost)
+    settled = True
     _record_usage(
         result.provider, result.model, result.input_tokens, result.output_tokens, cost
     )
@@ -319,8 +459,12 @@ async def chat(
     chain_name, router = _route(request.model, request_id)
     response.headers["X-Gateway-Chain"] = chain_name
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
+    reservations, skip = await _reserve_chain(chain_name, messages, None, request_id)
 
-    result = await _serve_chat(router, messages, api_key, request.model, request_id)
+    result = await _serve_chat(
+        router, messages, api_key, request.model, request_id,
+        reservations=reservations, skip_providers=skip,
+    )
 
     return ChatResponseOut(
         content=result.content,
@@ -332,7 +476,13 @@ async def chat(
 
 
 async def _event_stream(
-    router, messages: list[ChatMessage], api_key: str, requested_model: str, request_id: str
+    router,
+    messages: list[ChatMessage],
+    api_key: str,
+    requested_model: str,
+    request_id: str,
+    reservations: dict[str, float] | None = None,
+    skip_providers: set[str] | None = None,
 ) -> AsyncIterator[str]:
     start = time.perf_counter()
     final_provider = ""
@@ -340,14 +490,35 @@ async def _event_stream(
     input_tokens = 0
     output_tokens = 0
 
+    streamed_chars = 0
+
     try:
-        async for chunk in router.chat_stream(messages, request_id=request_id):
+        async for chunk in router.chat_stream(
+            messages, request_id=request_id, skip_providers=skip_providers
+        ):
             if chunk.done:
                 final_provider = chunk.provider
                 final_model = chunk.model
                 input_tokens = chunk.input_tokens
                 output_tokens = chunk.output_tokens
+            else:
+                # Counted as it goes, because the usage totals only arrive in
+                # the final chunk — which never comes if the client hangs up.
+                streamed_chars += len(chunk.content)
+                final_provider = final_provider or chunk.provider
+                final_model = final_model or chunk.model
             yield f"data: {json.dumps(asdict(chunk))}\n\n"
+    except (GeneratorExit, asyncio.CancelledError):
+        # The client disconnected mid-stream. Starlette closes the generator,
+        # so every line after the loop is skipped — which used to mean the
+        # tokens the provider had already generated and billed were recorded
+        # as $0.00, leaving the budget cap permanently unreachable. Charge an
+        # estimate from what was actually streamed instead.
+        await _settle_stream_on_abort(
+            api_key, requested_model, final_provider, final_model,
+            input_tokens, streamed_chars, reservations, request_id, start,
+        )
+        raise
     except AllProvidersFailedError as exc:
         # Headers/status are already committed to 200 once streaming has begun,
         # so a failure is reported as an SSE error event rather than an HTTP error.
@@ -358,6 +529,12 @@ async def _event_stream(
             outcome="error",
             latency_ms=(time.perf_counter() - start) * 1000,
             request_id=request_id,
+        )
+        # A provider that died after committing has still generated and been
+        # billed for whatever it sent, so charge that rather than nothing.
+        await _settle_stream_on_abort(
+            api_key, requested_model, final_provider, final_model,
+            input_tokens, streamed_chars, reservations, request_id, start,
         )
         yield f"event: error\ndata: {json.dumps({'error': str(exc), 'request_id': request_id})}\n\n"
         return
@@ -376,6 +553,8 @@ async def _event_stream(
         )
         _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
         await budget_tracker.record_spend(api_key, cost)
+
+    await _settle_chain(reservations or {}, final_provider, cost)
 
     await record_audit_log(
         api_key,
@@ -399,8 +578,12 @@ async def chat_stream(
     request_id = http_request.state.request_id
     chain_name, router = _route(request.model, request_id)
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
+    reservations, skip = await _reserve_chain(chain_name, messages, None, request_id)
     response = StreamingResponse(
-        _event_stream(router, messages, api_key, request.model, request_id),
+        _event_stream(
+            router, messages, api_key, request.model, request_id,
+            reservations=reservations, skip_providers=skip,
+        ),
         media_type="text/event-stream",
     )
     response.headers["X-Gateway-Chain"] = chain_name
@@ -426,6 +609,8 @@ async def _openai_event_stream(
     completion_id: str,
     created: int,
     params: SamplingParams | None = None,
+    reservations: dict[str, float] | None = None,
+    skip_providers: set[str] | None = None,
 ) -> AsyncIterator[str]:
     """SSE in OpenAI's `chat.completion.chunk` shape.
 
@@ -439,6 +624,7 @@ async def _openai_event_stream(
     input_tokens = 0
     output_tokens = 0
     first = True
+    streamed_chars = 0
 
     def envelope(delta: dict, finish_reason: str | None, model: str) -> str:
         payload = {
@@ -452,7 +638,8 @@ async def _openai_event_stream(
 
     try:
         async for chunk in router.chat_stream(
-            messages, request_id=request_id, params=params
+            messages, request_id=request_id, params=params,
+            skip_providers=skip_providers,
         ):
             if chunk.done:
                 final_provider = chunk.provider
@@ -460,22 +647,30 @@ async def _openai_event_stream(
                 input_tokens = chunk.input_tokens
                 output_tokens = chunk.output_tokens
                 continue
+            streamed_chars += len(chunk.content)
+            final_provider = final_provider or chunk.provider
             if first:
                 yield envelope({"role": "assistant"}, None, chunk.model or requested_model)
                 first = False
             yield envelope({"content": chunk.content}, None, chunk.model or requested_model)
+    except (GeneratorExit, asyncio.CancelledError):
+        # See _settle_stream_on_abort: a client disconnect used to skip every
+        # line below, recording $0.00 for tokens the provider had already
+        # generated and billed.
+        await _settle_stream_on_abort(
+            api_key, requested_model, final_provider, final_model,
+            input_tokens, streamed_chars, reservations, request_id, start,
+        )
+        raise
     except AllProvidersFailedError as exc:
         # Status is already committed to 200 once streaming has begun, so this
         # is reported in-band. OpenAI's SDK surfaces an `error` field on a
         # chunk as an exception, which is the closest thing to the 502 a
         # non-streaming caller would have received.
         REQUEST_COUNT.labels(status="error").inc()
-        await record_audit_log(
-            api_key,
-            requested_model=requested_model,
-            outcome="error",
-            latency_ms=(time.perf_counter() - start) * 1000,
-            request_id=request_id,
+        await _settle_stream_on_abort(
+            api_key, requested_model, final_provider, final_model,
+            input_tokens, streamed_chars, reservations, request_id, start,
         )
         yield (
             "data: "
@@ -498,6 +693,8 @@ async def _openai_event_stream(
         )
         _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
         await budget_tracker.record_spend(api_key, cost)
+
+    await _settle_chain(reservations or {}, final_provider, cost)
 
     await record_audit_log(
         api_key,
@@ -544,6 +741,8 @@ async def chat_completions(
             ", ".join(ignored),
         )
 
+    reservations, skip = await _reserve_chain(chain_name, messages, params, request_id)
+
     if request.stream:
         stream_response = StreamingResponse(
             _openai_event_stream(
@@ -555,6 +754,8 @@ async def chat_completions(
                 completion_id=f"chatcmpl-{uuid.uuid4().hex}",
                 created=int(time.time()),
                 params=params,
+                reservations=reservations,
+                skip_providers=skip,
             ),
             media_type="text/event-stream",
         )
@@ -575,7 +776,8 @@ async def chat_completions(
         response.headers["X-Gateway-Ignored-Params"] = ",".join(ignored)
 
     result = await _serve_chat(
-        router, messages, api_key, request.model, request_id, params=params
+        router, messages, api_key, request.model, request_id, params=params,
+        reservations=reservations, skip_providers=skip,
     )
 
     return ChatCompletionResponse(

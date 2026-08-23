@@ -25,6 +25,33 @@ _PRICING: dict[str, tuple[float, float]] = {
 }
 
 
+# Rough characters-per-token. Deliberately low: ~4 is the usual English
+# approximation, and 3 over-counts — the safe direction when the number is
+# reserving budget rather than billing.
+_CHARS_PER_TOKEN = 3
+
+
+def worst_case_cost_usd(
+    provider: str, model: str, input_chars: int, max_output_tokens: int
+) -> float:
+    """The most a single request to this model could possibly cost.
+
+    Used to reserve budget *before* the call. Checking `spent < cap` and then
+    calling leaves two holes — one request costing more than the remaining
+    headroom, and concurrent requests all observing the same pre-call total.
+    Reserving the upper bound closes both.
+
+    An unpriced model returns 0.0, matching estimate_cost_usd, but that can't
+    silently happen: tests/test_pricing.py fails the build if any model
+    reachable from a chain has no price.
+    """
+    pricing = _PRICING.get(f"{provider}:{model}")
+    if pricing is None:
+        return 0.0
+    input_price, output_price = pricing
+    return (input_chars / _CHARS_PER_TOKEN) * input_price + max_output_tokens * output_price
+
+
 def estimate_cost_usd(
     provider: str, model: str, input_tokens: int, output_tokens: int
 ) -> float:

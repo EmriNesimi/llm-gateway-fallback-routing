@@ -8,7 +8,7 @@ from app.routing.fallback import AllProvidersFailedError
 
 
 class _AlwaysFailsRouter:
-    async def chat(self, messages, request_id="", params=None):
+    async def chat(self, messages, request_id="", params=None, skip_providers=None):
         raise AllProvidersFailedError("no real provider needed for this test")
 
 

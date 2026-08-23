@@ -77,11 +77,24 @@ class FallbackRouter:
         messages: list[ChatMessage],
         request_id: str = "",
         params: SamplingParams | None = None,
+        skip_providers: set[str] | None = None,
     ) -> ChatResponse:
         errors: list[str] = []
         tried_any = False
 
         for attempt, (provider, model, breaker) in enumerate(self._chain):
+            if skip_providers and provider.name in skip_providers:
+                # Checked before the breaker, because a half-open trial
+                # request is still a billable call. A provider that has spent
+                # its ceiling must not be probed at all.
+                logger.warning(
+                    "[request_id=%s] provider %s skipped: out of budget",
+                    request_id,
+                    provider.name,
+                )
+                errors.append(f"{provider.name}: out of budget")
+                continue
+
             allowed = breaker.allow_request()
             publish_circuit_state(provider.name, breaker)
             if not allowed:
@@ -185,6 +198,7 @@ class FallbackRouter:
         messages: list[ChatMessage],
         request_id: str = "",
         params: SamplingParams | None = None,
+        skip_providers: set[str] | None = None,
     ) -> AsyncIterator[StreamChunk]:
         """Like `chat`, but streams chunks as they arrive.
 
@@ -199,6 +213,18 @@ class FallbackRouter:
         tried_any = False
 
         for attempt, (provider, model, breaker) in enumerate(self._chain):
+            if skip_providers and provider.name in skip_providers:
+                # Checked before the breaker, because a half-open trial
+                # request is still a billable call. A provider that has spent
+                # its ceiling must not be probed at all.
+                logger.warning(
+                    "[request_id=%s] provider %s skipped: out of budget",
+                    request_id,
+                    provider.name,
+                )
+                errors.append(f"{provider.name}: out of budget")
+                continue
+
             allowed = breaker.allow_request()
             publish_circuit_state(provider.name, breaker)
             if not allowed:

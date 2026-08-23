@@ -9,12 +9,12 @@ from app.ratelimit import dependency as ratelimit_dependency
 
 
 class FakeRouter:
-    async def chat(self, messages, request_id="", params=None):
+    async def chat(self, messages, request_id="", params=None, skip_providers=None):
         return ChatResponse(
             content="hi", provider="openai", model="gpt-4o-mini", input_tokens=5, output_tokens=5
         )
 
-    async def chat_stream(self, messages, request_id="", params=None):
+    async def chat_stream(self, messages, request_id="", params=None, skip_providers=None):
         yield StreamChunk(content="hi")
         yield StreamChunk(content="", done=True, input_tokens=5, output_tokens=5)
 

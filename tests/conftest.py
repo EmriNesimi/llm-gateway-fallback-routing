@@ -46,6 +46,7 @@ CLEARED_ENV_VARS = frozenset(
         "RATE_LIMIT_REFILL_PER_SEC",
         "REDIS_CONNECT_TIMEOUT_SECONDS",
         "REDIS_SOCKET_TIMEOUT_SECONDS",
+        "PROVIDER_LIFETIME_BUDGET_USD",
         "STRICT_MODEL_ROUTING",
     }
 )
@@ -104,5 +105,8 @@ async def isolated_redis(monkeypatch):
         ratelimit_dependency._limiter, "_script", fake.register_script(_LUA_TOKEN_BUCKET)
     )
     monkeypatch.setattr(budget_dependency.tracker, "_redis", fake)
+    # The lifetime provider ledger is a separate client; without this it
+    # reaches for a real Redis and every chat test fails on connect.
+    monkeypatch.setattr(budget_dependency.provider_budget, "_redis", fake)
 
     yield fake

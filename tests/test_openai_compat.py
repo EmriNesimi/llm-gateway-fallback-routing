@@ -22,7 +22,7 @@ from app.security.auth import require_api_key
 
 
 class FakeRouter:
-    async def chat(self, messages, request_id="", params=None):
+    async def chat(self, messages, request_id="", params=None, skip_providers=None):
         return ChatResponse(
             content="hello from the gateway",
             provider="openai",
@@ -31,7 +31,7 @@ class FakeRouter:
             output_tokens=7,
         )
 
-    async def chat_stream(self, messages, request_id="", params=None):
+    async def chat_stream(self, messages, request_id="", params=None, skip_providers=None):
         for piece in ("hel", "lo"):
             yield StreamChunk(
                 content=piece, provider="openai", model="gpt-4o-mini", done=False
