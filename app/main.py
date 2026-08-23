@@ -67,7 +67,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="LLM Gateway",
     description="Resilient LLM gateway with provider fallback, rate limiting, and observability.",
-    version="0.1.0",
+    # Keep in step with the git tag — this is what /openapi.json advertises,
+    # and a client pinning against it deserves the two to agree.
+    version="0.2.0",
     lifespan=lifespan,
 )
 
