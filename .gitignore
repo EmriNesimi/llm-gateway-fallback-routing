@@ -39,3 +39,6 @@ dump.rdb
 
 # ruff cache
 .ruff_cache/
+
+# Serena MCP tooling state — local, not project config
+.serena/
