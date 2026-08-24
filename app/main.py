@@ -419,7 +419,6 @@ async def _serve_chat(
     them. Two copies would drift, and the direction they'd drift in is a
     request that gets served but never billed."""
     start = time.perf_counter()
-    settled = False
     try:
         result = await router.chat(
             messages, request_id=request_id, params=params, skip_providers=skip_providers
@@ -427,7 +426,6 @@ async def _serve_chat(
     except AllProvidersFailedError as exc:
         # Nothing was served, so every reservation comes straight back.
         await _settle_chain(reservations or {}, "", 0.0)
-        settled = True
         REQUEST_COUNT.labels(status="error").inc()
         await record_audit_log(
             api_key,
@@ -446,12 +444,13 @@ async def _serve_chat(
             detail={"error": "all providers failed", "request_id": request_id},
         ) from exc
     finally:
+        # Deliberately no refund here. `finally` runs before the success-path
+        # bookkeeping below, so refunding at this point would hand the money
+        # back and then settle a second time — subtracting the reservation
+        # twice and driving the ledger negative, at which point the ceiling
+        # can never be reached. Each exit settles explicitly instead: the
+        # except branch above, and the success path below.
         REQUEST_LATENCY.observe(time.perf_counter() - start)
-        if not settled and reservations:
-            # A reservation that outlives its request is a permanent hole in
-            # the ceiling, so anything escaping by an unexpected route (a
-            # cancellation, a bug) still hands the money back here.
-            await _settle_chain(reservations, "", 0.0)
 
     REQUEST_COUNT.labels(status="success").inc()
 
@@ -462,7 +461,6 @@ async def _serve_chat(
         output_tokens=result.output_tokens,
     )
     await _settle_chain(reservations or {}, result.provider, cost)
-    settled = True
     _record_usage(
         result.provider, result.model, result.input_tokens, result.output_tokens, cost
     )

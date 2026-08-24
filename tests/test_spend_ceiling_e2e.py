@@ -108,6 +108,40 @@ def test_a_served_request_advances_the_ledger(client, monkeypatch):
     assert client.portal.call(_spent) > 0
 
 
+def test_the_ledger_ends_at_exactly_the_cost_of_one_request(client, monkeypatch):
+    """Not "greater than before" — exactly the cost.
+
+    The bug this pins: a refund in _serve_chat's `finally` ran before the
+    success-path settle, subtracting the reservation twice, so each request
+    moved the ledger by (cost - reservation). With a real cost smaller than
+    the reservation that is NEGATIVE, and a ledger going backwards can never
+    reach the ceiling. It went unnoticed because the stub here reported a cost
+    far larger than the reservation, which kept the total climbing anyway.
+    """
+    monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router(out_tokens=40)))
+
+    assert client.post("/v1/chat", json=BODY, headers=HEADERS).status_code == 200
+
+    # 1000 in @ $5/1M + 40 out @ $25/1M on claude-opus-5
+    expected = 1000 * 5 / 1_000_000 + 40 * 25 / 1_000_000
+    assert client.portal.call(_spent) == pytest.approx(expected, rel=1e-6)
+
+
+def test_repeated_cheap_requests_move_the_ledger_forward(client, monkeypatch):
+    """The same bug from the other side: many small requests must accumulate,
+    not erode. Each one costing less than its reservation is the normal case,
+    not the exception."""
+    monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router(out_tokens=10)))
+
+    seen = []
+    for _ in range(5):
+        client.post("/v1/chat", json=BODY, headers=HEADERS)
+        seen.append(client.portal.call(_spent))
+
+    assert seen == sorted(seen), f"ledger went backwards: {seen}"
+    assert seen[0] > 0
+
+
 def test_the_ceiling_eventually_refuses_with_402(client, monkeypatch):
     """The whole point: spending has to stop, and stop with a status the
     caller can act on rather than a generic failure."""
