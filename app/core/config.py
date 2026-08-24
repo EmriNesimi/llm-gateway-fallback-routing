@@ -80,6 +80,13 @@ class Settings(BaseSettings):
     gateway_api_keys: str = ""
     otel_exporter_otlp_endpoint: str | None = None
 
+    # Optional shared secret for /metrics. A scrape target isn't a client, so
+    # it gets its own token rather than a gateway key that could spend money.
+    # Unset leaves /metrics open — fine for the loopback-bound dev stack, not
+    # for anything reachable from elsewhere, since the metrics publish exactly
+    # how much has been spent and on what.
+    metrics_token: str | None = None
+
     # Comma-separated allowed browser origins for CORS. Empty by default —
     # this gateway is meant to be called server-to-server or via curl, so
     # opening it to arbitrary browser origins is opt-in, not assumed.

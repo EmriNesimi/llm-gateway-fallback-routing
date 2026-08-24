@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import json
 import logging
 import time
@@ -7,7 +8,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -182,7 +183,27 @@ async def root():
 
 
 @app.get("/metrics")
-async def metrics():
+async def metrics(x_metrics_token: str | None = Header(default=None)):
+    """Prometheus scrape target.
+
+    Gated on its own token rather than a client key, because a scraper isn't a
+    client — it shouldn't hold a key that can spend money, and it shouldn't
+    consume rate-limit budget. What's behind here is worth protecting:
+    gateway_cost_usd_total publishes exactly how much has been spent and on
+    what, alongside process-level detail from prometheus_client's default
+    collectors.
+
+    An unset METRICS_TOKEN leaves the endpoint open, which is the right
+    default for a loopback-bound dev stack and is why docker-compose.yml binds
+    everything to 127.0.0.1. Set it for anything reachable from elsewhere.
+    """
+    expected = settings.metrics_token
+    if expected and not (
+        x_metrics_token and hmac.compare_digest(x_metrics_token, expected)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid metrics token"
+        )
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 

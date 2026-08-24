@@ -34,6 +34,7 @@ CLEARED_ENV_VARS = frozenset(
         "GATEWAY_API_KEYS",
         "GATEWAY_SECRET_KEY",
         "LOG_FORMAT",
+        "METRICS_TOKEN",
         "MONTHLY_BUDGET_USD_PER_KEY",
         "OLLAMA_BASE_URL",
         "OLLAMA_REQUEST_TIMEOUT_SECONDS",
