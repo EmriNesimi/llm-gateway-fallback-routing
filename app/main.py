@@ -134,7 +134,12 @@ async def _check_redis() -> str:
         await get_redis().ping()
         return "ok"
     except Exception as exc:  # noqa: BLE001 - report any failure, not just known types
-        return f"error: {exc}"
+        # Logged in full, reported as one word. /readyz is unauthenticated, so
+        # the exception text handed hostnames, ports, driver versions and
+        # failure modes to anyone who asked — reconnaissance for attacking the
+        # very backends that hold the spend counters.
+        logger.error("readiness check failed for redis: %s", exc, exc_info=exc)
+        return "error"
 
 
 async def _check_database() -> str:
@@ -143,7 +148,8 @@ async def _check_database() -> str:
             await session.execute(text("SELECT 1"))
         return "ok"
     except Exception as exc:  # noqa: BLE001
-        return f"error: {exc}"
+        logger.error("readiness check failed for database: %s", exc, exc_info=exc)
+        return "error"
 
 
 @app.get("/readyz")
@@ -409,8 +415,14 @@ async def _serve_chat(
             latency_ms=(time.perf_counter() - start) * 1000,
             request_id=request_id,
         )
+        # The provider error text is logged, not returned. It embeds upstream
+        # response bodies, which carry API key prefixes/suffixes, org IDs and
+        # rate-limit internals — the request_id is what a caller actually
+        # needs to get help, and it's already correlated to this log line.
+        logger.error("[request_id=%s] all providers failed: %s", request_id, exc)
         raise HTTPException(
-            status_code=502, detail={"error": str(exc), "request_id": request_id}
+            status_code=502,
+            detail={"error": "all providers failed", "request_id": request_id},
         ) from exc
     finally:
         REQUEST_LATENCY.observe(time.perf_counter() - start)
@@ -536,7 +548,12 @@ async def _event_stream(
             api_key, requested_model, final_provider, final_model,
             input_tokens, streamed_chars, reservations, request_id, start,
         )
-        yield f"event: error\ndata: {json.dumps({'error': str(exc), 'request_id': request_id})}\n\n"
+        logger.error("[request_id=%s] stream failed: %s", request_id, exc)
+        yield (
+            "event: error\ndata: "
+            + json.dumps({"error": "all providers failed", "request_id": request_id})
+            + "\n\n"
+        )
         return
     finally:
         REQUEST_LATENCY.observe(time.perf_counter() - start)
@@ -662,7 +679,7 @@ async def _openai_event_stream(
             input_tokens, streamed_chars, reservations, request_id, start,
         )
         raise
-    except AllProvidersFailedError as exc:
+    except AllProvidersFailedError:
         # Status is already committed to 200 once streaming has begun, so this
         # is reported in-band. OpenAI's SDK surfaces an `error` field on a
         # chunk as an exception, which is the closest thing to the 502 a
@@ -674,7 +691,9 @@ async def _openai_event_stream(
         )
         yield (
             "data: "
-            + json.dumps({"error": {"message": str(exc), "request_id": request_id}})
+            + json.dumps(
+                {"error": {"message": "all providers failed", "request_id": request_id}}
+            )
             + "\n\n"
         )
         return

@@ -45,4 +45,7 @@ def test_readyz_reports_unavailable_when_redis_unreachable(isolated_db, monkeypa
     body = r.json()
     assert body["status"] == "unavailable"
     assert body["checks"]["database"] == "ok"
-    assert body["checks"]["redis"].startswith("error:")
+    # Just "error" — /readyz is unauthenticated, so the exception text (which
+    # named hosts, ports and driver versions) is logged rather than returned.
+    # What a load balancer needs is which dependency is down, not why.
+    assert body["checks"]["redis"] == "error"
