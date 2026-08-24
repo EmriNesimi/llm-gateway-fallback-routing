@@ -71,13 +71,27 @@ def _sampling_kwargs(model: str, params: SamplingParams | None) -> dict:
     return kwargs
 
 
-def _to_anthropic_messages(messages: list[ChatMessage]) -> list[MessageParam]:
-    # ChatMessage.role is a plain str (validated at the API boundary in
-    # app/schemas.py); the SDK wants its narrower Literal["user", "assistant"],
-    # so this cast documents "already validated" rather than re-checking here.
-    return cast(
-        "list[MessageParam]", [{"role": m.role, "content": m.content} for m in messages]
+def _split_system(messages: list[ChatMessage]) -> tuple[str, list[MessageParam]]:
+    """Separate system prompts from the conversation.
+
+    OpenAI takes a system prompt as a `messages[]` entry with `role: "system"`;
+    Anthropic takes it as a top-level `system` parameter and accepts only
+    user/assistant inside `messages[]`. Forwarding one as a message is a 400 —
+    which, being 4xx, is classified non-retryable, so the router fell straight
+    past Anthropic. The effect was that any request carrying a system prompt
+    silently never reached Anthropic at all: the `smart` chain served every
+    such request from its OpenAI fallback instead.
+
+    The cast on the remainder documents "already validated at the API
+    boundary" (app/schemas.py restricts role to system/user/assistant), and is
+    now honest — with system hoisted out, only user/assistant remain.
+    """
+    system = "\n\n".join(m.content for m in messages if m.role == "system")
+    conversation = cast(
+        "list[MessageParam]",
+        [{"role": m.role, "content": m.content} for m in messages if m.role != "system"],
     )
+    return system, conversation
 
 
 def _provider_error(prefix: str, exc: AnthropicError) -> ProviderError:
@@ -99,11 +113,15 @@ class AnthropicProvider(BaseProvider):
         messages: list[ChatMessage],
         params: SamplingParams | None = None,
     ) -> ChatResponse:
+        system, conversation = _split_system(messages)
+        kwargs = _sampling_kwargs(model, params)
+        if system:
+            # Only when the caller actually supplied one — passing system=""
+            # is not the same as omitting it.
+            kwargs["system"] = system
         try:
             response = await self._client.messages.create(
-                model=model,
-                messages=_to_anthropic_messages(messages),
-                **_sampling_kwargs(model, params),
+                model=model, messages=conversation, **kwargs
             )
         except AnthropicError as exc:
             raise _provider_error("anthropic request failed", exc) from exc
@@ -124,11 +142,13 @@ class AnthropicProvider(BaseProvider):
         messages: list[ChatMessage],
         params: SamplingParams | None = None,
     ) -> AsyncIterator[StreamChunk]:
+        system, conversation = _split_system(messages)
+        kwargs = _sampling_kwargs(model, params)
+        if system:
+            kwargs["system"] = system
         try:
             async with self._client.messages.stream(
-                model=model,
-                messages=_to_anthropic_messages(messages),
-                **_sampling_kwargs(model, params),
+                model=model, messages=conversation, **kwargs
             ) as stream:
                 async for text in stream.text_stream:
                     yield StreamChunk(content=text)
