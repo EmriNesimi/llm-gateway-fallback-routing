@@ -27,7 +27,12 @@ services:
   postgres:
     image: postgres:16-alpine
     ports:
-      - "127.0.0.1:5432:5432"
+      # 5433 on the host, not 5432. Anyone running a second Postgres container
+      # — a different project, Postgres.app, a system install — already holds
+      # the default, and the collision stops this whole stack from starting.
+      # Only the host mapping moves: DATABASE_URL reaches this over the
+      # compose network as postgres:5432, which is unchanged.
+      - "127.0.0.1:5433:5432"
     environment:
       - POSTGRES_USER=gateway
       - POSTGRES_PASSWORD=changeme
