@@ -3,6 +3,8 @@ import time
 
 from redis.asyncio import Redis
 
+from app.security.api_keys import hash_key
+
 logger = logging.getLogger("gateway.budget")
 
 _SECONDS_PER_MONTH = 30 * 24 * 60 * 60
@@ -17,7 +19,12 @@ class BudgetTracker:
 
     def _key(self, api_key: str) -> str:
         period = int(time.time() // _SECONDS_PER_MONTH)
-        return f"budget:{api_key}:{period}"
+        # Hashed, not raw. The database has only ever stored hashes
+        # (app/db/audit.py, app/admin/routes.py) — using the raw key as a
+        # Redis key name quietly undid that, because anyone able to run KEYS
+        # against Redis could read live client keys straight out of the key
+        # space, then DEL them to reset the spend that limits them.
+        return f"budget:{hash_key(api_key)}:{period}"
 
     async def spent_usd(self, api_key: str) -> float:
         # Deliberately NOT swallowed like record_spend below: this backs the

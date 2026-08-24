@@ -2,6 +2,8 @@ import time
 
 from redis.asyncio import Redis
 
+from app.security.api_keys import hash_key
+
 # Atomic refill + consume so concurrent requests can't race past the limit.
 _LUA_TOKEN_BUCKET = """
 local key = KEYS[1]
@@ -53,7 +55,7 @@ class TokenBucketLimiter:
         """Like `allow`, but also returns the tokens remaining after this
         check — used to surface X-RateLimit-Remaining on responses."""
         allowed, remaining = await self._script(
-            keys=[f"ratelimit:{key}"],
+            keys=[f"ratelimit:{hash_key(key)}"],
             args=[self._capacity, self._refill_rate, time.time(), cost],
         )
         return bool(allowed), float(remaining)
