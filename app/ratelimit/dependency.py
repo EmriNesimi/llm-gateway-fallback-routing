@@ -1,6 +1,6 @@
 import math
 
-from fastapi import Depends, HTTPException, Request, Response, status
+from fastapi import Depends, Header, HTTPException, Request, Response, status
 
 from app.core.config import settings
 from app.core.redis_client import get_redis
@@ -48,3 +48,28 @@ async def enforce_rate_limit(
     response.headers["X-RateLimit-Limit"] = str(_limiter.capacity)
     response.headers["X-RateLimit-Remaining"] = str(request.state.rate_limit_remaining)
     return api_key
+
+
+async def enforce_admin_rate_limit(
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+) -> None:
+    """Rate limit the admin API.
+
+    The admin key mints and revokes client keys, so it's a higher trust level
+    than any client key — but it was the only surface with no limit at all,
+    leaving X-Admin-Key guessable at unlimited rate. That's theoretical while
+    the configured secret is long, but that's a property of this deployment's
+    secret rather than of the endpoint, and the endpoint is where the control
+    belongs.
+
+    Keyed on a fixed label rather than the presented value: keying on the
+    guess would give an attacker a fresh bucket per attempt, which is no limit
+    at all. One shared bucket for admin traffic is the point.
+    """
+    allowed, _ = await _limiter.check(key="admin-api")
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="admin API rate limit exceeded",
+            headers={"Retry-After": str(_RETRY_AFTER_SECONDS)},
+        )

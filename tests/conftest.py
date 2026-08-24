@@ -93,10 +93,17 @@ async def isolated_db(monkeypatch):
     await engine.dispose()
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(autouse=True)
 async def isolated_redis(monkeypatch):
     """Swap the real rate-limiter/budget-tracker Redis client for a fake one,
-    so tests don't need a live Redis and don't share state between runs."""
+    so tests don't need a live Redis and don't share state between runs.
+
+    autouse, because a test that forgets to ask for it doesn't fail loudly —
+    it reaches for a real Redis on localhost and either hangs, errors, or
+    (worse) quietly passes against whatever state that server happens to
+    hold. tests/test_redis_integration.py is unaffected: it builds its own
+    clients against a real server rather than using these module-level ones.
+    """
     fake = fakeredis.aioredis.FakeRedis()
 
     monkeypatch.setattr(ratelimit_dependency._limiter, "_redis", fake)

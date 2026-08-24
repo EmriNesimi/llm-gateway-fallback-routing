@@ -8,9 +8,22 @@ from app.admin.auth import require_admin_key
 from app.admin.schemas import ApiKeyOut, AuditLogEntryOut, CreateKeyRequest, CreateKeyResponse
 from app.db.models import ApiKeyRecord, AuditLogEntry
 from app.db.session import get_session
+from app.ratelimit.dependency import enforce_admin_rate_limit
 from app.security.api_keys import hash_key
 
-router = APIRouter(prefix="/admin", tags=["admin"], dependencies=[Depends(require_admin_key)])
+# enforce_admin_rate_limit as well as the key check: without it X-Admin-Key
+# could be guessed at unlimited rate. The configured key is long enough that
+# brute force isn't realistic today, but that's a property of this deployment's
+# secret rather than of the endpoint, and the endpoint is where it belongs.
+router = APIRouter(
+    prefix="/admin",
+    tags=["admin"],
+    # Rate limit FIRST. FastAPI evaluates these in order, so with the key
+    # check ahead of it a wrong key 401s before the bucket is touched —
+    # leaving guesses unlimited, which is the one case the limit exists
+    # for. Costing every attempt, authenticated or not, is the point.
+    dependencies=[Depends(enforce_admin_rate_limit), Depends(require_admin_key)],
+)
 
 
 @router.post("/keys", response_model=CreateKeyResponse)
