@@ -54,3 +54,19 @@ class AuditLogEntryOut(BaseModel):
     output_tokens: int
     cost_usd: float
     latency_ms: float
+
+
+class AdminAuditEntryOut(BaseModel):
+    """A key issuance or revocation. `admin_key_hash` identifies which admin
+    credential acted without disclosing it — useful for spotting activity from
+    one that should have been rotated."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime.datetime
+    request_id: str
+    action: str
+    key_id: int
+    team: str
+    admin_key_hash: str

@@ -232,6 +232,8 @@ Pass the admin secret via `X-Admin-Key`. Like the client-facing auth, this fails
 
 Every `/v1/chat` and `/v1/chat/stream` request — success or failure — is written to an **audit log** (SQLite by default, Postgres via `DATABASE_URL` in production): timestamp, hashed API key, team, model, provider, outcome, tokens, cost, and latency. That's the "why did this fail at 2am" record — keys issued through the admin API get their team attributed automatically; keys from the legacy `GATEWAY_API_KEYS` env var are logged under `team: "unlinked"`.
 
+Key issuance and revocation are audited too, in their own table: `GET /admin/key-events` returns who issued or revoked which key and when, filterable by `action` and `key_id`. It's separate from the request audit log because the two answer different questions — that one is about traffic, this one is about how a key came to exist and whether a revocation really happened. The row records an HMAC of the admin credential used, which distinguishes one admin secret from another (and flags activity from one that should have been rotated) without storing it.
+
 `GET /admin/audit-log` takes `team`, `request_id`, `limit` (max 1000), and `offset` — page through a wider window with `limit`/`offset` once a team has more rows than fit in one response.
 
 ### schema migrations

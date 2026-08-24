@@ -1,12 +1,18 @@
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.admin.auth import require_admin_key
-from app.admin.schemas import ApiKeyOut, AuditLogEntryOut, CreateKeyRequest, CreateKeyResponse
-from app.db.models import ApiKeyRecord, AuditLogEntry
+from app.admin.schemas import (
+    AdminAuditEntryOut,
+    ApiKeyOut,
+    AuditLogEntryOut,
+    CreateKeyRequest,
+    CreateKeyResponse,
+)
+from app.db.models import AdminAuditEntry, ApiKeyRecord, AuditLogEntry
 from app.db.session import get_session
 from app.ratelimit.dependency import enforce_admin_rate_limit
 from app.security.api_keys import hash_key
@@ -28,11 +34,28 @@ router = APIRouter(
 
 @router.post("/keys", response_model=CreateKeyResponse)
 async def create_key(
-    request: CreateKeyRequest, session: AsyncSession = Depends(get_session)
+    request: CreateKeyRequest,
+    http_request: Request,
+    session: AsyncSession = Depends(get_session),
+    admin_key: str = Depends(require_admin_key),
 ) -> CreateKeyResponse:
     # Shown once, here, and never again — only the hash is persisted.
     raw_key = secrets.token_hex(24)
-    session.add(ApiKeyRecord(key_hash=hash_key(raw_key), team=request.team))
+    record = ApiKeyRecord(key_hash=hash_key(raw_key), team=request.team)
+    session.add(record)
+    # Flushed rather than committed, so the row gets its id and both writes
+    # land in one transaction — a key that exists with no audit row is exactly
+    # the gap this closes.
+    await session.flush()
+    session.add(
+        AdminAuditEntry(
+            request_id=getattr(http_request.state, "request_id", ""),
+            action="issued",
+            key_id=record.id,
+            team=request.team,
+            admin_key_hash=hash_key(admin_key),
+        )
+    )
     await session.commit()
     return CreateKeyResponse(api_key=raw_key, team=request.team)
 
@@ -57,12 +80,26 @@ async def get_key(key_id: int, session: AsyncSession = Depends(get_session)) -> 
 
 
 @router.delete("/keys/{key_id}")
-async def revoke_key(key_id: int, session: AsyncSession = Depends(get_session)) -> dict:
+async def revoke_key(
+    key_id: int,
+    http_request: Request,
+    session: AsyncSession = Depends(get_session),
+    admin_key: str = Depends(require_admin_key),
+) -> dict:
     record = await session.get(ApiKeyRecord, key_id)
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="key not found")
 
     record.revoked = True
+    session.add(
+        AdminAuditEntry(
+            request_id=getattr(http_request.state, "request_id", ""),
+            action="revoked",
+            key_id=key_id,
+            team=record.team,
+            admin_key_hash=hash_key(admin_key),
+        )
+    )
     await session.commit()
     return {"id": key_id, "revoked": True}
 
@@ -89,6 +126,37 @@ async def list_audit_log(
         query = query.where(AuditLogEntry.team == team)
     if request_id:
         query = query.where(AuditLogEntry.request_id == request_id)
+
+    result = await session.execute(query)
+    return list(result.scalars().all())
+
+
+@router.get("/key-events", response_model=list[AdminAuditEntryOut])
+async def list_key_events(
+    action: str | None = None,
+    key_id: int | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    session: AsyncSession = Depends(get_session),
+) -> list[AdminAuditEntry]:
+    """Who issued or revoked which key, and when.
+
+    Separate from /audit-log, which answers questions about traffic. This one
+    answers "how did this key come to exist" and "was it really revoked" —
+    the questions you have after a key turns up somewhere it shouldn't.
+    """
+    limit = max(1, min(limit, 1000))
+    offset = max(0, offset)
+    query = (
+        select(AdminAuditEntry)
+        .order_by(desc(AdminAuditEntry.created_at))
+        .limit(limit)
+        .offset(offset)
+    )
+    if action:
+        query = query.where(AdminAuditEntry.action == action)
+    if key_id is not None:
+        query = query.where(AdminAuditEntry.key_id == key_id)
 
     result = await session.execute(query)
     return list(result.scalars().all())

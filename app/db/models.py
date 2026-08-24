@@ -23,6 +23,36 @@ class ApiKeyRecord(Base):
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class AdminAuditEntry(Base):
+    """One row per key issued or revoked through the admin API.
+
+    Deliberately its own table rather than a row in `audit_log`. That one is
+    shaped for chat requests — requested_model, provider, tokens, cost,
+    latency — so an admin event would be mostly empty strings and zeros, and
+    would surface in `/admin/audit-log` queries that exist to answer questions
+    about traffic. Two different questions, two tables.
+
+    Nothing secret is stored: `admin_key_hash` is an HMAC of the admin secret
+    used, enough to tell one admin credential from another — and to notice
+    activity from one that should have been rotated — without keeping the
+    credential itself.
+    """
+
+    __tablename__ = "admin_audit_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC)
+    )
+    # The same correlation ID as the request audit log, so an admin action and
+    # the traffic around it line up on one timeline.
+    request_id: Mapped[str] = mapped_column(String(64), index=True, default="")
+    action: Mapped[str] = mapped_column(String(32), index=True)  # issued | revoked
+    key_id: Mapped[int] = mapped_column(Integer, index=True)
+    team: Mapped[str] = mapped_column(String(255), default="")
+    admin_key_hash: Mapped[str] = mapped_column(String(64), default="")
+
+
 class AuditLogEntry(Base):
     """One row per gateway request, success or failure — the "why did this
     fail at 2am" record."""

@@ -10,7 +10,10 @@ from app.core.config import settings
 
 async def require_admin_key(
     x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
-) -> None:
+) -> str:
+    """Returns the presented key so handlers can record *which* admin
+    credential acted. FastAPI caches a dependency per request, so depending on
+    this again inside a handler doesn't re-run the check."""
     if not settings.admin_api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -21,3 +24,4 @@ async def require_admin_key(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="invalid admin key",
         )
+    return x_admin_key
