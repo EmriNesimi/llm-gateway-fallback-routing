@@ -46,6 +46,7 @@ Every request into this gateway is a **packet looking for a route**. It hits aut
 - 🛟 **Automatic failover** — primary errors or times out → the router advances to the next provider in the chain, no client-side retry logic needed.
 - ⚡ **Circuit breaker per provider** — after repeated failures a provider is skipped entirely for a cooldown period instead of being retried and timing out every request.
 - 🚦 **Per-key rate limiting & budgets** — Redis-backed token bucket + monthly spend cap, enforced *before* a provider is ever called.
+- 🧯 **Hard per-provider spend ceiling** — a lifetime dollar limit per upstream, reserved atomically before each call, that no number of API keys and no passage of time can raise.
 - 📊 **Full observability** — every hop is traced (OpenTelemetry) and measured (Prometheus), visualized in Grafana.
 - 🔒 **Security-first** — fail-closed auth, constant-time key comparison, zero secrets in git history.
 
@@ -81,7 +82,7 @@ flowchart LR
 
 ## 🚧 build log
 
-Phase 5 complete ✅ — the gateway is now something an existing application can actually be pointed at: a drop-in OpenAI-compatible endpoint, real multi-chain routing, sampling controls that reach the provider, and the observability to see what any of it is doing. 267 tests, 95% coverage against a 93% floor enforced in CI.
+Phase 5 complete ✅ — the gateway is now something an existing application can actually be pointed at: a drop-in OpenAI-compatible endpoint, real multi-chain routing, sampling controls that reach the provider, and the observability to see what any of it is doing. Spend is now bounded by a hard per-provider ceiling rather than a cap that resets and multiplies. 286 tests, 93% coverage against a 93% floor enforced in CI.
 
 - [x] Project scaffold, config, security foundations
 - [x] Provider adapters (OpenAI / Anthropic / Ollama) + fallback chain
@@ -112,6 +113,8 @@ Phase 5 complete ✅ — the gateway is now something an existing application ca
 - [x] Release workflow building and pushing a multi-arch image to GHCR on a `v*` tag
 - [x] Provider keys that are present but obviously fake (the `.env.example` placeholder) detected at startup and treated as unset, instead of 401ing every request while the router silently falls past that provider
 - [x] `temperature` / `top_p` / `max_tokens` / `stop` forwarded to every provider in its own dialect, including the Claude models that reject two of them outright
+- [x] Hard lifetime spend ceiling per provider, request size bounded, and streamed spend recorded even when the client disconnects mid-stream
+- [x] Redis bound to loopback with a password, client keys hashed before use as Redis key names, upstream error detail kept out of client responses
 
 ## 🔌 calling the api
 
@@ -361,6 +364,46 @@ The non-obvious tradeoffs — why the circuit breaker gates retry rather than th
 ## 🔢 api versioning
 
 Every client-facing route lives under `/v1/`; operational routes (`/healthz`, `/metrics`, `/admin/*`) aren't versioned since they're not part of the client contract. What counts as a breaking change, and what doesn't, is written down in [`docs/api-versioning.md`](docs/api-versioning.md).
+
+## 💰 spend ceilings
+
+Two controls with similar names and different jobs. Both are on by default.
+
+| | `MONTHLY_BUDGET_USD_PER_KEY` | `PROVIDER_LIFETIME_BUDGET_USD` |
+|---|---|---|
+| Keyed by | client API key | upstream provider |
+| Resets | monthly | **never** |
+| Raised by issuing more keys | yes | **no** |
+| Protects | each caller's fair share | the operator's actual balance |
+
+The per-key cap can't bound what you spend: it multiplies by the number of
+client keys, it resets monthly, and it was checked rather than reserved — so
+with a burst allowance of 20, twenty concurrent requests all observed the same
+pre-call total and all went through.
+
+The lifetime ceiling is enforced differently. The request's worst-case cost is
+added atomically **before** the provider is called and the surplus refunded
+after, so concurrent requests see each other's reservations immediately —
+twenty simultaneous requests at `$1` against a `$4` ceiling admit exactly four.
+Over the ceiling, the reservation is handed back and the request refused with
+a `402`; the provider is never called, so nothing is spent. An unreachable
+Redis refuses too: being unable to prove there's budget left isn't the same as
+having budget left.
+
+Two things this rests on, both of which had to be fixed first:
+
+- **Request size is bounded** (`MAX_TOTAL_CONTENT_CHARS`, `MAX_MESSAGES`,
+  `MAX_OUTPUT_TOKENS`). Unbounded, a single request could cost `$16.77` against
+  `claude-opus-5` — more than the whole ceiling. The *total* across messages is
+  the bound that matters; a per-message cap just gets multiplied. Worst case is
+  now `$0.13`.
+- **Streamed spend survives a disconnect.** `record_spend` used to sit after
+  the streaming loop, and Starlette closes the generator when a client hangs
+  up — so the tokens the provider had already generated and billed were
+  recorded as `$0.00`, permanently. That made every cap unreachable. Both
+  stream paths now charge an estimate on `GeneratorExit`.
+
+Reasoning in [decision 011](docs/decisions/011-hard-provider-spend-ceiling.md).
 
 ## 🔒 security
 
