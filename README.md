@@ -267,6 +267,16 @@ Every request gets a correlation ID — either generated, or honored if the call
 - **Tracing** — `docker compose up` now includes Jaeger, already wired: open `http://localhost:16686`, pick the `llm-gateway` service, and a request's full retry-and-fallback chain is a single trace, each provider attempt its own span with provider/model/attempt/request_id attributes. Running the gateway on the host instead? Point `OTEL_EXPORTER_OTLP_ENDPOINT` at any OTLP collector. If it's unset, or nothing is listening there, the app still runs fine — you'll just see a harmless retry warning in the logs.
 - **Dashboards** — `docker compose up` brings up Prometheus (`:9090`) scraping the gateway and Grafana (`:3000`, default login `admin`/`admin`), auto-provisioned with a "LLM Gateway Overview" dashboard — no manual setup, it's already there on first load. Nine panels: request rate by status, p50/p95/p99 latency, provider attempts by outcome, fallback rate, **circuit breaker state per provider** (colour-mapped closed/half-open/open), **per-provider p95** (the global latency histogram covers retries and every fallback hop, so it can't compare providers), **spend rate in USD/hour**, **cumulative spend by model**, and **token throughput by direction**. A test asserts every metric the dashboard queries actually exists — a panel pointing at a renamed metric renders empty rather than failing, which looks identical to "no traffic yet".
 - **Logging** — plain text by default; set `LOG_FORMAT=json` for structured single-line logs a log aggregator (Loki, CloudWatch, etc.) can parse.
+### what it looks like running
+
+A single request, traced. The `provider.openai.chat` span is 432ms of the 448ms round trip, tagged with the provider, the model, the attempt number, and the request ID that also appears in the response header and the audit row:
+
+![Jaeger trace of a single request, showing the provider span and its attributes](docs/images/jaeger-trace.jpg)
+
+Cost split by provider and model, breaker state per provider, request counts by status — all scraped from `/metrics`:
+
+![Prometheus showing cost per provider, circuit state, and request counts](docs/images/prometheus-metrics.jpg)
+
 - **Load testing** — `scripts/load_test.js` is a [k6](https://k6.io) script that drives sustained concurrent traffic at `/v1/chat` (ramping past the default rate limit on purpose) so you can watch the fallback chain, circuit breaker, and rate limiter behave under pressure live in the Grafana dashboard above: `GATEWAY_URL=http://localhost:8000 CLIENT_KEY=<your key> k6 run scripts/load_test.js`. Real results from a run against a live OpenAI key: [`docs/load-test-results.md`](docs/load-test-results.md) — 3067 requests, 0 failures, p95 ~1.1s on served requests.
 
 ## 🚀 getting started
@@ -278,7 +288,7 @@ docker run --rm -p 8000:8000 --env-file .env \
   ghcr.io/emrinesimi/llm-gateway-fallback-routing:latest
 ```
 
-Pin a version with `:0.2.0` rather than `:latest` if you want reproducibility. Images are built on every `v*` tag; if a tag's build hasn't finished yet, `docker build -t llm-gateway .` gives you the same thing locally.
+Pin a version with `:0.3.0` rather than `:latest` if you want reproducibility. Images are built on every `v*` tag; if a tag's build hasn't finished yet, `docker build -t llm-gateway .` gives you the same thing locally.
 
 For the full stack — Redis, Prometheus, Grafana, Jaeger — clone and use `make up`:
 
