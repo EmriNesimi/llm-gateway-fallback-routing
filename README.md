@@ -75,6 +75,7 @@ flowchart LR
 | API keys / audit log | SQLAlchemy async — SQLite by default, Postgres in production |
 | Schema migrations | Alembic |
 | Observability | OpenTelemetry, Prometheus |
+| Traces | Jaeger (in the compose stack) |
 | Dashboards | Grafana |
 | Providers | OpenAI, Anthropic, Ollama |
 
