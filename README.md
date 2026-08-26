@@ -39,6 +39,7 @@ Every request into this gateway is a **packet looking for a route**. It hits aut
 | 🔴 | Every provider in the chain failed — `502` returned, nothing silently swallowed |
 | 🚫 | Rate limit or budget cap hit before a provider was ever called — `429` / `402` |
 | ⚫ | Provider's circuit is open (too many recent failures) — skipped without a network call |
+| 🧯 | Provider has spent its lifetime ceiling — dropped from the chain before it can be called, `402` if every provider in the chain is |
 
 ## ⚙️ what it does
 
