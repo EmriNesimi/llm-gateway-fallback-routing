@@ -18,6 +18,12 @@ test:
 run:
 	uvicorn app.main:app --reload
 
+# Same check CI runs: fails if app/db/models.py has drifted from the committed
+# migrations. Worth having locally, since otherwise drift is only ever caught
+# after pushing.
+migrate-check:
+	alembic check
+
 migrate:
 	alembic upgrade head
 
