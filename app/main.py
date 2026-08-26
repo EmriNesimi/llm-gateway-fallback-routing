@@ -183,7 +183,10 @@ async def root():
 
 
 @app.get("/metrics")
-async def metrics(x_metrics_token: str | None = Header(default=None)):
+async def metrics(
+    x_metrics_token: str | None = Header(default=None),
+    authorization: str | None = Header(default=None),
+):
     """Prometheus scrape target.
 
     Gated on its own token rather than a client key, because a scraper isn't a
@@ -198,9 +201,15 @@ async def metrics(x_metrics_token: str | None = Header(default=None)):
     everything to 127.0.0.1. Set it for anything reachable from elsewhere.
     """
     expected = settings.metrics_token
-    if expected and not (
-        x_metrics_token and hmac.compare_digest(x_metrics_token, expected)
-    ):
+    # Accept the standard Authorization: Bearer as well as the custom header.
+    # Prometheus scrape configs can send the former natively and have no
+    # generic custom-header field, so a token-only-on-X-Metrics-Token gate
+    # would be one the intended scraper physically cannot satisfy.
+    presented = x_metrics_token
+    if not presented and authorization and authorization.lower().startswith("bearer "):
+        presented = authorization[len("bearer ") :].strip()
+
+    if expected and not (presented and hmac.compare_digest(presented, expected)):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid metrics token"
         )

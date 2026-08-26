@@ -48,6 +48,20 @@ def test_metrics_requires_the_token_once_one_is_set(client, monkeypatch):
     )
 
 
+def test_prometheus_can_authenticate_with_a_bearer_token(client, monkeypatch):
+    """The scraper this gate exists for. Prometheus scrape configs can send
+    Authorization: Bearer natively and have no generic custom-header field, so
+    a gate that only read X-Metrics-Token would be one the intended client
+    physically could not satisfy — it would just show the target as down."""
+    monkeypatch.setattr(settings, "metrics_token", "scrape-me")
+
+    ok = client.get("/metrics", headers={"Authorization": "Bearer scrape-me"})
+    bad = client.get("/metrics", headers={"Authorization": "Bearer wrong"})
+
+    assert ok.status_code == 200
+    assert bad.status_code == 401
+
+
 def test_a_rejected_scrape_leaks_no_spend_figures(client, monkeypatch):
     """The reason to gate it at all: these metrics say exactly how much has
     been spent and on what."""
