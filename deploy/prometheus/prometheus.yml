@@ -3,5 +3,11 @@ global:
 
 scrape_configs:
   - job_name: llm-gateway
+    # If you set METRICS_TOKEN on the gateway, uncomment this too — otherwise
+    # /metrics starts returning 401 and Prometheus just shows the target as
+    # down, with nothing pointing at the token as the cause.
+    # authorization:
+    #   type: Bearer
+    #   credentials: <your METRICS_TOKEN>
     static_configs:
       - targets: ["gateway:8000"]
