@@ -34,3 +34,7 @@ scripts/
 deploy/
 README.md
 docker-compose.yml
+# Prose and screenshots. Nothing here is COPYed into the image, and the
+# screenshots alone are ~176K of build context uploaded to the daemon on
+# every build for nothing.
+docs/
