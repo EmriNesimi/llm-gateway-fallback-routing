@@ -40,6 +40,19 @@ echo "   misconfigured, this will already show the fallback provider that answer
 echo "   (A 502 here means no configured provider — OpenAI/Anthropic/Ollama — is"
 echo "   reachable at all; set at least one real key or run Ollama locally.)"
 
+step "3b. The same request through the OpenAI-compatible endpoint"
+echo "-> This is what an existing app points at: same routing, same budgets,"
+echo "   same audit trail, but OpenAI's response shape so no client changes."
+curl -s -X POST "$GATEWAY_URL/v1/chat/completions" \
+  -H "X-API-Key: $CLIENT_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model": "fast", "messages": [{"role": "user", "content": "Say hi in five words."}], "max_tokens": 32}' | jqp
+
+step "3c. Which chains this gateway will route"
+curl -s "$GATEWAY_URL/v1/models" -H "X-API-Key: $CLIENT_KEY" | jqp
+echo "-> \`model\` selects a chain, not a specific model, so a chain can be"
+echo "   re-pointed at a newer model without any client changing."
+
 step "4. Trip the rate limiter (bursting past RATE_LIMIT_CAPACITY)"
 for i in $(seq 1 25); do
   code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$GATEWAY_URL/v1/chat" \
