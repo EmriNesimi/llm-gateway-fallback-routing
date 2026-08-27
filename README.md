@@ -49,6 +49,7 @@ Every request into this gateway is a **packet looking for a route**. It hits aut
 - 🚦 **Per-key rate limiting & budgets** — Redis-backed token bucket + monthly spend cap, enforced *before* a provider is ever called.
 - 🧯 **Hard per-provider spend ceiling** — a lifetime dollar limit per upstream, reserved atomically before each call, that no number of API keys and no passage of time can raise.
 - 📊 **Full observability** — every hop is traced (OpenTelemetry) and measured (Prometheus), visualized in Grafana.
+- 🧾 **Every key issuance and revocation audited** — who did it, to which key, when, readable at `/admin/key-events`; the credential that acted is recorded as a hash, never stored.
 - 🔒 **Security-first** — fail-closed auth, constant-time key comparison, zero secrets in git history.
 
 ## 🗺️ the request path
