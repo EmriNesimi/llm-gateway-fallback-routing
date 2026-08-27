@@ -360,7 +360,7 @@ request 03 -> 429
 
 ## 🧭 architecture decisions
 
-The non-obvious tradeoffs — why the circuit breaker gates retry rather than the other way around, why SQLite is the default and Postgres is opt-in, why streaming buffers just the first chunk before committing to a provider, why post-hoc bookkeeping (audit log, spend recording) is best-effort while pre-flight enforcement (rate limit, budget) fails closed — are written up in [`docs/decisions/`](docs/decisions/), one file per decision, with the alternative considered and why it lost.
+The non-obvious tradeoffs — why the circuit breaker gates retry rather than the other way around, why SQLite is the default and Postgres is opt-in, why streaming buffers just the first chunk before committing to a provider, why post-hoc bookkeeping (audit log, spend recording) is best-effort while pre-flight enforcement (rate limit, budget) fails closed — are written up in [`docs/decisions/`](docs/decisions/README.md), one file per decision, with the alternative considered and why it lost.
 
 ## ⚠️ error handling
 
