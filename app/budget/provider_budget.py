@@ -29,6 +29,11 @@ import logging
 
 from redis.asyncio import Redis
 
+from app.observability.metrics import (
+    PROVIDER_BUDGET_REMAINING,
+    PROVIDER_BUDGET_SPENT,
+)
+
 logger = logging.getLogger("gateway.provider_budget")
 
 # Ollama runs locally and bills nothing, so it has no ceiling — the same
@@ -65,7 +70,25 @@ class ProviderBudget:
 
     async def spent(self, provider: str) -> float:
         raw = await self._redis.get(self._key(provider))
-        return float(raw) if raw else 0.0
+        total = float(raw) if raw else 0.0
+        self._publish(provider, total)
+        return total
+
+    def _publish(self, provider: str, total: float) -> None:
+        """Mirror the ledger onto its gauges.
+
+        Done on read rather than on write because the ledger lives in Redis
+        and can move without this process touching it — another replica
+        settling a request, or an operator resetting it. Publishing what was
+        just read keeps the gauge honest about the shared value rather than
+        this instance's guess at it.
+        """
+        if provider in FREE_PROVIDERS:
+            return
+        PROVIDER_BUDGET_SPENT.labels(provider=provider).set(total)
+        PROVIDER_BUDGET_REMAINING.labels(provider=provider).set(
+            max(0.0, self._cap_usd - total)
+        )
 
     async def remaining(self, provider: str) -> float:
         if provider in FREE_PROVIDERS:

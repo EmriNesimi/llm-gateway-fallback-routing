@@ -193,3 +193,44 @@ async def test_an_unreachable_redis_refuses_rather_than_allows():
 
     with pytest.raises(ConnectionError):
         await budget.reserve("openai", 0.01)
+
+
+# --------------------------------------------------------------------------
+# Visibility
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_the_ledger_is_visible_as_metrics(budget):
+    """gateway_cost_usd_total is a counter — it says what has gone, never what
+    is left, and "left" is the number worth alerting on. Without a gauge the
+    only warning is a 402 after the money is already spent."""
+    from prometheus_client import REGISTRY
+
+    await budget.reserve("openai", 1.5)
+    await budget.settle("openai", 1.5, 1.5)
+    await budget.spent("openai")
+
+    spent = REGISTRY.get_sample_value(
+        "gateway_provider_budget_spent_usd", {"provider": "openai"}
+    )
+    remaining = REGISTRY.get_sample_value(
+        "gateway_provider_budget_remaining_usd", {"provider": "openai"}
+    )
+
+    assert spent == pytest.approx(1.5)
+    assert remaining == pytest.approx(2.5)  # $4 cap
+
+
+@pytest.mark.asyncio
+async def test_remaining_never_reports_negative(budget):
+    """An overshoot shouldn't render as a negative bar on a dashboard; zero
+    headroom is the honest reading."""
+    await budget.record_unreserved("anthropic", 99.0)
+    await budget.spent("anthropic")
+
+    from prometheus_client import REGISTRY
+
+    assert REGISTRY.get_sample_value(
+        "gateway_provider_budget_remaining_usd", {"provider": "anthropic"}
+    ) == 0.0

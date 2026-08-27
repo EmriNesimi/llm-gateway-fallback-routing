@@ -57,3 +57,20 @@ TOKENS = Counter(
     "Tokens processed, by direction",
     ["provider", "model", "direction"],  # direction: input | output
 )
+
+
+# The ceiling itself, not just what has been spent against it.
+# gateway_cost_usd_total is a counter — it says how much has gone, never how
+# much is left, and "left" is the number worth alerting on. Without this the
+# only warning you get is a 402 after the budget is already gone.
+PROVIDER_BUDGET_SPENT = Gauge(
+    "gateway_provider_budget_spent_usd",
+    "Lifetime USD spent against a provider's hard ceiling",
+    ["provider"],
+)
+
+PROVIDER_BUDGET_REMAINING = Gauge(
+    "gateway_provider_budget_remaining_usd",
+    "Lifetime USD still available before a provider is refused",
+    ["provider"],
+)
