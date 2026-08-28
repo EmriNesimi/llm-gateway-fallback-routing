@@ -236,6 +236,34 @@ def test_dashboard_only_queries_metrics_that_exist():
     )
 
 
+def test_alert_rules_only_reference_metrics_that_exist():
+    """Same failure mode as the dashboard, one step worse.
+
+    A Grafana panel querying a renamed metric renders empty. An alert rule
+    querying one simply never fires — so the alert that exists to tell you the
+    budget is gone stays silent, and silence is indistinguishable from healthy.
+    """
+    import pathlib
+    import re
+
+    rules = pathlib.Path("deploy/prometheus/alerts.yml").read_text()
+    exposed = {m.name for m in REGISTRY.collect()}
+
+    referenced = set()
+    for name in re.findall(r"\bgateway_[a-z_]+", rules):
+        for suffix in ("_bucket", "_count", "_sum", "_total"):
+            if name.endswith(suffix):
+                name = name[: -len(suffix)]
+                break
+        referenced.add(name)
+
+    missing = sorted(referenced - exposed)
+    assert not missing, (
+        f"alerts.yml references {missing}, which the app doesn't expose —"
+        " those alerts would never fire, and never firing looks like healthy"
+    )
+
+
 def test_metric_objects_carry_the_labels_the_dashboard_queries():
     assert CIRCUIT_STATE._labelnames == ("provider",)
     assert PROVIDER_LATENCY._labelnames == ("provider",)
