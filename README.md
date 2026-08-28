@@ -119,6 +119,8 @@ Phase 5 complete ✅ — the gateway is now something an existing application ca
 - [x] Hard lifetime spend ceiling per provider, request size bounded, and streamed spend recorded even when the client disconnects mid-stream
 - [x] Redis bound to loopback with a password, client keys hashed before use as Redis key names, upstream error detail kept out of client responses
 
+Release-by-release detail is in [`CHANGELOG.md`](CHANGELOG.md).
+
 ## 🔌 calling the api
 
 `POST /v1/chat` requires a client API key (one of the values in `GATEWAY_API_KEYS`), passed as either:
