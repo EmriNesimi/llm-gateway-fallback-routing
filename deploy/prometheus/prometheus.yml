@@ -1,6 +1,9 @@
 global:
   scrape_interval: 5s
 
+rule_files:
+  - alerts.yml
+
 scrape_configs:
   - job_name: llm-gateway
     # If you set METRICS_TOKEN on the gateway, uncomment this too — otherwise

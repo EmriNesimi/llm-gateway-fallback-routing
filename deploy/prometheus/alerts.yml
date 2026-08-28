@@ -1,0 +1,47 @@
+groups:
+  - name: llm-gateway
+    rules:
+      # Decision 010 asks for exactly this pair. Breakers are per-process, so
+      # the two questions are genuinely different: is a provider down, or is
+      # one replica sick? Aggregating hides the second; alerting per instance
+      # would page on the first N times over.
+      - alert: ProviderCircuitOpen
+        expr: max by (provider) (gateway_circuit_state) >= 2
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.provider }} circuit is open"
+          description: >-
+            Every replica reporting open means the provider itself is failing;
+            requests are falling through to the next in the chain.
+
+      - alert: ProviderCircuitDisagreement
+        expr: >-
+          max by (provider) (gateway_circuit_state)
+            - min by (provider) (gateway_circuit_state) > 0
+        for: 5m
+        labels: {severity: info}
+        annotations:
+          summary: "replicas disagree about {{ $labels.provider }}"
+          description: >-
+            One instance sees this provider as failing and another doesn't —
+            the signature of a replica-local fault (wedged pool, bad cached
+            DNS, stale credential) rather than a provider outage. A shared
+            breaker would have hidden this by design.
+
+      # The gauge added for exactly this. gateway_cost_usd_total only ever
+      # says what has gone; without a headroom alert the first warning is a
+      # 402 after the balance is spent.
+      - alert: ProviderBudgetLow
+        expr: gateway_provider_budget_remaining_usd < 1
+        for: 1m
+        labels: {severity: warning}
+        annotations:
+          summary: "{{ $labels.provider }} has under $1 of budget left"
+
+      - alert: ProviderBudgetExhausted
+        expr: gateway_provider_budget_remaining_usd <= 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "{{ $labels.provider }} is out of budget and is being skipped"
