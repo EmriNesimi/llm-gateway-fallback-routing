@@ -12,6 +12,13 @@ on:
 permissions:
   contents: read
 
+# One run per branch. Pushing twice in quick succession — which this repo does
+# constantly, given how granular the commits are — otherwise leaves the first
+# run grinding through code that's already been replaced.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
