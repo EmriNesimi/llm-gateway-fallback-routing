@@ -2,7 +2,8 @@
 
 Every route lives under `/v1/` (`/v1/chat`, `/v1/chat/stream`,
 `/v1/chat/completions`, `/v1/models`). Everything
-outside that prefix — `/healthz`, `/readyz`, `/metrics`, `/admin/*` — is
+outside that prefix — `/healthz`, `/readyz`, `/metrics`, and every `/admin/*`
+route including `/admin/keys`, `/admin/audit-log` and `/admin/key-events` — is
 operational or administrative, not part of the versioned client contract, and
 can change without a version bump.
 
