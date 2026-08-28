@@ -68,6 +68,13 @@ done
 step "5. Check gateway metrics (Prometheus format)"
 curl -sf "$GATEWAY_URL/metrics" | grep -E '^gateway_' | head -20
 
+step "5b. What is left of each provider's lifetime budget"
+curl -sf "$GATEWAY_URL/metrics" | grep -E '^gateway_provider_budget_' || true
+echo "-> A counter says what has gone; this says what is left, which is the"
+echo "   number worth alerting on. At zero the provider is dropped from the"
+echo "   chain before it can be called, and a 402 follows once every provider"
+echo "   in the chain is out."
+
 step "6. Review the audit trail for this demo"
 curl -sf "$GATEWAY_URL/admin/audit-log?team=demo-team&limit=10" \
   -H "X-Admin-Key: $ADMIN_KEY" | jqp
@@ -75,4 +82,5 @@ curl -sf "$GATEWAY_URL/admin/audit-log?team=demo-team&limit=10" \
 step "Done"
 echo "Every request above — success, rate-limited, or fallback — is in the"
 echo "audit log and reflected in /metrics. Point Grafana (:3000) at Prometheus"
-echo "(:9090) for the same data as live dashboards."
+echo "(:9090) for the same data as live dashboards, and Jaeger (:16686) for"
+echo "the per-provider spans behind any single request."
