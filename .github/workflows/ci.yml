@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# Least privilege. Without this the token inherits the repository default,
+# which is often read+write — far more than a job that only checks out code
+# and runs tests has any use for.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
