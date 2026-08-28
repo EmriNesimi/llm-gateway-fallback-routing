@@ -111,7 +111,11 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      # Overridable, and no longer a literal in a committed file. Still
+      # defaults to admin/admin because this stack binds to loopback and a
+      # dev dashboard shouldn't need a password hunt to open — but anyone
+      # exposing it now has one variable to set rather than a file to edit.
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
     volumes:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
