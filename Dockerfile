@@ -17,6 +17,13 @@ COPY migrations ./migrations
 COPY docker-entrypoint.sh .
 RUN chmod +x docker-entrypoint.sh
 
+# Drop root. Nothing here needs it: the dependencies are already installed,
+# and /app is the only path written to (the default SQLite database), so it's
+# chowned rather than left root-owned. A container escape is a much smaller
+# problem from an unprivileged uid.
+RUN useradd --create-home --uid 10001 gateway && chown -R gateway:gateway /app
+USER gateway
+
 # No curl in the slim image, so use Python (already present) to hit /readyz —
 # this checks Redis/DB connectivity, not just that the process is alive.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
