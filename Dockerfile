@@ -1,5 +1,11 @@
 FROM python:3.12-slim
 
+# Without this, Python buffers stdout when it isn't a TTY — which is exactly
+# the case under Docker — so `docker logs` shows nothing until the buffer
+# fills or the process exits. On a crash that means losing the log lines that
+# would explain it.
+ENV PYTHONUNBUFFERED=1
+
 WORKDIR /app
 
 COPY requirements.txt .
