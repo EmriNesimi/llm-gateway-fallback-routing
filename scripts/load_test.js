@@ -48,9 +48,17 @@ export const options = {
   },
 };
 
+// Half the traffic through each endpoint. /v1/chat/completions is what an
+// existing application actually points at, and it carries more per-request
+// work than /v1/chat — schema with extra optional fields, sampling params,
+// the OpenAI response envelope — so load-testing only the native shape was
+// measuring the path fewer people use.
+const ENDPOINTS = ["/v1/chat", "/v1/chat/completions"];
+
 export default function () {
+  const endpoint = ENDPOINTS[__ITER % ENDPOINTS.length];
   const res = http.post(
-    `${GATEWAY_URL}/v1/chat`,
+    `${GATEWAY_URL}${endpoint}`,
     JSON.stringify({
       model: "default",
       messages: [{ role: "user", content: "Say hi in five words." }],
@@ -65,6 +73,10 @@ export default function () {
 
   check(res, {
     "status is 200 or 429": (r) => r.status === 200 || r.status === 429,
+    // 402 would mean a provider hit its lifetime ceiling mid-run — valid
+    // behaviour, but it means the rest of the run is measuring refusals
+    // rather than routing, so it's worth seeing rather than passing quietly.
+    "not budget-exhausted": (r) => r.status !== 402,
   });
 
   if (res.status === 200) {
