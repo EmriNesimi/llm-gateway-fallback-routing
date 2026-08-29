@@ -3,6 +3,11 @@
 # can import the `app` package. Without this the test suite fails to collect.
 pythonpath = ["."]
 testpaths = ["tests"]
+# strict-markers turns a typo'd @pytest.mark.asyncio into an error rather than
+# a silently-ignored decorator — which for async tests means the body never
+# runs and the test passes without asserting anything.
+# strict-config does the same for a mistyped setting in this file.
+addopts = "--strict-markers --strict-config"
 
 [tool.ruff]
 line-length = 100
