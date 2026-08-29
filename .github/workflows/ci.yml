@@ -63,6 +63,15 @@ jobs:
       # it: at-current fails on rounding after any harmless refactor, while no
       # floor at all — the previous state — means coverage can only be
       # discovered to have dropped, never prevented from dropping.
+      # alerts.yml is committed but nothing validated it. A malformed rule
+      # doesn't degrade gracefully — Prometheus refuses to load the file, so
+      # every alert in it silently stops existing.
+      - name: Validate Prometheus rules and config
+        run: |
+          docker run --rm -v "$PWD/deploy/prometheus:/etc/prometheus:ro" \
+            --entrypoint promtool prom/prometheus:latest \
+            check config /etc/prometheus/prometheus.yml
+
       - name: Run tests with coverage
         run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=93
 
