@@ -76,7 +76,14 @@ jobs:
       # bindings and variable substitution. A typo in it breaks the entire
       # stack and is currently only discovered by someone running `make up`.
       - name: Validate docker-compose
-        run: docker compose config --quiet
+        # .env is gitignored, and the gateway service declares it under
+        # env_file, so compose refuses to parse without one. Copying the
+        # example in is what a new user does anyway — which makes this step
+        # also check that .env.example is a working starting point, not just
+        # that the compose file parses.
+        run: |
+          cp .env.example .env
+          docker compose config --quiet
 
       - name: Run tests with coverage
         run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=93
