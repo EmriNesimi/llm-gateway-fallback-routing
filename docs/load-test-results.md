@@ -3,6 +3,13 @@
 A real run of `scripts/load_test.js` (k6, 10 VUs ramped over 50s) against a
 local gateway instance, real Redis, and a live OpenAI key — not a mock.
 
+> **These numbers predate the spend ceiling.** They were recorded before the
+> per-provider budget reservation, the request-size bounds, and the
+> `/v1/chat/completions` half of the traffic the script now generates — so
+> latency here is missing one Redis round-trip per provider per request, and
+> the run couldn't have been refused with a 402. Treat them as a floor for
+> the routing path rather than a current benchmark; re-run to compare.
+
 ```
 checks_total.......: 3067    61.0/s
 checks_succeeded...: 100.00% 3067 out of 3067
