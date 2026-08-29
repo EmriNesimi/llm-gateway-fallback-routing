@@ -318,9 +318,16 @@ Testing this in VS Code specifically (Test Explorer setup, a debug config with b
 ### running lint & tests locally
 
 ```bash
+make check     # lint, typecheck, audit, migration drift, tests + coverage floor
+```
+
+Or individually:
+
+```bash
 make lint
 make typecheck
 make audit
+make migrate-check
 make test
 ```
 
