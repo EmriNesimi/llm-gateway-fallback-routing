@@ -72,6 +72,12 @@ jobs:
             --entrypoint promtool prom/prometheus:latest \
             check config /etc/prometheus/prometheus.yml
 
+      # The compose file has grown to six services with health gates, port
+      # bindings and variable substitution. A typo in it breaks the entire
+      # stack and is currently only discovered by someone running `make up`.
+      - name: Validate docker-compose
+        run: docker compose config --quiet
+
       - name: Run tests with coverage
         run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=93
 
