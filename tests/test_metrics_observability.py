@@ -12,7 +12,11 @@ from prometheus_client import REGISTRY
 from app.observability.metrics import CIRCUIT_STATE, COST_USD, PROVIDER_LATENCY, TOKENS
 from app.providers.base import ChatResponse, ProviderError
 from app.routing.circuit_breaker import CircuitBreaker
-from app.routing.fallback import FallbackRouter, publish_circuit_state
+from app.routing.fallback import (
+    AllProvidersFailedError,
+    FallbackRouter,
+    publish_circuit_state,
+)
 
 
 class StubProvider:
@@ -84,7 +88,7 @@ async def test_router_publishes_breaker_state_without_being_asked():
         [(StubProvider("router-gauge", fail=True), "m", breaker)], retry_attempts=0
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(AllProvidersFailedError):
         await router.chat([])
 
     # The breaker tripped during a normal request; nothing had to poll it.
@@ -115,7 +119,7 @@ async def test_failed_attempts_are_timed_too():
         [(StubProvider("timed-fail", fail=True), "m", breaker)], retry_attempts=0
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(AllProvidersFailedError):
         await router.chat([])
 
     assert _sample("gateway_provider_latency_seconds_count", provider="timed-fail") == 1
@@ -153,7 +157,7 @@ async def test_retry_backoff_is_not_counted_as_provider_latency():
         retry_backoff_seconds=0.25,
     )
 
-    with pytest.raises(Exception):
+    with pytest.raises(AllProvidersFailedError):
         await router.chat([])
 
     total = _sample("gateway_provider_latency_seconds_sum", provider="backoff")
