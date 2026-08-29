@@ -1,0 +1,25 @@
+version: 2
+updates:
+  # pip-audit already fails the build on a known CVE, but only tells you after
+  # one is published against something you're already running. This opens the
+  # PR before that.
+  - package-ecosystem: pip
+    directory: /
+    schedule: {interval: weekly}
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for the routine bumps rather than five. Security updates are
+      # deliberately left ungrouped so they arrive on their own and can be
+      # merged without reading five unrelated diffs.
+      python-minor-and-patch:
+        update-types: [minor, patch]
+
+  # The actions are pinned by major tag (@v4, @v5), so these only move when a
+  # new major lands — rare, and exactly when a human should look.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: {interval: monthly}
+
+  - package-ecosystem: docker
+    directory: /
+    schedule: {interval: monthly}
