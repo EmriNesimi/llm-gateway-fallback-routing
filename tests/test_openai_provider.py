@@ -28,9 +28,11 @@ class _FakeChoice:
 
 
 class _FakeResponse:
-    def __init__(self, choices, usage=_FakeUsage(), model="gpt-4o-mini"):
+    def __init__(self, choices, usage=None, model="gpt-4o-mini"):
         self.choices = choices
-        self.usage = usage
+        # Built per instance rather than shared as a default: one mutation in
+        # any test would otherwise leak into every later one.
+        self.usage = _FakeUsage() if usage is None else usage
         self.model = model
 
 

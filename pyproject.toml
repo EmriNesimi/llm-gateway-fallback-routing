@@ -12,7 +12,16 @@ target-version = "py312"
 extend-exclude = ["migrations/versions"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP"]
+# B (flake8-bugbear) catches the likely-a-bug shapes the others don't — it's
+# how the over-broad `pytest.raises(Exception)` assertions were found, which
+# would have passed on any error at all including a typo.
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# B008 flags function calls in argument defaults, which is exactly how FastAPI
+# declares dependencies — `x: T = Depends(...)`. Idiomatic here, not a bug.
+"app/*.py" = ["B008"]
+"app/**/*.py" = ["B008"]
 
 [tool.mypy]
 python_version = "3.12"
