@@ -273,3 +273,28 @@ def test_metric_objects_carry_the_labels_the_dashboard_queries():
     assert PROVIDER_LATENCY._labelnames == ("provider",)
     assert COST_USD._labelnames == ("provider", "model")
     assert TOKENS._labelnames == ("provider", "model", "direction")
+
+
+def test_target_down_alert_matches_the_scrape_job_name():
+    """GatewayTargetDown selects on job="llm-gateway".
+
+    That label isn't published by the app — Prometheus attaches it from the
+    scrape config's job_name. Rename the job there and the alert keeps
+    evaluating against a series that no longer exists, so it never fires. The
+    metric-name guard above can't catch this: `up` isn't a gateway_ metric.
+    """
+    import pathlib
+    import re
+
+    rules = pathlib.Path("deploy/prometheus/alerts.yml").read_text()
+    scrape = pathlib.Path("deploy/prometheus/prometheus.yml").read_text()
+
+    alerted_on = set(re.findall(r'up\{job="([^"]+)"\}', rules))
+    configured = set(re.findall(r"job_name:\s*(\S+)", scrape))
+
+    assert alerted_on, "GatewayTargetDown no longer selects on a job label"
+    assert alerted_on <= configured, (
+        f"alerts.yml watches job(s) {sorted(alerted_on - configured)} that"
+        f" prometheus.yml does not scrape (it defines {sorted(configured)}) —"
+        " the alert would never fire"
+    )

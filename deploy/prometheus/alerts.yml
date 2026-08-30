@@ -29,6 +29,23 @@ groups:
             DNS, stale credential) rather than a provider outage. A shared
             breaker would have hidden this by design.
 
+      # Every other rule in this file is evaluated over metrics the gateway
+      # itself publishes. If the gateway is down there are no metrics, so none
+      # of them fire — they just go absent, which looks identical to "nothing
+      # is wrong". `up` is synthesised by Prometheus from the scrape itself,
+      # so it is the one signal that still exists when the subject doesn't.
+      - alert: GatewayTargetDown
+        expr: up{job="llm-gateway"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations:
+          summary: "the gateway is not being scraped"
+          description: >-
+            Prometheus cannot reach {{ $labels.instance }}. Either the gateway
+            is down, or METRICS_TOKEN was set without adding the matching
+            credentials to the scrape config — /metrics then returns 401 and
+            the target reads as down with nothing pointing at the token.
+
       # The gauge added for exactly this. gateway_cost_usd_total only ever
       # says what has gone; without a headroom alert the first warning is a
       # 402 after the balance is spent.
