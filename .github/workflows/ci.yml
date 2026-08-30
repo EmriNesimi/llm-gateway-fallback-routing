@@ -45,7 +45,7 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v5
         with:
@@ -140,7 +140,7 @@ jobs:
       DATABASE_URL: postgresql+asyncpg://gateway:changeme@localhost:5432/gateway
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v5
         with:
@@ -168,7 +168,7 @@ jobs:
     # time before anyone finds out.
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build the image
         run: docker build -t llm-gateway:ci .
