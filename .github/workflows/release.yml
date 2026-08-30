@@ -18,6 +18,9 @@ on:
 jobs:
   image:
     runs-on: ubuntu-latest
+    # Higher than CI's image job: this one builds under QEMU for a second
+    # architecture, which is emulated and an order of magnitude slower.
+    timeout-minutes: 30
 
     permissions:
       contents: read

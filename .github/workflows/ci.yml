@@ -22,6 +22,11 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
+    # Ceiling, not a target — this job runs in about 90 seconds. Without one,
+    # GitHub's default lets a wedged step (a hung container pull, a test
+    # waiting on a service that never comes up) burn six hours of runner
+    # time before anyone finds out.
+    timeout-minutes: 15
 
     # Real Redis, not just fakeredis — the rate limiter's Lua script has
     # previously behaved subtly differently under fakeredis's Lua emulation.
@@ -90,6 +95,11 @@ jobs:
 
   postgres-migrations:
     runs-on: ubuntu-latest
+    # Ceiling, not a target — this job runs in about 50 seconds. Without one,
+    # GitHub's default lets a wedged step (a hung container pull, a test
+    # waiting on a service that never comes up) burn six hours of runner
+    # time before anyone finds out.
+    timeout-minutes: 10
 
     # The test suite above runs entirely against an in-memory SQLite DB (see
     # tests/conftest.py's isolated_db fixture), so it never actually proves
@@ -137,6 +147,11 @@ jobs:
   # asking "does it still build and start", not producing an artifact.
   image:
     runs-on: ubuntu-latest
+    # Ceiling, not a target — this job runs in about 40 seconds. Without one,
+    # GitHub's default lets a wedged step (a hung container pull, a test
+    # waiting on a service that never comes up) burn six hours of runner
+    # time before anyone finds out.
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
