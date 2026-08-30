@@ -68,3 +68,31 @@ def test_python_version_is_pinned_consistently():
         "Python version declarations disagree — bump them together:\n"
         + "\n".join(f"  {site}: {version}" for site, version in sorted(sites.items()))
     )
+
+
+def test_served_version_matches_the_changelog():
+    """app/main.py's `version=` is what /openapi.json advertises, and a client
+    pinning against it deserves it to mean something. The comment beside it
+    says "keep in step with the git tag" — which nothing checked, and a
+    release that bumps the tag and the CHANGELOG while leaving this behind
+    would ship a gateway describing itself as the previous version.
+
+    Compared against the CHANGELOG rather than `git describe` because CI
+    checkouts don't reliably carry tags, and a guard that silently can't see
+    its reference is worse than none.
+    """
+    changelog = _read("CHANGELOG.md")
+
+    # Skip an "Unreleased" heading if one is present — the newest *released*
+    # version is the one the running app should be claiming.
+    versions = re.findall(r"^##\s+(\d+\.\d+\.\d+)\s*$", changelog, re.M)
+    assert versions, "CHANGELOG.md has no `## X.Y.Z` heading to compare against"
+    newest = versions[0]
+
+    m = re.search(r'^\s*version="(\d+\.\d+\.\d+)",', _read("app/main.py"), re.M)
+    assert m, "app/main.py no longer declares a `version=\"X.Y.Z\",` on the FastAPI app"
+
+    assert m.group(1) == newest, (
+        f"app/main.py serves version {m.group(1)} but the newest CHANGELOG"
+        f" entry is {newest} — /openapi.json would advertise the wrong one"
+    )
