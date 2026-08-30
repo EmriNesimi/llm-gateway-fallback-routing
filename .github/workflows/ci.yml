@@ -90,6 +90,21 @@ jobs:
           cp .env.example .env
           docker compose config --quiet
 
+      # The two shell scripts here are load-bearing and unlinted: the
+      # entrypoint decides whether migrations run before the app starts, and
+      # demo.sh is what a reader runs first. Shell fails quietly — an unquoted
+      # expansion or a typo'd variable becomes an empty string rather than an
+      # error — so the failure mode is a container that starts having skipped
+      # its migrations, not one that refuses to start.
+      #
+      # Discovered from git rather than listed, so a new script is covered the
+      # day it lands instead of whenever someone remembers this step exists.
+      - name: Lint shell scripts
+        run: |
+          mapfile -t scripts < <(git ls-files '*.sh')
+          printf 'linting: %s\n' "${scripts[@]}"
+          docker run --rm -v "$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:stable "${scripts[@]}"
+
       - name: Run tests with coverage
         run: pytest -q --cov=app --cov-report=term-missing --cov-fail-under=93
 
