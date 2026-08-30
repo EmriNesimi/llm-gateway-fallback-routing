@@ -1,0 +1,87 @@
+"""`.env.example` is read as documentation of what happens if you set nothing.
+
+Every tuning value in it — timeouts, budgets, breaker thresholds, rate limit
+— is also a default in app/core/config.py, and the two are written down
+independently. Change a default in the code and the example file keeps
+advertising the old one, which is worse than saying nothing: someone copies it
+to .env and pins the old value while believing they took the default.
+
+Only values that are *meant* to equal the default are compared. The secrets
+and placeholders deliberately differ, and each exclusion below says why.
+"""
+
+import pathlib
+import re
+
+import pytest
+
+from app.core.config import Settings
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# Deliberately not the default. Every entry needs a reason.
+_INTENTIONALLY_DIFFERENT = {
+    "OPENAI_API_KEY": "obvious placeholder, demonstrates startup placeholder detection",
+    "ANTHROPIC_API_KEY": "obvious placeholder, demonstrates startup placeholder detection",
+    "GATEWAY_SECRET_KEY": "must be replaced; the code default is deliberately insecure",
+    "GATEWAY_API_KEYS": "must be replaced; empty default fails closed on purpose",
+    "ADMIN_API_KEY": "must be replaced; unset default fails closed on purpose",
+    "OTEL_EXPORTER_OTLP_ENDPOINT": (
+        "documents the host-side Jaeger address; the code default is unset so"
+        " tracing is simply off unless asked for"
+    ),
+}
+
+# Consumed by docker-compose.yml, not by Settings, so there is no default to
+# compare them against.
+_COMPOSE_ONLY = {"REDIS_PASSWORD", "GRAFANA_PASSWORD"}
+
+
+def _example_values() -> dict[str, str]:
+    values = {}
+    for line in (ROOT / ".env.example").read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        key, _, value = line.partition("=")
+        values[key.strip()] = value.strip()
+    return values
+
+
+def _matches(value: str, default, annotation) -> bool:
+    # An empty value means "unset", which is how both "" and None read.
+    if value == "":
+        return default in ("", None)
+    if annotation is bool or isinstance(default, bool):
+        return value.lower() == str(default).lower()
+    if isinstance(default, (int, float)):
+        return float(value) == float(default)
+    return value == (default if default is not None else "")
+
+
+def test_every_documented_key_is_a_real_setting():
+    """Guards the guard: a key renamed in the code but not here would
+    otherwise be silently skipped rather than reported."""
+    fields = set(Settings.model_fields)
+    unknown = sorted(
+        key
+        for key in _example_values()
+        if key not in _COMPOSE_ONLY and key.lower() not in fields
+    )
+    assert not unknown, (
+        f".env.example documents {unknown}, which Settings does not define —"
+        " setting them would do nothing"
+    )
+
+
+@pytest.mark.parametrize("key,value", sorted(_example_values().items()))
+def test_documented_default_matches_the_code(key, value):
+    if key in _COMPOSE_ONLY or key in _INTENTIONALLY_DIFFERENT:
+        pytest.skip(_INTENTIONALLY_DIFFERENT.get(key, "consumed by docker-compose, not Settings"))
+
+    field = Settings.model_fields[key.lower()]
+    assert _matches(value, field.default, field.annotation), (
+        f".env.example says {key}={value!r} but the code default is"
+        f" {field.default!r} — the file advertises a value the gateway"
+        " would not actually use"
+    )
