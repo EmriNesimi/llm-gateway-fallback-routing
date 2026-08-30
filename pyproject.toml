@@ -8,6 +8,19 @@ testpaths = ["tests"]
 # runs and the test passes without asserting anything.
 # strict-config does the same for a mistyped setting in this file.
 addopts = "--strict-markers --strict-config"
+# A DeprecationWarning from our own code is a scheduled breakage: it means a
+# future version of a dependency stops doing what this code asks. Printed at
+# the end of a green run it reads as noise and gets scrolled past; as a
+# failure it gets fixed while the fix is still cheap.
+#
+# The one exemption is Starlette telling FastAPI's TestClient that httpx is
+# deprecated. That is upstream's business, not reachable from anything here,
+# and it fires at import — matched on message rather than category so the
+# exemption stays this specific warning and not everything Starlette emits.
+filterwarnings = [
+    "error",
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+]
 
 [tool.ruff]
 line-length = 100
