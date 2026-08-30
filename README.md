@@ -323,6 +323,14 @@ make check     # lint, typecheck, audit, migration drift, tests + coverage floor
 
 Or individually:
 
+The lint and test tooling lives in `requirements-dev.txt` (which pulls in
+`requirements.txt` too) — the quickstart above installs only what running the
+gateway needs, so install the dev file first:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
 ```bash
 make lint
 make typecheck
@@ -331,7 +339,7 @@ make migrate-check
 make test
 ```
 
-(equivalent to `ruff check .`, `mypy`, `pip-audit -r requirements.txt`, and `pytest -q --cov=app --cov-report=term-missing --cov-fail-under=93`; `make migrate-check` runs CI's `alembic check` for model/migration drift — see the `Makefile` for the rest: `make run`, `make migrate`, `make up`/`down`, `make demo`)
+(equivalent to `ruff check .`, `mypy`, `pip-audit -r requirements.txt -r requirements-dev.txt`, and `pytest -q --cov=app --cov-report=term-missing --cov-fail-under=93`; `make migrate-check` runs CI's `alembic check` for model/migration drift — see the `Makefile` for the rest: `make run`, `make migrate`, `make up`/`down`, `make demo`)
 
 Same commands CI runs on every push/PR to `main` — CI also runs a real Redis service container, so the rate limiter's Lua script is tested against genuine Redis, not just `fakeredis`'s emulation of it.
 

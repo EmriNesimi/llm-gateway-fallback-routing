@@ -48,7 +48,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
 
       - name: Lint
         run: ruff check .
@@ -57,7 +57,7 @@ jobs:
         run: mypy
 
       - name: Audit dependencies for known vulnerabilities
-        run: pip-audit -r requirements.txt
+        run: pip-audit -r requirements.txt -r requirements-dev.txt
 
       # The floor sits one point under the current 94% rather than exactly at
       # it: at-current fails on rounding after any harmless refactor, while no
@@ -123,7 +123,7 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: pip install -r requirements-dev.txt
 
       - name: Apply migrations to Postgres
         run: alembic upgrade head

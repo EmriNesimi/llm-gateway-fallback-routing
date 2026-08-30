@@ -7,7 +7,7 @@
    ```bash
    python3 -m venv .venv
    source .venv/bin/activate
-   pip install -r requirements.txt
+   pip install -r requirements-dev.txt
    ```
 3. Install the **Python** extension (ms-python.python) if you don't have it —
    VS Code will prompt you to select an interpreter; pick `.venv/bin/python`

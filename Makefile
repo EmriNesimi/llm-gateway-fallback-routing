@@ -1,7 +1,7 @@
 .PHONY: install check lint typecheck audit test run migrate migrate-check up down demo
 
 install:
-	pip install -r requirements.txt
+	pip install -r requirements-dev.txt
 
 # Every check CI runs that doesn't need Docker, in one command. CI has
 # steadily grown steps with no local equivalent, so "it passed locally"
@@ -21,7 +21,7 @@ typecheck:
 	mypy
 
 audit:
-	pip-audit -r requirements.txt
+	pip-audit -r requirements.txt -r requirements-dev.txt
 
 test:
 	pytest -q --cov=app --cov-report=term-missing --cov-fail-under=93
