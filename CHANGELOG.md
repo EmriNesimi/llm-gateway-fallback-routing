@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased
+
+Nothing here changes how a request is routed or what it costs. It is all
+hardening around the edges — the image, CI, and guards against documentation
+quietly going stale.
+
+**Runtime image**
+- Test and lint tooling moved to `requirements-dev.txt`. `pytest`, `ruff`,
+  `mypy`, `pip-audit` and `fakeredis` were being installed into the production
+  image; it is now 295MB rather than 433MB.
+
+**Alerting**
+- `GatewayTargetDown` — every other rule evaluates metrics the gateway
+  publishes, so none of them fire when the gateway is the thing that's down.
+- `GatewayRequestsFailingAcrossWholeChain` — fires when requests are failing
+  every provider, which is the outcome fallback exists to prevent.
+
+**CI**
+- Job timeouts, so a wedged step can't burn six hours of runner time.
+- `shellcheck` over the tracked shell scripts.
+- `promtool`, `docker compose config`, and an image build that starts the
+  container and asserts it isn't running as root.
+- Dependabot enabled for pip, GitHub Actions and Docker.
+- Warnings from our own code fail the build; `--strict-markers` and
+  `--strict-config`; ruff's bugbear rules.
+- `make check` runs the same set locally.
+
+**Guards against drift**
+Each of these exists because the thing it checks had already gone stale at
+least once, silently:
+- The seven places the Python version is pinned must agree.
+- The version the app serves must match the newest CHANGELOG entry.
+- `.env.example` must document the defaults the code actually uses.
+- Alert rules must reference metrics that exist.
+- The README's test count and coverage floor must match reality.
+
 ## 0.3.0
 
 The spend ceiling, and making it actually work.
