@@ -11,7 +11,6 @@ and placeholders deliberately differ, and each exclusion below says why.
 """
 
 import pathlib
-import re
 
 import pytest
 
