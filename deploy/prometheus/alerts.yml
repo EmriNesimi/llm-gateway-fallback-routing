@@ -46,6 +46,28 @@ groups:
             credentials to the scrape config — /metrics then returns 401 and
             the target reads as down with nothing pointing at the token.
 
+      # status="error" is not "a request 4xx'd" — it is specifically
+      # AllProvidersFailedError, meaning every provider in the chain was tried
+      # and none served the request. Fallback exists to absorb single-provider
+      # failure, so a sustained share of requests getting through the whole
+      # chain and still failing means the absorbing has stopped working.
+      # 10% is deliberately low for that reason.
+      #
+      # Budget exhaustion also lands here: an exhausted provider is dropped
+      # from the chain, and a chain with nothing left in it fails this way. If
+      # this fires alongside ProviderBudgetExhausted, that is the cause.
+      - alert: GatewayRequestsFailingAcrossWholeChain
+        expr: >-
+          sum(rate(gateway_requests_total{status="error"}[5m]))
+            / sum(rate(gateway_requests_total[5m])) > 0.1
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          summary: "over 10% of requests are failing every provider"
+          description: >-
+            No division-by-zero guard is needed: with no traffic both rates are
+            0, and 0/0 is NaN, which fails the comparison rather than firing.
+
       # The gauge added for exactly this. gateway_cost_usd_total only ever
       # says what has gone; without a headroom alert the first warning is a
       # 402 after the balance is spent.
