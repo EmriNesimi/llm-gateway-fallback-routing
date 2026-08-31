@@ -23,8 +23,15 @@ typecheck:
 audit:
 	pip-audit -r requirements.txt -r requirements-dev.txt
 
+# --cov-branch counts each if/else edge, not just whether the line ran. A
+# line like `if x: return` scores as covered when only the true side is
+# ever taken, which is how an untested early-return hides.
+#
+# The floor is 92 rather than 93 because the same code scores lower under
+# the stricter measure — 92 against branches is a harder promise than 93
+# against lines, not a relaxed one.
 test:
-	pytest -q --cov=app --cov-report=term-missing --cov-fail-under=93
+	pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=92
 
 run:
 	uvicorn app.main:app --reload
