@@ -63,3 +63,27 @@ def test_readme_coverage_floor_matches_what_ci_enforces():
     assert enforced == {claimed}, (
         f"README claims a {claimed}% floor; CI and the Makefile enforce {sorted(enforced)}"
     )
+
+
+def test_readme_panel_count_matches_the_dashboard():
+    """The README said "Nine panels" and then listed ten.
+
+    Same class as the test count above: a number written by hand next to a
+    list that grows. It had already drifted by one, which nobody noticed
+    because prose doesn't fail.
+    """
+    import json
+
+    dashboard = json.loads(
+        (ROOT / "deploy" / "grafana" / "dashboards" / "gateway-overview.json").read_text()
+    )
+
+    match = re.search(r"(\d+) panels:", README.read_text())
+    assert match, "README no longer states a panel count in the form 'N panels:'"
+
+    claimed = int(match.group(1))
+    actual = len(dashboard["panels"])
+    assert claimed == actual, (
+        f"README claims {claimed} dashboard panels, gateway-overview.json"
+        f" defines {actual}"
+    )
