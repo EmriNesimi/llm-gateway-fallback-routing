@@ -84,3 +84,21 @@ def test_documented_default_matches_the_code(key, value):
         f" {field.default!r} — the file advertises a value the gateway"
         " would not actually use"
     )
+
+
+def test_every_setting_is_documented():
+    """The other direction from the check above.
+
+    That one catches a key in .env.example that no longer exists. This one
+    catches a setting added to config.py that never made it into the file —
+    which is worse, because the reader has no way to discover it exists. The
+    only inventory of what this gateway can be configured with is this file.
+    """
+    documented = set(_example_values())
+    undocumented = sorted(
+        name.upper() for name in Settings.model_fields if name.upper() not in documented
+    )
+    assert not undocumented, (
+        f"{undocumented} exist as settings but appear nowhere in .env.example —"
+        " nobody reading the file would know they can be set"
+    )
