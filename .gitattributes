@@ -1,0 +1,20 @@
+# Normalise line endings in the repository, and check text files out with LF
+# everywhere. Without this, a clone on Windows with core.autocrlf=true gets
+# CRLF, and two files here break in ways that are hard to read:
+#
+#   docker-entrypoint.sh  — `sh` treats the trailing \r as part of the last
+#                           argument, so the container dies with an error
+#                           naming a command that looks correct.
+#   scripts/demo.sh       — same, and it is the first thing a reader runs.
+#
+# The Dockerfile COPYs the entrypoint straight from the build context, so
+# nothing downstream would fix it.
+* text=auto eol=lf
+
+# Shell scripts must be LF regardless of anything a contributor has set
+# locally — the two above are executed, not just read.
+*.sh text eol=lf
+
+# Never touched: mangling these corrupts them.
+*.jpg binary
+*.png binary
