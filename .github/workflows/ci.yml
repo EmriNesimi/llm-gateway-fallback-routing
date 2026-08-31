@@ -105,9 +105,14 @@ jobs:
       # day it lands instead of whenever someone remembers this step exists.
       - name: Lint shell scripts
         run: |
-          mapfile -t scripts < <(git ls-files '*.sh')
-          printf 'linting: %s\n' "${scripts[@]}"
-          docker run --rm -v "$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:v0.11.0 "${scripts[@]}"
+          # No mapfile: it needs bash 4, so the step could not be reproduced
+          # on macOS (bash 3.2) or run under sh. A CI step nobody can run
+          # locally is one nobody checks before pushing.
+          scripts=$(git ls-files '*.sh')
+          test -n "$scripts" || { echo "no shell scripts found"; exit 1; }
+          echo "linting:"; echo "$scripts"
+          git ls-files -z '*.sh' \
+            | xargs -0 docker run --rm -v "$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:v0.11.0
 
       - name: Run tests with coverage
         run: pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=92
