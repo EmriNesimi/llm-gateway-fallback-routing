@@ -110,3 +110,26 @@ def test_readme_alert_count_matches_the_rules_file():
     assert claimed == actual, (
         f"README claims {claimed} alert rules, alerts.yml defines {actual}"
     )
+
+
+def test_readme_only_references_make_targets_that_exist():
+    """The README tells a reader to run ten different `make` commands. A
+    renamed or dropped target turns one of those into `make: *** No rule to
+    make target` — landing on whoever is following the README for the first
+    time, which is the worst possible audience for it.
+
+    Checked against the rules the Makefile actually defines rather than
+    .PHONY, since a target can work without being listed there.
+    """
+    makefile = (ROOT / "Makefile").read_text()
+    defined = set(re.findall(r"^([a-zA-Z][\w-]*):", makefile, re.M))
+    assert defined, "no targets found in the Makefile — the guard would pass vacuously"
+
+    referenced = set(re.findall(r"\bmake ([a-z][a-z-]*)", README.read_text()))
+    assert referenced, "README no longer mentions any make targets"
+
+    missing = sorted(referenced - defined)
+    assert not missing, (
+        f"README tells the reader to run {missing}, which the Makefile does not"
+        f" define (it has {sorted(defined)})"
+    )
