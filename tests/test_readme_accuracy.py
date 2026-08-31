@@ -87,3 +87,26 @@ def test_readme_panel_count_matches_the_dashboard():
         f"README claims {claimed} dashboard panels, gateway-overview.json"
         f" defines {actual}"
     )
+
+
+def test_readme_alert_count_matches_the_rules_file():
+    """Third instance of the same shape: a hand-written number beside a list
+    that grows. The panel count had already drifted; this one starts correct
+    and is pinned so it stays that way.
+
+    Counted from the text rather than by parsing YAML, so this needs no
+    dependency the project doesn't otherwise have. promtool already validates
+    the file's structure in CI, so a count of `- alert:` lines can't be
+    reading something malformed.
+    """
+    rules = (ROOT / "deploy" / "prometheus" / "alerts.yml").read_text()
+    actual = len(re.findall(r"^\s*- alert:", rules, re.M))
+    assert actual, "no alert rules found — the guard would pass vacuously"
+
+    match = re.search(r"(\d+) rules in `deploy/prometheus/alerts.yml`", README.read_text())
+    assert match, "README no longer states an alert count"
+
+    claimed = int(match.group(1))
+    assert claimed == actual, (
+        f"README claims {claimed} alert rules, alerts.yml defines {actual}"
+    )
