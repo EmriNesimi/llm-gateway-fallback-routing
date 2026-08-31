@@ -36,7 +36,9 @@ _MIN_PLAUSIBLE_KEY_LENGTH = 40
 # locally and a different one in CI, where no .env exists.
 _ENV_FILE = os.environ.get("GATEWAY_ENV_FILE", ".env") or None
 
-_INSECURE_SECRET_DEFAULT = "dev-only-insecure-key"
+# noqa S105: deliberately a known-bad default, not a leaked secret. It is
+# named for what it is and warned about at startup.
+_INSECURE_SECRET_DEFAULT = "dev-only-insecure-key"  # noqa: S105
 # Schemes app/db/session.py and migrations/env.py actually know how to drive —
 # anything else would fail deep inside SQLAlchemy with a much less legible
 # error, well after startup, instead of here.
