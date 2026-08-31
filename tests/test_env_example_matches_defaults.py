@@ -32,7 +32,9 @@ _INTENTIONALLY_DIFFERENT = {
 }
 
 # Consumed by docker-compose.yml, not by Settings, so there is no default to
-# compare them against.
+# compare them against. Kept honest by
+# test_compose_variables_are_documented below, which derives the same set from
+# the compose file rather than trusting this literal.
 _COMPOSE_ONLY = {"REDIS_PASSWORD", "GRAFANA_PASSWORD"}
 
 
@@ -101,4 +103,38 @@ def test_every_setting_is_documented():
     assert not undocumented, (
         f"{undocumented} exist as settings but appear nowhere in .env.example —"
         " nobody reading the file would know they can be set"
+    )
+
+
+def _compose_variables() -> set[str]:
+    """Names docker-compose.yml substitutes, e.g. ${REDIS_PASSWORD:-default}."""
+    import re
+
+    compose = (ROOT / "docker-compose.yml").read_text()
+    return set(re.findall(r"\$\{([A-Z_][A-Z0-9_]*)", compose))
+
+
+def test_compose_variables_are_documented():
+    """Every ${VAR} in the compose file has a default baked in, so an
+    undocumented one doesn't fail — the stack quietly comes up using the
+    fallback, and nobody knows the knob exists. That is how the Redis password
+    would end up left at its default on something exposed.
+    """
+    referenced = _compose_variables()
+    assert referenced, "no ${VAR} substitutions found — the guard would pass vacuously"
+
+    missing = sorted(referenced - set(_example_values()))
+    assert not missing, (
+        f"docker-compose.yml substitutes {missing}, which .env.example never"
+        " mentions — the stack would silently use the built-in default"
+    )
+
+
+def test_the_compose_only_exclusion_list_is_accurate():
+    """_COMPOSE_ONLY above skips the default comparison for compose variables.
+    If it drifts from what the compose file actually uses, it either skips a
+    real setting (hiding drift) or names one that no longer exists."""
+    assert _COMPOSE_ONLY == _compose_variables() - set(Settings.model_fields), (
+        f"_COMPOSE_ONLY is {sorted(_COMPOSE_ONLY)} but the compose file"
+        f" substitutes {sorted(_compose_variables())}"
     )
