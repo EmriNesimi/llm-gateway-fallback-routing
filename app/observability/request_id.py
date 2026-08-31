@@ -1,7 +1,8 @@
 import uuid
 
-from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
+from starlette.responses import Response
 
 # Matches AuditLogEntry.request_id's column width (app/db/models.py). An
 # oversized client-supplied X-Request-ID doesn't just get truncated
@@ -20,7 +21,9 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     Stashed on request.state for handlers/audit log/spans, and echoed back
     on the response so a caller always has something to hand to support."""
 
-    async def dispatch(self, request: Request, call_next):
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         incoming = request.headers.get("X-Request-ID")
         if incoming and len(incoming) <= _MAX_REQUEST_ID_LENGTH:
             request_id = incoming

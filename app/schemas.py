@@ -1,4 +1,4 @@
-from typing import Literal
+from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -43,7 +43,7 @@ class ChatRequest(BaseModel):
     messages: list[ChatMessageIn] = Field(min_length=1, max_length=MAX_MESSAGES)
 
     @model_validator(mode="after")
-    def _cap_total_content(self):
+    def _cap_total_content(self) -> "Self":
         """Bound the whole request, not just each message.
 
         MAX_CONTENT_CHARS alone is multiplied by MAX_MESSAGES, which is how a
@@ -108,7 +108,7 @@ class ChatCompletionRequest(BaseModel):
 
 
     @model_validator(mode="after")
-    def _cap_total_content(self):
+    def _cap_total_content(self) -> "Self":
         """Bound the whole request, not just each message.
 
         MAX_CONTENT_CHARS alone is multiplied by MAX_MESSAGES, which is how a

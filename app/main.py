@@ -7,6 +7,7 @@ import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import asdict
+from typing import Any
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,7 +30,7 @@ from app.observability.metrics import COST_USD, REQUEST_COUNT, REQUEST_LATENCY, 
 from app.observability.request_id import RequestIDMiddleware
 from app.observability.security_headers import SecurityHeadersMiddleware
 from app.observability.tracing import configure_tracing
-from app.providers.base import ChatMessage, SamplingParams
+from app.providers.base import ChatMessage, ChatResponse, SamplingParams
 from app.routing.dependencies import build_router
 from app.routing.fallback import AllProvidersFailedError, FallbackRouter
 from app.routing.model_map import (
@@ -124,7 +125,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> Respo
 
 
 @app.get("/healthz")
-async def healthz():
+async def healthz() -> dict[str, str]:
     """Liveness: is the process up? No dependency checks — used by orchestrators
     to decide whether to restart the container."""
     return {"status": "ok"}
@@ -154,7 +155,7 @@ async def _check_database() -> str:
 
 
 @app.get("/readyz")
-async def readyz():
+async def readyz() -> Response:
     """Readiness: can this instance actually serve traffic? Checks the
     dependencies /v1/chat needs (Redis for rate limits/budgets, the DB for
     the admin API/audit log) so a load balancer can route around an instance
@@ -178,7 +179,7 @@ async def readyz():
 
 
 @app.get("/")
-async def root():
+async def root() -> dict[str, str]:
     return {"service": "llm-gateway", "docs": "/docs"}
 
 
@@ -186,7 +187,7 @@ async def root():
 async def metrics(
     x_metrics_token: str | None = Header(default=None),
     authorization: str | None = Header(default=None),
-):
+) -> Response:
     """Prometheus scrape target.
 
     Gated on its own token rather than a client key, because a scraper isn't a
@@ -217,7 +218,7 @@ async def metrics(
 
 
 @app.get("/v1/models")
-async def list_models(_: str = Depends(require_api_key)):
+async def list_models(_: str = Depends(require_api_key)) -> dict[str, Any]:
     """The model names this gateway will route, so a client can discover them
     instead of guessing and silently landing on the default chain.
 
@@ -412,7 +413,7 @@ async def _settle_chain(
 
 
 async def _serve_chat(
-    router,
+    router: FallbackRouter,
     messages: list[ChatMessage],
     api_key: str,
     requested_model: str,
@@ -420,7 +421,7 @@ async def _serve_chat(
     params: SamplingParams | None = None,
     reservations: dict[str, float] | None = None,
     skip_providers: set[str] | None = None,
-):
+) -> ChatResponse:
     """Run a non-streaming request through the router and do the bookkeeping.
 
     Shared by /v1/chat and /v1/chat/completions so there's exactly one
@@ -494,7 +495,7 @@ async def chat(
     http_request: Request,
     response: Response,
     api_key: str = Depends(enforce_budget),
-):
+) -> ChatResponseOut:
     request_id = http_request.state.request_id
     chain_name, router = _route(request.model, request_id)
     response.headers["X-Gateway-Chain"] = chain_name
@@ -516,7 +517,7 @@ async def chat(
 
 
 async def _event_stream(
-    router,
+    router: FallbackRouter,
     messages: list[ChatMessage],
     api_key: str,
     requested_model: str,
@@ -619,7 +620,7 @@ async def _event_stream(
 @app.post("/v1/chat/stream")
 async def chat_stream(
     request: ChatRequest, http_request: Request, api_key: str = Depends(enforce_budget)
-):
+) -> StreamingResponse:
     request_id = http_request.state.request_id
     chain_name, router = _route(request.model, request_id)
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
@@ -646,7 +647,7 @@ async def chat_stream(
 
 
 async def _openai_event_stream(
-    router,
+    router: FallbackRouter,
     messages: list[ChatMessage],
     api_key: str,
     requested_model: str,
@@ -759,13 +760,17 @@ async def _openai_event_stream(
     yield "data: [DONE]\n\n"
 
 
-@app.post("/v1/chat/completions")
+# response_model=None because the return annotation is a union with
+# StreamingResponse (stream=True returns one), which FastAPI cannot turn
+# into a response schema. It never generated one for this route anyway —
+# this says so explicitly rather than by omitting the annotation.
+@app.post("/v1/chat/completions", response_model=None)
 async def chat_completions(
     request: ChatCompletionRequest,
     http_request: Request,
     response: Response,
     api_key: str = Depends(enforce_budget),
-):
+) -> ChatCompletionResponse | StreamingResponse:
     """OpenAI Chat Completions, so an unmodified `openai` client can point its
     base_url here and get the fallback chain, rate limiting, budgets, and audit
     trail without changing a line of application code.

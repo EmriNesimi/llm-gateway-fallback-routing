@@ -54,6 +54,11 @@ select = ["E", "F", "I", "UP", "B", "S"]
 python_version = "3.12"
 files = ["app"]
 check_untyped_defs = true
+# Every function in app/ carries annotations now, so this locks that in.
+# It is the difference between mypy checking the bodies it happens to
+# understand and mypy checking all of them — an unannotated def is
+# skipped silently, which is the quietest way to lose type coverage.
+disallow_untyped_defs = true
 warn_unused_ignores = true
 warn_redundant_casts = true
 # Alembic's generated migration scripts follow its own boilerplate, and
