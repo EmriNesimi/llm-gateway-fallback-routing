@@ -96,3 +96,35 @@ def test_served_version_matches_the_changelog():
         f"app/main.py serves version {m.group(1)} but the newest CHANGELOG"
         f" entry is {newest} — /openapi.json would advertise the wrong one"
     )
+
+
+def test_the_container_healthcheck_hits_a_real_route():
+    """The Dockerfile's HEALTHCHECK curls a URL written as a string.
+
+    Nothing connects it to the app's routing table, and the failure is nasty:
+    rename the endpoint and the healthcheck fails forever, so the container
+    reports unhealthy while serving traffic perfectly well. docker-compose.yml
+    gates prometheus on `condition: service_healthy`, so the visible symptom
+    is the monitoring stack never starting — a long way from the cause.
+
+    The port is checked too, since CMD and the HEALTHCHECK name it separately.
+    """
+    from app.main import app
+
+    dockerfile = _read("Dockerfile")
+
+    m = re.search(r"urlopen\('http://localhost:(\d+)(/\S*?)'\)", dockerfile)
+    assert m, "HEALTHCHECK no longer contains a recognisable urlopen(...) URL"
+    port, path = m.group(1), m.group(2)
+
+    served = {getattr(r, "path", None) for r in app.routes}
+    assert path in served, (
+        f"HEALTHCHECK probes {path}, which the app does not serve."
+        f" Routes: {sorted(p for p in served if p)}"
+    )
+
+    cmd_ports = re.findall(r'"--port",\s*"(\d+)"', dockerfile)
+    assert cmd_ports, "CMD no longer specifies --port"
+    assert port in cmd_ports, (
+        f"HEALTHCHECK probes port {port} but CMD serves on {cmd_ports}"
+    )
