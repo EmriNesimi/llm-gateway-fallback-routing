@@ -71,10 +71,14 @@ jobs:
       # alerts.yml is committed but nothing validated it. A malformed rule
       # doesn't degrade gracefully — Prometheus refuses to load the file, so
       # every alert in it silently stops existing.
+      # Pinned rather than :latest. A CI step whose tool version changes
+      # underneath it turns "main went red overnight with no commit" into a
+      # thing that happens, and the failure points at the rules file rather
+      # than at the tool that moved.
       - name: Validate Prometheus rules and config
         run: |
           docker run --rm -v "$PWD/deploy/prometheus:/etc/prometheus:ro" \
-            --entrypoint promtool prom/prometheus:latest \
+            --entrypoint promtool prom/prometheus:v3.14.0 \
             check config /etc/prometheus/prometheus.yml
 
       # The compose file has grown to six services with health gates, port
@@ -103,7 +107,7 @@ jobs:
         run: |
           mapfile -t scripts < <(git ls-files '*.sh')
           printf 'linting: %s\n' "${scripts[@]}"
-          docker run --rm -v "$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:stable "${scripts[@]}"
+          docker run --rm -v "$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:v0.11.0 "${scripts[@]}"
 
       - name: Run tests with coverage
         run: pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=92
