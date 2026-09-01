@@ -98,3 +98,108 @@ async def test_stream_raises_when_all_providers_fail_before_first_chunk():
     with pytest.raises(AllProvidersFailedError):
         async for _ in router.chat_stream([]):
             pass
+
+
+# --------------------------------------------------------------------------
+# The same refusals, on the streaming path
+# --------------------------------------------------------------------------
+#
+# chat_stream duplicates chat's skip logic rather than sharing it, so the
+# budget and breaker checks needed covering twice. Duplicated logic that is
+# tested once is exactly how the two halves drift apart.
+
+
+class _NonRetryableProvider(BaseProvider):
+    """Fails before the first chunk with a failure worth no retries — a 4xx
+    shape: bad request, unknown model, invalid key."""
+
+    name = "nonretryable"
+
+    def __init__(self):
+        self.calls = 0
+
+    async def chat(self, model, messages, params=None):
+        raise NotImplementedError
+
+    async def chat_stream(self, model, messages, params=None):
+        self.calls += 1
+        raise ProviderError(f"{self.name} rejected the request", retryable=False)
+        yield  # pragma: no cover - makes this an async generator
+
+
+@pytest.mark.asyncio
+async def test_streaming_skips_a_provider_that_is_out_of_budget():
+    broke = FakeStreamProvider("broke")
+    spare = FakeStreamProvider("spare")
+    router = FallbackRouter(
+        chain=[(broke, "model-a", _breaker()), (spare, "model-b", _breaker())],
+        retry_attempts=0,
+        retry_backoff_seconds=0,
+    )
+
+    chunks = [c async for c in router.chat_stream([], skip_providers={"broke"})]
+
+    assert broke.calls == 0
+    assert "".join(c.content for c in chunks) == "hello world"
+
+
+@pytest.mark.asyncio
+async def test_streaming_skips_a_provider_with_an_open_breaker():
+    tripped = CircuitBreaker(failure_threshold=1, cooldown_seconds=60)
+    tripped.record_failure()
+
+    down = FakeStreamProvider("down")
+    spare = FakeStreamProvider("spare")
+    router = FallbackRouter(
+        chain=[(down, "model-a", tripped), (spare, "model-b", _breaker())],
+        retry_attempts=0,
+        retry_backoff_seconds=0,
+    )
+
+    chunks = [c async for c in router.chat_stream([])]
+
+    assert down.calls == 0
+    assert "".join(c.content for c in chunks) == "hello world"
+
+
+@pytest.mark.asyncio
+async def test_streaming_every_breaker_open_attempts_nothing(caplog):
+    import logging
+
+    a_breaker = CircuitBreaker(failure_threshold=1, cooldown_seconds=60)
+    a_breaker.record_failure()
+    b_breaker = CircuitBreaker(failure_threshold=1, cooldown_seconds=60)
+    b_breaker.record_failure()
+
+    a, b = FakeStreamProvider("a"), FakeStreamProvider("b")
+    router = FallbackRouter(
+        chain=[(a, "model-a", a_breaker), (b, "model-b", b_breaker)],
+        retry_attempts=0,
+        retry_backoff_seconds=0,
+    )
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(AllProvidersFailedError):
+            [c async for c in router.chat_stream([])]
+
+    assert a.calls == 0 and b.calls == 0
+    assert "nothing was attempted" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_non_retryable_stream_failure_falls_back_without_retrying():
+    """retry_attempts is 2 here. A retryable failure would burn both against
+    the same provider first; a non-retryable one must not, because a 4xx fails
+    identically every time and the retries are pure added latency."""
+    doomed = _NonRetryableProvider()
+    spare = FakeStreamProvider("spare")
+    router = FallbackRouter(
+        chain=[(doomed, "model-a", _breaker()), (spare, "model-b", _breaker())],
+        retry_attempts=2,
+        retry_backoff_seconds=0,
+    )
+
+    chunks = [c async for c in router.chat_stream([])]
+
+    assert doomed.calls == 1, "a non-retryable failure was retried anyway"
+    assert "".join(c.content for c in chunks) == "hello world"
