@@ -45,8 +45,21 @@ def worst_case_cost_usd(
     silently happen: tests/test_pricing.py fails the build if any model
     reachable from a chain has no price.
     """
-    pricing = _PRICING.get(f"{provider}:{model}")
+    key = f"{provider}:{model}"
+    pricing = _PRICING.get(key)
     if pricing is None:
+        if provider != "ollama":
+            # Same reasoning as estimate_cost_usd, and worse here. A $0
+            # worst case means reserve() claims nothing, so the request runs
+            # entirely outside the lifetime ceiling — the one control that
+            # is supposed to be un-bypassable. This path warned on the
+            # billing side and said nothing on the reservation side.
+            logger.warning(
+                "no pricing entry for %s — no budget will be reserved for this"
+                " request, so the provider ceiling will not apply to it. Add an"
+                " entry to app/budget/pricing.py's _PRICING.",
+                key,
+            )
         return 0.0
     input_price, output_price = pricing
     return (input_chars / _CHARS_PER_TOKEN) * input_price + max_output_tokens * output_price
