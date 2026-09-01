@@ -1,6 +1,5 @@
-import pytest
-
 import httpx
+import pytest
 
 from app.providers.base import ProviderError, SamplingParams
 from app.providers.ollama_provider import (
