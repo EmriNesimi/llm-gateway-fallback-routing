@@ -5,6 +5,7 @@ import app.main as main_module
 from app.budget.dependency import enforce_budget
 from app.main import app
 from app.routing.fallback import AllProvidersFailedError
+from app.schemas import MAX_CONTENT_CHARS, MAX_TOTAL_CONTENT_CHARS
 
 
 class _AlwaysFailsRouter:
@@ -82,3 +83,47 @@ def test_valid_roles_are_accepted_by_validation(_client):
             json={"model": "default", "messages": [{"role": role, "content": "hi"}]},
         )
         assert r.status_code != 422
+
+
+# --------------------------------------------------------------------------
+# The total-content bound
+# --------------------------------------------------------------------------
+#
+# MAX_CONTENT_CHARS caps a single message; MAX_TOTAL_CONTENT_CHARS caps the
+# request. Only the second one actually bounds cost — the per-message limit
+# multiplied by MAX_MESSAGES is 2.5M characters, which is far more than the
+# entire provider budget would pay for. Until now nothing exercised the raise,
+# so the bound that does the work was the untested one.
+
+
+def _two_messages_over_the_total():
+    """Each message is legal on its own; together they are not."""
+    half = "x" * 30_000
+    return [
+        {"role": "user", "content": half},
+        {"role": "user", "content": half},
+    ]
+
+
+@pytest.mark.parametrize("endpoint", ["/v1/chat", "/v1/chat/completions"])
+def test_messages_that_are_individually_legal_can_still_be_too_much(_client, endpoint):
+    messages = _two_messages_over_the_total()
+    assert all(len(m["content"]) < MAX_CONTENT_CHARS for m in messages)
+    assert sum(len(m["content"]) for m in messages) > MAX_TOTAL_CONTENT_CHARS
+
+    r = _client.post(endpoint, json={"model": "default", "messages": messages})
+
+    assert r.status_code == 422
+    assert "total message content" in r.text
+
+
+@pytest.mark.parametrize("endpoint", ["/v1/chat", "/v1/chat/completions"])
+def test_a_request_exactly_at_the_total_limit_is_accepted(_client, endpoint):
+    """The boundary itself must pass, or the limit is off by one and the
+    error message lies about where the line is."""
+    messages = [{"role": "user", "content": "x" * MAX_TOTAL_CONTENT_CHARS}]
+
+    r = _client.post(endpoint, json={"model": "default", "messages": messages})
+
+    # Past validation: the stub router refuses, which is a 502 rather than 422.
+    assert r.status_code != 422
