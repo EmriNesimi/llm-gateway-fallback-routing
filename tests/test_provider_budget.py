@@ -234,3 +234,63 @@ async def test_remaining_never_reports_negative(budget):
     assert REGISTRY.get_sample_value(
         "gateway_provider_budget_remaining_usd", {"provider": "anthropic"}
     ) == 0.0
+
+
+# --------------------------------------------------------------------------
+# The exemptions, and the paid path they are the exception to
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_remaining_reports_headroom_for_a_paid_provider(budget):
+    """`remaining` is what the gauge and the ProviderBudgetLow alert are built
+    on. Only the ollama shortcut was covered, so the arithmetic every alert
+    depends on had never run."""
+    await budget.reserve("openai", 1.25)
+    await budget.settle("openai", 1.25, 1.25)
+
+    assert await budget.remaining("openai") == pytest.approx(2.75)  # $4 cap
+
+
+@pytest.mark.asyncio
+async def test_settling_a_free_provider_writes_nothing(budget):
+    """settle() computes `actual - reserved`, which is normally negative — the
+    refund. Applied to ollama, whose reserve() deliberately wrote nothing, it
+    would push the ledger below zero and hand out headroom nobody paid for.
+    That is the exact bug that made the whole ceiling inert once before."""
+    await budget.reserve("ollama", 5.0)
+    await budget.settle("ollama", 5.0, 0.10)
+
+    assert await budget._redis.get(budget._key("ollama")) is None
+    assert await budget.spent("ollama") == 0.0
+
+
+@pytest.mark.asyncio
+async def test_free_providers_are_never_charged_unreserved_spend(budget):
+    await budget.record_unreserved("ollama", 2.0)
+
+    assert await budget._redis.get(budget._key("ollama")) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("amount", [0.0, -1.0])
+async def test_non_positive_unreserved_spend_is_ignored(budget, amount):
+    """A zero-cost settle is the normal case for a request that failed before
+    any tokens were generated. Writing it would be harmless; writing a
+    negative one would silently refund budget."""
+    await budget.record_unreserved("anthropic", amount)
+
+    assert await budget._redis.get(budget._key("anthropic")) is None
+
+
+@pytest.mark.asyncio
+async def test_free_providers_publish_no_budget_gauges(budget):
+    """Ollama has no ceiling, so a headroom gauge for it would read as either
+    zero (looks exhausted) or infinite (breaks the graph). Neither should
+    exist."""
+    from prometheus_client import REGISTRY
+
+    await budget.spent("ollama")
+
+    for metric in ("gateway_provider_budget_spent_usd", "gateway_provider_budget_remaining_usd"):
+        assert REGISTRY.get_sample_value(metric, {"provider": "ollama"}) is None
