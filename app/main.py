@@ -81,13 +81,30 @@ FastAPIInstrumentor.instrument_app(app)
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
-if settings.allowed_cors_origins():
-    app.add_middleware(
+def _configure_cors(application: FastAPI) -> bool:
+    """Add the CORS middleware only when origins are configured.
+
+    A function rather than a bare `if` at import time so both outcomes are
+    reachable from a test. As module-level code the enabled branch could only
+    be exercised by reimporting this module, which re-runs the instrumentation
+    and the Prometheus metric definitions — so it was simply never covered,
+    on the one middleware whose job is deciding which sites may call this API.
+
+    Returns whether it was added, which is the only observable difference.
+    """
+    origins = settings.allowed_cors_origins()
+    if not origins:
+        return False
+    application.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.allowed_cors_origins(),
+        allow_origins=origins,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    return True
+
+
+_configure_cors(app)
 app.include_router(admin_router)
 
 
