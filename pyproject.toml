@@ -64,3 +64,14 @@ warn_redundant_casts = true
 # Alembic's generated migration scripts follow its own boilerplate, and
 # aren't hand-typed — same reasoning as the ruff exclude above.
 exclude = ["migrations/versions"]
+
+[tool.coverage.run]
+# SQLAlchemy's async support runs the sync half of a query inside a greenlet
+# (greenlet_spawn), and coverage does not trace greenlet-switched code unless
+# asked to. The effect was silent and specific: in any handler using an
+# AsyncSession, every line AFTER the first `await session.…` was reported as
+# never executed — including branches that tests were provably exercising.
+#
+# That made the coverage number understate reality and, worse, pointed at
+# already-tested code as the gap worth filling.
+concurrency = ["thread", "greenlet"]
