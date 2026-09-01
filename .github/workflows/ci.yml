@@ -115,7 +115,7 @@ jobs:
             | xargs -0 docker run --rm -v "$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:v0.11.0
 
       - name: Run tests with coverage
-        run: pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=92
+        run: pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=97
 
   postgres-migrations:
     runs-on: ubuntu-latest

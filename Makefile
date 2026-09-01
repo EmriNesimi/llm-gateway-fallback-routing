@@ -27,11 +27,14 @@ audit:
 # line like `if x: return` scores as covered when only the true side is
 # ever taken, which is how an untested early-return hides.
 #
-# The floor is 92 rather than 93 because the same code scores lower under
-# the stricter measure — 92 against branches is a harder promise than 93
-# against lines, not a relaxed one.
+# The floor was 92 when branch coverage was switched on, because the same
+# code scores lower under the stricter measure. Closing the real gaps since
+# then took it to 98%, so 92 had stopped being a floor and become a number
+# nothing could fall through. 97 leaves roughly the same headroom the floor
+# has always had — enough that the Redis integration tests skipping locally
+# doesn't fail the build, not so much that a whole module can rot out.
 test:
-	pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=92
+	pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=97
 
 run:
 	uvicorn app.main:app --reload

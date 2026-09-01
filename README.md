@@ -86,7 +86,7 @@ flowchart LR
 
 ## 🚧 build log
 
-Phase 5 complete ✅ — the gateway is now something an existing application can actually be pointed at: a drop-in OpenAI-compatible endpoint, real multi-chain routing, sampling controls that reach the provider, and the observability to see what any of it is doing. Spend is now bounded by a hard per-provider ceiling rather than a cap that resets and multiplies. 404 tests, 94% line-and-branch coverage against a 92% floor enforced in CI.
+Phase 5 complete ✅ — the gateway is now something an existing application can actually be pointed at: a drop-in OpenAI-compatible endpoint, real multi-chain routing, sampling controls that reach the provider, and the observability to see what any of it is doing. Spend is now bounded by a hard per-provider ceiling rather than a cap that resets and multiplies. 404 tests, 98% line-and-branch coverage against a 97% floor enforced in CI.
 
 - [x] Project scaffold, config, security foundations
 - [x] Provider adapters (OpenAI / Anthropic / Ollama) + fallback chain
@@ -340,7 +340,7 @@ make migrate-check
 make test
 ```
 
-(equivalent to `ruff check .`, `mypy`, `pip-audit -r requirements.txt -r requirements-dev.txt`, and `pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=92`; `make migrate-check` runs CI's `alembic check` for model/migration drift — see the `Makefile` for the rest: `make run`, `make migrate`, `make up`/`down`, `make demo`)
+(equivalent to `ruff check .`, `mypy`, `pip-audit -r requirements.txt -r requirements-dev.txt`, and `pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=97`; `make migrate-check` runs CI's `alembic check` for model/migration drift — see the `Makefile` for the rest: `make run`, `make migrate`, `make up`/`down`, `make demo`)
 
 Same commands CI runs on every push/PR to `main` — CI also runs a real Redis service container, so the rate limiter's Lua script is tested against genuine Redis, not just `fakeredis`'s emulation of it.
 

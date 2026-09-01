@@ -27,6 +27,19 @@ quietly going stale.
   `--strict-config`; ruff's bugbear rules.
 - `make check` runs the same set locally.
 
+**Test coverage**
+- Coverage now traces SQLAlchemy's greenlets. Without it, every line after the
+  first `await session.…` in a handler was reported as never executed —
+  including branches the tests were provably exercising.
+- Closed the real gaps that were left once the measurement was honest: the
+  request-size bound that limits cost, the spend ceiling's free-provider
+  exemptions, both skip paths in the router, Anthropic's system-prompt hoist
+  on the streaming path, and the startup guards for tracing and schema
+  creation. 98% line-and-branch, floor raised from 92% to 97%.
+- `worst_case_cost_usd` now warns when a model has no price, because a $0
+  worst case means no budget is reserved and the request escapes the ceiling
+  entirely. Only the billing side warned before.
+
 **Guards against drift**
 Each of these exists because the thing it checks had already gone stale at
 least once, silently:
