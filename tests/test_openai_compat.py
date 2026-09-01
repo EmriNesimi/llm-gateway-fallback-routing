@@ -278,3 +278,15 @@ async def test_openai_sdk_lists_models(openai_client):
     models = await openai_client.models.list()
 
     assert [m.id for m in models.data] == ["default", "fast", "local", "smart"]
+
+
+def test_streamed_requests_also_report_ignored_parameters(client):
+    """The streaming path sets this header on its own StreamingResponse rather
+    than on the shared `response` object, so it is a second implementation of
+    the same contract — and it was the untested one. A client that sends
+    `seed` and streams would otherwise get no hint it was dropped."""
+    r = client.post("/v1/chat/completions", json=_body(stream=True, seed=42, presence_penalty=0.5))
+
+    assert r.status_code == 200
+    assert r.headers["content-type"].startswith("text/event-stream")
+    assert r.headers["X-Gateway-Ignored-Params"] == "presence_penalty,seed"

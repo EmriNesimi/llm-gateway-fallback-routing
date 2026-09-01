@@ -232,3 +232,42 @@ def test_a_refused_request_does_not_leak_reservation(client, monkeypatch):
         client.post("/v1/chat", json=BODY, headers=HEADERS)
 
     assert client.portal.call(_spent) == pytest.approx(at_refusal)
+
+
+@pytest.mark.asyncio
+async def test_an_abort_before_any_provider_answered_refunds_everything(monkeypatch):
+    """The other half of the disconnect path.
+
+    _settle_stream_on_abort normally charges for tokens already generated. If
+    the client hung up before any provider committed, there is nothing to
+    charge for — but reservations were already taken across the chain, and
+    leaving them would permanently consume budget for a request that cost
+    nothing. Enough of those and the ceiling is reached without a cent spent.
+    """
+    import time
+
+    import fakeredis.aioredis
+
+    from app.budget.provider_budget import ProviderBudget
+
+    budget = ProviderBudget(redis=fakeredis.aioredis.FakeRedis(), cap_usd=4.0)
+    monkeypatch.setattr(main_module, "provider_budget", budget)
+
+    reservations = {"anthropic": 0.75, "openai": 0.50}
+    for provider, amount in reservations.items():
+        await budget.reserve(provider, amount)
+
+    await main_module._settle_stream_on_abort(
+        api_key="test-client-key",
+        requested_model="smart",
+        provider="",          # nobody answered
+        model="",
+        input_tokens=0,
+        streamed_chars=0,
+        reservations=reservations,
+        request_id="abort-before-first-chunk",
+        start=time.perf_counter(),
+    )
+
+    assert await budget.spent("anthropic") == pytest.approx(0.0)
+    assert await budget.spent("openai") == pytest.approx(0.0)
