@@ -158,3 +158,79 @@ async def test_result_model_is_requested_model_not_providers_echo():
     result = await router.chat([ChatMessage(role="user", content="hi")])
 
     assert result.model == "gpt-4o-mini"
+
+
+# --------------------------------------------------------------------------
+# Providers the router refuses to try at all
+# --------------------------------------------------------------------------
+#
+# Two reasons a provider gets skipped before any call: it has spent its
+# lifetime budget, or its breaker is open. Both were untested at this level,
+# which matters because the skip is what makes the spend ceiling free —
+# an exhausted provider that still gets probed still costs money.
+
+
+@pytest.mark.asyncio
+async def test_a_provider_out_of_budget_is_never_called():
+    """Not "is called and refused" — never called. A half-open trial request
+    is still billable, so the budget check sits ahead of the breaker."""
+    broke = FakeProvider("broke")
+    spare = FakeProvider("spare")
+    router = FallbackRouter(
+        chain=[(broke, "model-a", _breaker()), (spare, "model-b", _breaker())],
+        retry_attempts=0,
+        retry_backoff_seconds=0,
+    )
+
+    result = await router.chat(
+        [ChatMessage(role="user", content="hi")], skip_providers={"broke"}
+    )
+
+    assert broke.calls == 0
+    assert result.provider == "spare"
+
+
+@pytest.mark.asyncio
+async def test_a_provider_with_an_open_breaker_is_skipped():
+    tripped = CircuitBreaker(failure_threshold=1, cooldown_seconds=60)
+    tripped.record_failure()
+
+    down = FakeProvider("down")
+    spare = FakeProvider("spare")
+    router = FallbackRouter(
+        chain=[(down, "model-a", tripped), (spare, "model-b", _breaker())],
+        retry_attempts=0,
+        retry_backoff_seconds=0,
+    )
+
+    result = await router.chat([ChatMessage(role="user", content="hi")])
+
+    assert down.calls == 0
+    assert result.provider == "spare"
+
+
+@pytest.mark.asyncio
+async def test_every_breaker_open_fails_without_calling_anyone(caplog):
+    """Distinct from "everything was tried and failed": nothing was attempted
+    at all. The log line says so, because the two are indistinguishable from
+    the 502 alone and lead to completely different investigations."""
+    import logging
+
+    tripped = CircuitBreaker(failure_threshold=1, cooldown_seconds=60)
+    tripped.record_failure()
+    other = CircuitBreaker(failure_threshold=1, cooldown_seconds=60)
+    other.record_failure()
+
+    a, b = FakeProvider("a"), FakeProvider("b")
+    router = FallbackRouter(
+        chain=[(a, "model-a", tripped), (b, "model-b", other)],
+        retry_attempts=0,
+        retry_backoff_seconds=0,
+    )
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(AllProvidersFailedError):
+            await router.chat([ChatMessage(role="user", content="hi")])
+
+    assert a.calls == 0 and b.calls == 0
+    assert "nothing was attempted" in caplog.text
