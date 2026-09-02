@@ -716,7 +716,11 @@ async def _openai_event_stream(
     sequence the OpenAI SDK's stream parser expects."""
     start = time.perf_counter()
     final_provider = ""
-    final_model = requested_model
+    # Empty, not requested_model. This is priced against on the abort path,
+    # and requested_model is the chain name ("smart", "fast") — never a key in
+    # _PRICING. Seeding it here meant a client disconnect looked up a price
+    # that could not exist, got $0, and recorded nothing.
+    final_model = ""
     input_tokens = 0
     output_tokens = 0
     first = True
@@ -745,6 +749,12 @@ async def _openai_event_stream(
                 continue
             streamed_chars += len(chunk.content)
             final_provider = final_provider or chunk.provider
+            # Tracked per chunk, not only on the `done` chunk: a client that
+            # hangs up never sends one, and the abort handler prices the spend
+            # by model. Without this it settled against an empty model name,
+            # found no price, and charged $0 — the same bug that made the
+            # ceiling unreachable, still live on this endpoint.
+            final_model = final_model or chunk.model
             if first:
                 yield envelope({"role": "assistant"}, None, chunk.model or requested_model)
                 first = False
