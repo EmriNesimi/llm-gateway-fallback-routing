@@ -17,3 +17,4 @@ and so a reader can tell a deliberate trade from an accident.
 | 009 | An unknown model is served, loudly, unless the operator opts into rejecting it | [file](009-unknown-model-handling.md) |
 | 010 | Circuit breakers stay per-process, not shared through Redis | [file](010-per-process-circuit-breakers.md) |
 | 011 | A hard per-provider spend ceiling, separate from the per-key budget | [file](011-hard-provider-spend-ceiling.md) |
+| 012 | A request that cannot be costed is refused, not run | [file](012-uncostable-requests-are-refused.md) |
