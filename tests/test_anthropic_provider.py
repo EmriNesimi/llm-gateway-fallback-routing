@@ -138,3 +138,63 @@ async def test_streaming_without_a_system_prompt_sends_no_system_key(monkeypatch
         pass
 
     assert "system" not in captured
+
+
+class _Block:
+    def __init__(self, type_, text=""):
+        self.type = type_
+        self.text = text
+
+
+class _Usage:
+    input_tokens = 11
+    output_tokens = 22
+
+
+class _Response:
+    model = "claude-opus-5-20260101"
+    usage = _Usage()
+
+    def __init__(self, content):
+        self.content = content
+
+
+@pytest.mark.asyncio
+async def test_only_text_blocks_are_concatenated_into_the_reply(monkeypatch):
+    """Anthropic returns `content` as a list of typed blocks, not a string.
+    Non-text blocks have no `.text`, so including them would raise — and
+    joining them blindly would splice tool-use metadata into what the caller
+    sees as the model's answer.
+
+    Only the error paths of this method were tested; the response parsing that
+    produces every successful Anthropic reply was not.
+    """
+    provider = AnthropicProvider(api_key="test")
+
+    async def fake_create(**kwargs):
+        return _Response([_Block("text", "hello "), _Block("tool_use"), _Block("text", "world")])
+
+    monkeypatch.setattr(provider._client.messages, "create", fake_create)
+
+    result = await provider.chat("claude-opus-5", [ChatMessage(role="user", content="hi")])
+
+    assert result.content == "hello world"
+    assert result.provider == "anthropic"
+    assert result.input_tokens == 11
+    assert result.output_tokens == 22
+
+
+@pytest.mark.asyncio
+async def test_the_model_reported_is_the_one_anthropic_echoed(monkeypatch):
+    """Anthropic answers with a dated snapshot id. Reporting the requested
+    name instead would make the audit log claim a model that never ran."""
+    provider = AnthropicProvider(api_key="test")
+
+    async def fake_create(**kwargs):
+        return _Response([_Block("text", "ok")])
+
+    monkeypatch.setattr(provider._client.messages, "create", fake_create)
+
+    result = await provider.chat("claude-opus-5", [ChatMessage(role="user", content="hi")])
+
+    assert result.model == "claude-opus-5-20260101"
