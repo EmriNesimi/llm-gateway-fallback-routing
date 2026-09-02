@@ -19,7 +19,11 @@ from sqlalchemy import text
 from app.admin.routes import router as admin_router
 from app.budget.dependency import enforce_budget, provider_budget
 from app.budget.dependency import tracker as budget_tracker
-from app.budget.pricing import estimate_cost_usd, worst_case_cost_usd
+from app.budget.pricing import (
+    UnpricedModelError,
+    estimate_cost_usd,
+    worst_case_cost_usd,
+)
 from app.budget.provider_budget import FREE_PROVIDERS, ProviderBudgetExhausted
 from app.core.config import settings
 from app.core.redis_client import get_redis
@@ -330,13 +334,24 @@ async def _reserve_chain(
 
     reservations: dict[str, float] = {}
     skip: set[str] = set()
+    unpriced: set[str] = set()
     billable = 0
 
     for provider, model in FALLBACK_CHAINS[chain_name]:
         if provider in FREE_PROVIDERS:
             continue
         billable += 1
-        cost = worst_case_cost_usd(provider, model, chars, max_out)
+        try:
+            cost = worst_case_cost_usd(provider, model, chars, max_out)
+        except UnpricedModelError:
+            # Un-costable, so the ceiling cannot apply to it. Dropped from the
+            # chain exactly like an exhausted provider rather than failing the
+            # whole request — a priced provider further down can still serve
+            # it, and refusing outright would turn one missing table entry
+            # into a total outage.
+            skip.add(provider)
+            unpriced.add(provider)
+            continue
         try:
             await provider_budget.reserve(provider, cost)
             reservations[provider] = cost
@@ -345,17 +360,27 @@ async def _reserve_chain(
 
     has_free_hop = any(p in FREE_PROVIDERS for p, _ in FALLBACK_CHAINS[chain_name])
     if billable and len(skip) == billable and not has_free_hop:
+        exhausted = skip - unpriced
         logger.error(
-            "[request_id=%s] refusing: every provider in chain %r is out of budget",
+            "[request_id=%s] refusing: no usable provider in chain %r"
+            " (out of budget: %s; unpriced: %s)",
             request_id,
             chain_name,
+            sorted(exhausted) or "none",
+            sorted(unpriced) or "none",
         )
+        # 402 when money is why, 503 when it is a missing pricing entry —
+        # the first is the caller's problem to wait out, the second is an
+        # operator misconfiguration and retrying will never fix it.
         raise HTTPException(
-            status_code=402,
+            status_code=402 if exhausted else 503,
             detail={
-                "error": "provider budget exhausted",
+                "error": (
+                    "provider budget exhausted" if exhausted else "no pricing configured"
+                ),
                 "spent": await provider_budget.snapshot(),
                 "cap_usd": provider_budget.cap_usd,
+                "unpriced": sorted(unpriced),
                 "request_id": request_id,
             },
         )

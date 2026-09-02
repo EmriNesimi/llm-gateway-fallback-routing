@@ -271,3 +271,49 @@ async def test_an_abort_before_any_provider_answered_refunds_everything(monkeypa
 
     assert await budget.spent("anthropic") == pytest.approx(0.0)
     assert await budget.spent("openai") == pytest.approx(0.0)
+
+
+# --------------------------------------------------------------------------
+# Un-costable requests
+# --------------------------------------------------------------------------
+
+
+def test_an_unpriced_provider_is_stepped_over_not_called(client, monkeypatch):
+    """A missing pricing entry makes a provider un-costable, so the ceiling
+    cannot apply to it and it must not be called. It is dropped from the chain
+    exactly like an exhausted one — the next provider still serves the
+    request, because one missing table row should not be an outage."""
+    from app.budget import pricing
+
+    original = pricing._PRICING.copy()
+    monkeypatch.setattr(
+        pricing,
+        "_PRICING",
+        {k: v for k, v in original.items() if not k.startswith("anthropic:")},
+    )
+
+    router = Router()
+    monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", router))
+
+    r = client.post("/v1/chat", json=BODY, headers=HEADERS)
+
+    assert r.status_code == 200
+    # "smart" is anthropic then openai; anthropic is now unpriced.
+    assert r.json()["provider"] == "openai"
+    assert router.served == ["openai"], "the unpriced provider was called anyway"
+
+
+def test_a_chain_with_no_priced_provider_is_refused_as_misconfiguration(client, monkeypatch):
+    """503, not 402. Money is not the problem and waiting will not fix it —
+    an operator has to add the pricing entry."""
+    from app.budget import pricing
+
+    monkeypatch.setattr(pricing, "_PRICING", {})
+    monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router()))
+
+    r = client.post("/v1/chat", json=BODY, headers=HEADERS)
+
+    assert r.status_code == 503
+    detail = r.json()["detail"]
+    assert detail["error"] == "no pricing configured"
+    assert detail["unpriced"] == ["anthropic", "openai"]

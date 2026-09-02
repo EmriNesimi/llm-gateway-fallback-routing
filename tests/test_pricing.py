@@ -1,6 +1,13 @@
 import logging
 
-from app.budget.pricing import _PRICING, estimate_cost_usd, worst_case_cost_usd
+import pytest
+
+from app.budget.pricing import (
+    _PRICING,
+    UnpricedModelError,
+    estimate_cost_usd,
+    worst_case_cost_usd,
+)
 from app.routing.model_map import FALLBACK_CHAINS
 
 # Ollama runs locally at no cost and deliberately has no pricing entry — see
@@ -61,27 +68,28 @@ def test_unknown_non_ollama_model_costs_zero_but_warns_loudly(caplog):
     assert "openai:some-future-model" in caplog.records[0].message
 
 
-def test_unpriced_model_reserves_nothing_and_says_so(caplog):
-    """The reservation counterpart to the billing warning above.
-
-    A $0 worst case means reserve() claims no headroom, so the request runs
-    entirely outside the lifetime ceiling. That is the one control meant to be
-    un-bypassable, so it must not go quiet — and it did: the billing path
-    warned, this one returned 0.0 without a word.
+def test_an_unpriced_model_cannot_be_reserved_for(caplog):
+    """Fail-closed. A $0 worst case used to mean reserve() claimed nothing, so
+    the request ran outside the lifetime ceiling entirely — the one control
+    meant to be un-bypassable. The honest answer to "how much could this cost"
+    is "unknown", and unknown has to mean no.
 
     test_every_routable_model_has_a_pricing_entry is what stops this happening
-    for a real model; this covers what happens if it ever does.
+    for a real model; this is the behaviour if that guard is ever wrong.
     """
-    with caplog.at_level(logging.WARNING):
-        cost = worst_case_cost_usd("openai", "not-a-real-model", 10_000, 2048)
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(UnpricedModelError) as exc_info:
+            worst_case_cost_usd("openai", "not-a-real-model", 10_000, 2048)
 
-    assert cost == 0.0
-    assert "no budget will be reserved" in caplog.text
+    assert exc_info.value.provider == "openai"
+    assert exc_info.value.model == "not-a-real-model"
+    assert "openai:not-a-real-model" in caplog.text
 
 
-def test_ollama_reserves_nothing_without_warning(caplog):
-    """Ollama has no pricing entry by design, so warning here would fire on
-    every local request."""
+def test_ollama_costs_nothing_without_complaint(caplog):
+    """Ollama bills nothing, so "no price" is correct rather than missing. It
+    must not raise, or the free fallback that exists for when the paid
+    providers are gone would be the first thing to break."""
     with caplog.at_level(logging.WARNING):
         cost = worst_case_cost_usd("ollama", "llama3", 10_000, 2048)
 

@@ -5,6 +5,26 @@ Ollama is local/free, so it has no entry and costs $0.
 
 import logging
 
+
+class UnpricedModelError(Exception):
+    """Raised when a billable model has no entry in _PRICING.
+
+    Only ever raised from the reservation path. Returning $0 there meant
+    reserving nothing, so the request ran entirely outside the lifetime
+    ceiling — the one control that is supposed to be un-bypassable. Refusing
+    to price it is the fail-closed answer: an un-costable request is one we
+    cannot promise to stop.
+    """
+
+    def __init__(self, provider: str, model: str):
+        super().__init__(
+            f"no pricing entry for {provider}:{model} — cannot bound the cost of"
+            " this request, so it cannot be allowed to run"
+        )
+        self.provider = provider
+        self.model = model
+
+
 logger = logging.getLogger("gateway.pricing")
 
 # (input_price_per_token, output_price_per_token), quoted per 1M tokens below
@@ -30,6 +50,9 @@ _PRICING: dict[str, tuple[float, float]] = {
 # reserving budget rather than billing.
 _CHARS_PER_TOKEN = 3
 
+# Bills nothing, so "no price" is correct rather than missing.
+_FREE_PROVIDERS = frozenset({"ollama"})
+
 
 def worst_case_cost_usd(
     provider: str, model: str, input_chars: int, max_output_tokens: int
@@ -41,26 +64,27 @@ def worst_case_cost_usd(
     headroom, and concurrent requests all observing the same pre-call total.
     Reserving the upper bound closes both.
 
-    An unpriced model returns 0.0, matching estimate_cost_usd, but that can't
-    silently happen: tests/test_pricing.py fails the build if any model
-    reachable from a chain has no price.
+    A billable model with no price raises UnpricedModelError rather than
+    returning 0.0. A $0 worst case reserves nothing, which lets the request run
+    outside the lifetime ceiling entirely — so the honest answer to "how much
+    could this cost" is "unknown", and unknown has to mean no.
+
+    tests/test_pricing.py fails the build if any model reachable from a chain
+    has no price, so this should be unreachable in practice. It is the
+    behaviour if that guard is ever wrong.
     """
     key = f"{provider}:{model}"
     pricing = _PRICING.get(key)
     if pricing is None:
-        if provider != "ollama":
-            # Same reasoning as estimate_cost_usd, and worse here. A $0
-            # worst case means reserve() claims nothing, so the request runs
-            # entirely outside the lifetime ceiling — the one control that
-            # is supposed to be un-bypassable. This path warned on the
-            # billing side and said nothing on the reservation side.
-            logger.warning(
-                "no pricing entry for %s — no budget will be reserved for this"
-                " request, so the provider ceiling will not apply to it. Add an"
-                " entry to app/budget/pricing.py's _PRICING.",
-                key,
-            )
-        return 0.0
+        if provider in _FREE_PROVIDERS:
+            return 0.0
+        logger.error(
+            "no pricing entry for %s — refusing to reserve budget for an"
+            " un-costable request. Add an entry to app/budget/pricing.py's"
+            " _PRICING.",
+            key,
+        )
+        raise UnpricedModelError(provider, model)
     input_price, output_price = pricing
     return (input_chars / _CHARS_PER_TOKEN) * input_price + max_output_tokens * output_price
 
