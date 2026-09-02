@@ -200,3 +200,49 @@ def test_transport_errors_are_retryable():
     exc = httpx.ConnectError("connection refused")
 
     assert _provider_error("ollama", exc).retryable is True
+
+
+# --------------------------------------------------------------------------
+# Transport failures
+# --------------------------------------------------------------------------
+#
+# Ollama runs on the operator's own machine, so "not running" is its normal
+# failure — far more likely than a bad response. Both entry points have to
+# turn that into ProviderError, because anything else escapes FallbackRouter's
+# except clause and becomes a 500 instead of a fallback to a paid provider.
+
+
+@pytest.mark.asyncio
+async def test_chat_turns_a_connection_failure_into_a_provider_error(monkeypatch):
+    provider = OllamaProvider(base_url="http://localhost:11434")
+
+    async def fake_post(self, url, json):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr("httpx.AsyncClient.post", fake_post)
+
+    with pytest.raises(ProviderError) as exc_info:
+        await provider.chat("llama3", [])
+
+    assert exc_info.value.retryable is True
+    assert "ollama request failed" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_turns_a_connection_failure_into_a_provider_error(monkeypatch):
+    """The streaming path has its own try/except and its own message prefix,
+    so it needs its own test — a stream that raised httpx straight through
+    would surface as a 500 mid-response rather than a fallback."""
+    provider = OllamaProvider(base_url="http://localhost:11434")
+
+    def fake_stream(self, method, url, json):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr("httpx.AsyncClient.stream", fake_stream)
+
+    with pytest.raises(ProviderError) as exc_info:
+        async for _ in provider.chat_stream("llama3", []):
+            pass
+
+    assert exc_info.value.retryable is True
+    assert "ollama stream failed" in str(exc_info.value)
