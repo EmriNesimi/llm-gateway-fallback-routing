@@ -27,6 +27,20 @@ quietly going stale.
   `--strict-config`; ruff's bugbear rules.
 - `make check` runs the same set locally.
 
+**Cost control**
+- A model with no pricing entry is now **refused** rather than run. A missing
+  price meant a `$0` worst case, which reserved nothing and let the request
+  run outside the lifetime ceiling entirely — a bypass in the one control
+  designed not to have one. The provider is dropped from the chain like an
+  exhausted one so fallback still serves the request; only an entirely
+  unpriced chain fails, with `503 no pricing configured`. See
+  [decision 012](docs/decisions/012-uncostable-requests-are-refused.md).
+- Spend with no matching reservation is now actually charged.
+  `record_unreserved` existed for the client-hangup case, was documented as
+  the escape hatch and unit-tested, and was never called from anywhere — so
+  `_settle_chain` silently dropped any charge against a provider that had no
+  reservation.
+
 **Test coverage**
 - Coverage now traces SQLAlchemy's greenlets. Without it, every line after the
   first `await session.…` in a handler was reported as never executed —
