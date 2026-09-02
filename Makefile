@@ -27,14 +27,16 @@ audit:
 # line like `if x: return` scores as covered when only the true side is
 # ever taken, which is how an untested early-return hides.
 #
-# The floor was 92 when branch coverage was switched on, because the same
-# code scores lower under the stricter measure. Closing the real gaps since
-# then took it to 98%, so 92 had stopped being a floor and become a number
-# nothing could fall through. 97 leaves roughly the same headroom the floor
-# has always had — enough that the Redis integration tests skipping locally
-# doesn't fail the build, not so much that a whole module can rot out.
+# The floor tracks reality rather than sitting where it was first set: 92
+# when branch coverage arrived, 97 once the real gaps were closed, 99 now
+# that only one branch is left uncovered. A floor well below what the suite
+# actually achieves is not a safety net — a whole module can rot out without
+# the build noticing.
+#
+# 99 still allows for the Redis integration tests skipping locally, which is
+# the only legitimate reason the number moves between environments.
 test:
-	pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=97
+	pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=99
 
 run:
 	uvicorn app.main:app --reload
