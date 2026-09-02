@@ -453,6 +453,14 @@ async def _settle_chain(
             provider, reserved, actual_usd if provider == served_provider else 0.0
         )
 
+    if served_provider and served_provider not in reservations:
+        # Real spend with no reservation to swap. settle() would do nothing
+        # here — it only walks the reservations — so the charge would simply
+        # be dropped, and dropped spend is how a ceiling stops being one.
+        # ProviderBudget.record_unreserved exists for exactly this and was
+        # never actually called from anywhere.
+        await provider_budget.record_unreserved(served_provider, actual_usd)
+
 
 async def _serve_chat(
     router: FallbackRouter,

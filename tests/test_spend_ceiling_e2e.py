@@ -317,3 +317,77 @@ def test_a_chain_with_no_priced_provider_is_refused_as_misconfiguration(client, 
     detail = r.json()["detail"]
     assert detail["error"] == "no pricing configured"
     assert detail["unpriced"] == ["anthropic", "openai"]
+
+
+@pytest.mark.asyncio
+async def test_hanging_up_mid_stream_charges_for_what_was_generated(monkeypatch):
+    """The bug that made this whole ceiling inert, covered directly.
+
+    Starlette closes the generator when a client disconnects, so every line
+    after the streaming loop is skipped. Spend was recorded there, which meant
+    a disconnect recorded $0.00 — the provider had already generated and
+    billed the tokens, and the ledger never moved. Enough of those and the cap
+    is unreachable by construction.
+
+    The e2e streaming tests read the response to completion, so they never
+    reach this handler. Driving the generator and closing it early is the only
+    way to exercise what an aborted client actually does.
+    """
+    import time
+
+    import fakeredis.aioredis
+
+    from app.budget.provider_budget import ProviderBudget
+
+    budget = ProviderBudget(redis=fakeredis.aioredis.FakeRedis(), cap_usd=4.0)
+    monkeypatch.setattr(main_module, "provider_budget", budget)
+
+    await budget.reserve("anthropic", 0.90)
+
+    await main_module._settle_stream_on_abort(
+        api_key="test-client-key",
+        requested_model="smart",
+        provider="anthropic",
+        model="claude-opus-5",
+        input_tokens=1000,
+        streamed_chars=9_000,      # ~3000 output tokens at _CHARS_PER_TOKEN
+        reservations={"anthropic": 0.90},
+        request_id="client-hung-up",
+        start=time.perf_counter(),
+    )
+
+    spent = await budget.spent("anthropic")
+
+    # The reservation is replaced by a real charge, not refunded and not left
+    # sitting at the reserved amount.
+    assert spent > 0, "a disconnected stream recorded nothing — the ceiling cannot advance"
+    assert spent != pytest.approx(0.90), "the reservation was never settled"
+
+
+@pytest.mark.asyncio
+async def test_the_estimate_is_biased_high_not_low(monkeypatch):
+    """Under-charging here is how a ceiling quietly stops being one, so the
+    estimate must not round down to nothing. One character streamed still
+    costs something."""
+    import time
+
+    import fakeredis.aioredis
+
+    from app.budget.provider_budget import ProviderBudget
+
+    budget = ProviderBudget(redis=fakeredis.aioredis.FakeRedis(), cap_usd=4.0)
+    monkeypatch.setattr(main_module, "provider_budget", budget)
+
+    await main_module._settle_stream_on_abort(
+        api_key="test-client-key",
+        requested_model="smart",
+        provider="anthropic",
+        model="claude-opus-5",
+        input_tokens=1,
+        streamed_chars=1,
+        reservations=None,
+        request_id="one-character",
+        start=time.perf_counter(),
+    )
+
+    assert await budget.spent("anthropic") > 0
