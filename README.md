@@ -41,6 +41,7 @@ Every request into this gateway is a **packet looking for a route**. It hits aut
 | 🚫 | Rate limit or budget cap hit before a provider was ever called — `429` / `402` |
 | ⚫ | Provider's circuit is open (too many recent failures) — skipped without a network call |
 | 🧯 | Provider has spent its lifetime ceiling — dropped from the chain before it can be called, `402` if every provider in the chain is |
+| 💸 | Provider's model has no price, so its cost can't be bounded — dropped the same way, `503` if that leaves nothing usable |
 
 ## ⚙️ what it does
 
@@ -423,6 +424,15 @@ Over the ceiling, the reservation is handed back and the request refused with
 a `402`; the provider is never called, so nothing is spent. An unreachable
 Redis refuses too: being unable to prove there's budget left isn't the same as
 having budget left.
+
+A model with no entry in `app/budget/pricing.py` is refused rather than run.
+A missing price used to mean a `$0` worst case, which reserved nothing and let
+the request run outside the ceiling entirely — a bypass in the one control
+that is supposed to have none. That provider is now dropped from the chain
+like an exhausted one, so fallback still serves the request; only if nothing
+priced is left does it fail, with `503` and `no pricing configured` rather
+than `402`. Money isn't the problem there and retrying won't fix it. See
+[decision 012](docs/decisions/012-uncostable-requests-are-refused.md).
 
 Two things this rests on, both of which had to be fixed first:
 
