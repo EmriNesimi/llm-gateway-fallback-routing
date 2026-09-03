@@ -203,3 +203,59 @@ async def test_a_non_retryable_stream_failure_falls_back_without_retrying():
 
     assert doomed.calls == 1, "a non-retryable failure was retried anyway"
     assert "".join(c.content for c in chunks) == "hello world"
+
+
+class _EmptyStreamProvider(BaseProvider):
+    """Ends the stream without yielding anything — no chunks, no error."""
+
+    name = "empty"
+
+    def __init__(self):
+        self.calls = 0
+
+    async def chat(self, model, messages, params=None):
+        raise NotImplementedError
+
+    async def chat_stream(self, model, messages, params=None):
+        self.calls += 1
+        return
+        yield  # pragma: no cover - makes this an async generator
+
+
+@pytest.mark.asyncio
+async def test_a_provider_that_streams_nothing_falls_back():
+    """A stream that ends immediately is a failure, not an empty answer.
+
+    Nothing raises here — the provider just stops — so without turning
+    StopAsyncIteration into a ProviderError the router would treat it as a
+    successful empty response and hand the caller a blank reply, having
+    skipped every remaining provider in the chain. The caller gets nothing and
+    no error explaining why.
+    """
+    empty = _EmptyStreamProvider()
+    spare = FakeStreamProvider("spare")
+    router = FallbackRouter(
+        chain=[(empty, "model-a", _breaker()), (spare, "model-b", _breaker())],
+        retry_attempts=0,
+        retry_backoff_seconds=0,
+    )
+
+    chunks = [c async for c in router.chat_stream([])]
+
+    assert empty.calls == 1
+    assert "".join(c.content for c in chunks) == "hello world"
+
+
+@pytest.mark.asyncio
+async def test_every_provider_streaming_nothing_is_an_error_not_an_empty_reply():
+    """The end of that logic: if the whole chain produces no chunks, the
+    caller must get a failure rather than a successful blank."""
+    a, b = _EmptyStreamProvider(), _EmptyStreamProvider()
+    router = FallbackRouter(
+        chain=[(a, "model-a", _breaker()), (b, "model-b", _breaker())],
+        retry_attempts=0,
+        retry_backoff_seconds=0,
+    )
+
+    with pytest.raises(AllProvidersFailedError):
+        [c async for c in router.chat_stream([])]
