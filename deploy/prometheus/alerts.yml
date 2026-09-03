@@ -68,6 +68,26 @@ groups:
             No division-by-zero guard is needed: with no traffic both rates are
             0, and 0/0 is NaN, which fails the comparison rather than firing.
 
+      # Not covered by the budget alerts below: this is not a money problem.
+      # A chain reaching a model with no pricing entry means the gateway
+      # cannot bound what a request would cost, so it refuses rather than run
+      # it un-metered (decision 012). Waiting does not fix it and no balance
+      # is running out — someone has to add the entry.
+      #
+      # Any occurrence at all is worth waking up for, hence a threshold of
+      # zero rather than a rate: the build guard that makes this unreachable
+      # has already failed if this fires.
+      - alert: GatewayRefusingUnpricedRequests
+        expr: increase(gateway_requests_refused_total{reason="no_pricing_configured"}[10m]) > 0
+        for: 0m
+        labels: {severity: critical}
+        annotations:
+          summary: "requests refused because a model has no price"
+          description: >-
+            A routable model is missing from app/budget/pricing.py, so its cost
+            cannot be bounded and the chain has nothing usable left. Retrying
+            will not help.
+
       # The gauge added for exactly this. gateway_cost_usd_total only ever
       # says what has gone; without a headroom alert the first warning is a
       # 402 after the balance is spent.
