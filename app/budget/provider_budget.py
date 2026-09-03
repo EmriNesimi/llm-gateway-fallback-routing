@@ -161,6 +161,12 @@ class ProviderBudget:
             return
         await self._redis.incrbyfloat(self._key(provider), actual_usd)
 
-    async def snapshot(self, providers: tuple[str, ...] = ("openai", "anthropic")) -> dict:
-        """Current spend per provider, for operators and for tests."""
+    async def snapshot(self, providers: tuple[str, ...]) -> dict:
+        """Current spend per provider, for operators and for tests.
+
+        Takes the list rather than defaulting to one. This module has no way
+        to know which providers exist — that lives in the routing chains — and
+        the default it used to carry was a literal pair that would have gone
+        stale the moment a third paid provider was added.
+        """
         return {p: await self.spent(p) for p in providers}

@@ -242,3 +242,21 @@ def test_models_endpoint_reports_the_providers_behind_each_name(client):
     by_id = {entry["id"]: entry for entry in r.json()["data"]}
     assert by_id["local"]["providers"] == ["ollama"]
     assert by_id["smart"]["providers"] == ["anthropic", "openai"]
+
+
+def test_billable_providers_are_derived_from_the_chains():
+    """The spend snapshot in a refusal names these. It used to be the literal
+    ("openai", "anthropic"), so a third paid provider would have been missing
+    from every "here is what you have spent" message — the one place an
+    operator looks when the gateway says it is out of budget."""
+    from app.budget.provider_budget import FREE_PROVIDERS
+    from app.routing.model_map import FALLBACK_CHAINS, billable_providers
+
+    derived = billable_providers()
+    everything = {p for chain in FALLBACK_CHAINS.values() for p, _ in chain}
+
+    assert set(derived) == everything - FREE_PROVIDERS
+    assert derived == tuple(sorted(derived)), "order must be stable for the response body"
+    # Ollama is reachable from a chain and must not appear: it has no ceiling,
+    # so reporting spend for it would be meaningless.
+    assert not set(derived) & FREE_PROVIDERS

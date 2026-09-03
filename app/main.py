@@ -40,6 +40,7 @@ from app.routing.fallback import AllProvidersFailedError, FallbackRouter
 from app.routing.model_map import (
     DEFAULT_CHAIN_NAME,
     FALLBACK_CHAINS,
+    billable_providers,
     is_routable,
     routable_models,
 )
@@ -378,7 +379,7 @@ async def _reserve_chain(
                 "error": (
                     "provider budget exhausted" if exhausted else "no pricing configured"
                 ),
-                "spent": await provider_budget.snapshot(),
+                "spent": await provider_budget.snapshot(billable_providers()),
                 "cap_usd": provider_budget.cap_usd,
                 "unpriced": sorted(unpriced),
                 "request_id": request_id,

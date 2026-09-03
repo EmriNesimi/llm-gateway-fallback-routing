@@ -42,6 +42,29 @@ FALLBACK_CHAINS: dict[str, list[tuple[str, str]]] = {
 DEFAULT_CHAIN_NAME = "default"
 
 
+def billable_providers() -> tuple[str, ...]:
+    """Every provider any chain can reach that actually charges money.
+
+    Derived from the chains rather than written down again. The spend snapshot
+    in a refusal response used to name ("openai", "anthropic") as a literal,
+    so adding a third paid provider would have quietly dropped it from every
+    "here is what you have spent" message — the one place an operator looks
+    when the gateway says it is out of budget.
+    """
+    from app.budget.provider_budget import FREE_PROVIDERS
+
+    return tuple(
+        sorted(
+            {
+                provider
+                for chain in FALLBACK_CHAINS.values()
+                for provider, _ in chain
+                if provider not in FREE_PROVIDERS
+            }
+        )
+    )
+
+
 def routable_models() -> list[str]:
     """Chain names a caller may pass as `model`, for discovery and errors."""
     return sorted(FALLBACK_CHAINS)
