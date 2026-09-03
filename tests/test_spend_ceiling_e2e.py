@@ -391,3 +391,45 @@ async def test_the_estimate_is_biased_high_not_low(monkeypatch):
     )
 
     assert await budget.spent("anthropic") > 0
+
+
+def _refusals(reason: str) -> float:
+    from prometheus_client import REGISTRY
+
+    return REGISTRY.get_sample_value(
+        "gateway_requests_refused_total", {"reason": reason}
+    ) or 0.0
+
+
+def test_a_budget_refusal_is_counted(client, monkeypatch):
+    """A refused request never reaches REQUEST_COUNT — it raises out of
+    _reserve_chain before the handler records anything. So the dashboards
+    showed a healthy, quietly idle gateway at exactly the moment it started
+    turning every request away."""
+    monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router()))
+
+    before = _refusals("provider_budget_exhausted")
+
+    # Spend the ceiling, then ask again.
+    for _ in range(6):
+        client.post("/v1/chat", json=BODY, headers=HEADERS)
+    r = client.post("/v1/chat", json=BODY, headers=HEADERS)
+
+    assert r.status_code == 402
+    assert _refusals("provider_budget_exhausted") > before
+
+
+def test_a_pricing_refusal_is_counted_under_its_own_reason(client, monkeypatch):
+    """Separate label, because the two need different responses: one is
+    waiting for budget, the other is an operator adding a table entry."""
+    from app.budget import pricing
+
+    monkeypatch.setattr(pricing, "_PRICING", {})
+    monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router()))
+
+    before = _refusals("no_pricing_configured")
+
+    r = client.post("/v1/chat", json=BODY, headers=HEADERS)
+
+    assert r.status_code == 503
+    assert _refusals("no_pricing_configured") == before + 1

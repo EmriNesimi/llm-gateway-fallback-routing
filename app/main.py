@@ -30,7 +30,13 @@ from app.core.redis_client import get_redis
 from app.db.audit import record_audit_log
 from app.db.session import async_session, engine, init_db
 from app.observability.logging_config import configure_logging
-from app.observability.metrics import COST_USD, REQUEST_COUNT, REQUEST_LATENCY, TOKENS
+from app.observability.metrics import (
+    COST_USD,
+    REQUEST_COUNT,
+    REQUEST_LATENCY,
+    REQUESTS_REFUSED,
+    TOKENS,
+)
 from app.observability.request_id import RequestIDMiddleware
 from app.observability.security_headers import SecurityHeadersMiddleware
 from app.observability.tracing import configure_tracing
@@ -370,6 +376,9 @@ async def _reserve_chain(
             sorted(exhausted) or "none",
             sorted(unpriced) or "none",
         )
+        REQUESTS_REFUSED.labels(
+            reason="provider_budget_exhausted" if exhausted else "no_pricing_configured"
+        ).inc()
         # 402 when money is why, 503 when it is a missing pricing entry —
         # the first is the caller's problem to wait out, the second is an
         # operator misconfiguration and retrying will never fix it.

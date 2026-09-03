@@ -6,6 +6,17 @@ REQUEST_COUNT = Counter(
     ["status"],
 )
 
+# A refused request never reaches REQUEST_COUNT: it raises out of a
+# dependency or out of _reserve_chain, before the handler records anything.
+# So the two outcomes an operator most wants to see — "we are turning traffic
+# away" and why — were visible only in logs, and the dashboards showed a
+# perfectly healthy, quietly idle gateway.
+REQUESTS_REFUSED = Counter(
+    "gateway_requests_refused_total",
+    "Requests turned away before any provider was called, by reason",
+    ["reason"],
+)
+
 REQUEST_LATENCY = Histogram(
     "gateway_request_latency_seconds",
     "End-to-end latency of chat requests",
