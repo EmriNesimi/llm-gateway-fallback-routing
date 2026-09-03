@@ -296,6 +296,27 @@
         },
         "overrides": []
       }
+    },
+    {
+      "id": 11,
+      "title": "Refusals by reason",
+      "type": "timeseries",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 40
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(gateway_requests_refused_total[5m])) by (reason)",
+          "legendFormat": "{{reason}}"
+        }
+      ]
     }
   ]
 }
