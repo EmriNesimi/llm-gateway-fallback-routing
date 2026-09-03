@@ -365,3 +365,41 @@ def test_alert_rules_select_on_refusal_reasons_that_exist():
         f"alerts.yml selects refusal reason(s) {unknown} that no code emits"
         f" (emitted: {sorted(emitted)}) — those alerts would never fire"
     )
+
+
+def test_every_metric_is_graphed_or_alerted():
+    """The reverse of the two guards above.
+
+    Those catch a dashboard or alert pointing at a metric that does not exist.
+    This catches a metric that exists and nothing looks at — which is not
+    harmless: it is cardinality and code carried on the belief that someone is
+    watching. gateway_provider_budget_spent_usd was exactly that, published
+    on every ledger read and shown nowhere, while being the more authoritative
+    spend figure (the shared Redis ledger, not one process's counter).
+    """
+    import pathlib
+    import re
+
+    declared = set(
+        re.findall(r'"(gateway_[a-z_]+)"', pathlib.Path("app/observability/metrics.py").read_text())
+    )
+    assert declared, "no metrics declared — the guard would pass vacuously"
+
+    watched_text = (
+        pathlib.Path("deploy/grafana/dashboards/gateway-overview.json").read_text()
+        + pathlib.Path("deploy/prometheus/alerts.yml").read_text()
+    )
+
+    def base(name: str) -> str:
+        for suffix in ("_bucket", "_count", "_sum", "_total"):
+            if name.endswith(suffix):
+                return name[: -len(suffix)]
+        return name
+
+    watched = {base(n) for n in re.findall(r"gateway_[a-z_]+", watched_text)}
+
+    orphans = sorted(m for m in declared if base(m) not in watched)
+    assert not orphans, (
+        f"{orphans} are exported but appear in no dashboard panel and no alert"
+        " rule — nobody would ever see them"
+    )

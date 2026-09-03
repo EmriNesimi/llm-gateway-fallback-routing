@@ -254,7 +254,7 @@
     },
     {
       "id": 10,
-      "title": "Budget headroom remaining (USD)",
+      "title": "Lifetime spend vs headroom (USD)",
       "type": "timeseries",
       "gridPos": {
         "h": 8,
@@ -269,7 +269,11 @@
       "targets": [
         {
           "expr": "gateway_provider_budget_remaining_usd",
-          "legendFormat": "{{provider}}"
+          "legendFormat": "{{provider}} remaining"
+        },
+        {
+          "expr": "gateway_provider_budget_spent_usd",
+          "legendFormat": "{{provider}} spent"
         }
       ],
       "fieldConfig": {
