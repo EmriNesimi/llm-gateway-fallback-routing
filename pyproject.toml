@@ -20,6 +20,13 @@ addopts = "--strict-markers --strict-config"
 filterwarnings = [
     "error",
     "ignore:Using `httpx` with `starlette.testclient` is deprecated",
+    # anyio 4.15 deprecated the anyio.abc.BlockingPortal alias; Starlette's
+    # TestClient still imports it. Nothing here can act on that, and with
+    # "error" above it took the whole suite down at collection — 17 files,
+    # on a commit that had passed CI the day before, with no code change.
+    # That is the cost of warnings-as-errors, and the exemption is narrow
+    # enough to expire on its own once Starlette moves.
+    "ignore:The anyio.abc.BlockingPortal alias is deprecated",
 ]
 
 [tool.ruff]
