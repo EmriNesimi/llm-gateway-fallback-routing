@@ -298,3 +298,38 @@ def test_target_down_alert_matches_the_scrape_job_name():
         f" prometheus.yml does not scrape (it defines {sorted(configured)}) —"
         " the alert would never fire"
     )
+
+
+def test_every_refusal_reason_is_a_distinct_label():
+    """The reasons must stay separable, because each one has a different fix:
+    wait (rate_limit), raise the caller's cap (key_budget_exhausted), top up
+    the provider balance (provider_budget_exhausted), add a pricing entry
+    (no_pricing_configured), or investigate whoever is hammering key issuance
+    (admin_rate_limit).
+
+    Collapsing any two would mean paging on a graph that cannot say which.
+    """
+    import pathlib
+    import re
+
+    sources = [
+        pathlib.Path("app/main.py"),
+        pathlib.Path("app/ratelimit/dependency.py"),
+        pathlib.Path("app/budget/dependency.py"),
+    ]
+    used = set()
+    for path in sources:
+        for line in path.read_text().splitlines():
+            if "reason=" in line:
+                # Both literals of a conditional live on the same line, e.g.
+                # reason="a" if cond else "b" — so scan the line, not just the
+                # text immediately after `reason=`.
+                used.update(re.findall(r'"([a-z_]+)"', line))
+
+    assert used == {
+        "rate_limit",
+        "admin_rate_limit",
+        "key_budget_exhausted",
+        "provider_budget_exhausted",
+        "no_pricing_configured",
+    }, f"refusal reasons changed: {sorted(used)}"

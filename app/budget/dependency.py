@@ -4,6 +4,7 @@ from app.budget.provider_budget import ProviderBudget
 from app.budget.tracker import BudgetTracker
 from app.core.config import settings
 from app.core.redis_client import get_redis
+from app.observability.metrics import REQUESTS_REFUSED
 from app.ratelimit.dependency import enforce_rate_limit
 
 tracker = BudgetTracker(
@@ -35,6 +36,10 @@ async def enforce_budget(
     request.state.budget_remaining_usd = remaining
 
     if spent >= settings.monthly_budget_usd_per_key:
+        # Distinct from provider_budget_exhausted: this caller is over their
+        # own monthly share while the operator's balance is untouched. Same
+        # 402, completely different fix.
+        REQUESTS_REFUSED.labels(reason="key_budget_exhausted").inc()
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail="monthly budget exceeded for this API key",

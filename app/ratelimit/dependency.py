@@ -4,6 +4,7 @@ from fastapi import Depends, Header, HTTPException, Request, Response, status
 
 from app.core.config import settings
 from app.core.redis_client import get_redis
+from app.observability.metrics import REQUESTS_REFUSED
 from app.ratelimit.token_bucket import TokenBucketLimiter
 from app.security.auth import require_api_key
 
@@ -35,6 +36,7 @@ async def enforce_rate_limit(
     request.state.rate_limit_remaining = max(0, int(remaining))
 
     if not allowed:
+        REQUESTS_REFUSED.labels(reason="rate_limit").inc()
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="rate limit exceeded, slow down",
@@ -68,6 +70,9 @@ async def enforce_admin_rate_limit(
     """
     allowed, _ = await _limiter.check(key="admin-api")
     if not allowed:
+        # Separate label: admin traffic is one shared bucket, so this firing
+        # means something is hammering key issuance, not that a client is busy.
+        REQUESTS_REFUSED.labels(reason="admin_rate_limit").inc()
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="admin API rate limit exceeded",
