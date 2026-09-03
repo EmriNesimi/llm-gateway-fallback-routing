@@ -333,3 +333,35 @@ def test_every_refusal_reason_is_a_distinct_label():
         "provider_budget_exhausted",
         "no_pricing_configured",
     }, f"refusal reasons changed: {sorted(used)}"
+
+
+def test_alert_rules_select_on_refusal_reasons_that_exist():
+    """GatewayRefusingUnpricedRequests filters on reason="no_pricing_configured".
+
+    That label is a string in the app, not something the metric declares — so
+    renaming the reason leaves the alert evaluating a series that is never
+    produced. It would sit green forever while the condition it exists for
+    happens, which is the failure mode this whole family of guards is for.
+    """
+    import pathlib
+    import re
+
+    rules = pathlib.Path("deploy/prometheus/alerts.yml").read_text()
+    selected = set(re.findall(r'gateway_requests_refused_total\{reason="([a-z_]+)"', rules))
+    assert selected, "no alert selects a refusal reason — the guard would pass vacuously"
+
+    emitted = set()
+    for path in (
+        pathlib.Path("app/main.py"),
+        pathlib.Path("app/ratelimit/dependency.py"),
+        pathlib.Path("app/budget/dependency.py"),
+    ):
+        for line in path.read_text().splitlines():
+            if "reason=" in line:
+                emitted.update(re.findall(r'"([a-z_]+)"', line))
+
+    unknown = sorted(selected - emitted)
+    assert not unknown, (
+        f"alerts.yml selects refusal reason(s) {unknown} that no code emits"
+        f" (emitted: {sorted(emitted)}) — those alerts would never fire"
+    )
