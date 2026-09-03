@@ -95,3 +95,33 @@ def test_ollama_costs_nothing_without_complaint(caplog):
 
     assert cost == 0.0
     assert caplog.text == ""
+
+
+@pytest.mark.asyncio
+async def test_free_providers_are_exempt_in_both_modules():
+    """Pricing and the ledger have to agree on which providers are free.
+
+    They briefly did not: pricing.py grew its own copy of the set. The failure
+    that creates is silent and one-sided — pricing would refuse a free
+    provider as un-costable while the ledger happily exempts it, so the free
+    fallback that exists for when the paid providers are gone would be the
+    thing that breaks.
+
+    Asserted behaviourally rather than by comparing the two names, so it still
+    catches a divergence introduced some other way.
+    """
+    import fakeredis.aioredis
+
+    from app.budget.provider_budget import FREE_PROVIDERS, ProviderBudget
+
+    budget = ProviderBudget(redis=fakeredis.aioredis.FakeRedis(), cap_usd=4.0)
+
+    assert FREE_PROVIDERS, "no free providers — the guard would pass vacuously"
+    for provider in FREE_PROVIDERS:
+        # Pricing: costs nothing and does not refuse.
+        assert worst_case_cost_usd(provider, "any-model", 10_000, 2048) == 0.0
+
+        # Ledger: reserving is a no-op, so nothing to settle and no ceiling.
+        await budget.reserve(provider, 99.0)
+        assert await budget.spent(provider) == 0.0
+        assert not await budget.is_exhausted(provider)

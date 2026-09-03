@@ -5,6 +5,8 @@ Ollama is local/free, so it has no entry and costs $0.
 
 import logging
 
+from app.budget.provider_budget import FREE_PROVIDERS
+
 
 class UnpricedModelError(Exception):
     """Raised when a billable model has no entry in _PRICING.
@@ -50,9 +52,6 @@ _PRICING: dict[str, tuple[float, float]] = {
 # reserving budget rather than billing.
 _CHARS_PER_TOKEN = 3
 
-# Bills nothing, so "no price" is correct rather than missing.
-_FREE_PROVIDERS = frozenset({"ollama"})
-
 
 def worst_case_cost_usd(
     provider: str, model: str, input_chars: int, max_output_tokens: int
@@ -76,7 +75,7 @@ def worst_case_cost_usd(
     key = f"{provider}:{model}"
     pricing = _PRICING.get(key)
     if pricing is None:
-        if provider in _FREE_PROVIDERS:
+        if provider in FREE_PROVIDERS:
             return 0.0
         logger.error(
             "no pricing entry for %s — refusing to reserve budget for an"
