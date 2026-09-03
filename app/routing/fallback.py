@@ -315,7 +315,13 @@ class FallbackRouter:
                         ) from exc
                     return
 
-            if not committed:
+            # `no branch`: this condition is never false when reached. Once
+            # committed is set the loop either returns (316) or raises (313),
+            # so control only arrives here having never committed. The check
+            # stays because it states that invariant at the point it matters —
+            # but coverage should not report a branch that cannot be taken as
+            # merely untested, or the report stops meaning anything.
+            if not committed:  # pragma: no branch
                 breaker.record_failure()
                 publish_circuit_state(provider.name, breaker)
                 logger.warning(
