@@ -71,3 +71,32 @@ def test_an_unknown_provider_name_fails_loudly():
     to the typo in the chain definition."""
     with pytest.raises(ValueError, match="unknown provider: gemini"):
         dependencies._get_provider("gemini")
+
+
+def test_every_provider_named_in_a_chain_can_be_built():
+    """model_map.py and this factory name providers independently.
+
+    Add "gemini" to a chain without teaching _get_provider about it and
+    nothing complains until the first request routed there — which raises
+    ValueError from inside the router and surfaces as a 500, with the typo in
+    the chain definition several layers away from the traceback.
+
+    The pricing guard already checks every chained *model* has a price. This
+    is the same check for the *provider*.
+    """
+    from app.routing.model_map import FALLBACK_CHAINS
+
+    named = {provider for chain in FALLBACK_CHAINS.values() for provider, _ in chain}
+    assert named, "no providers found in any chain — the guard would pass vacuously"
+
+    unbuildable = []
+    for provider in sorted(named):
+        try:
+            dependencies._get_provider(provider)
+        except ValueError:
+            unbuildable.append(provider)
+
+    assert not unbuildable, (
+        f"chains route to {unbuildable}, which app/routing/dependencies.py"
+        " cannot build — every request to those chains would 500"
+    )
