@@ -41,6 +41,16 @@ quietly going stale.
   `_settle_chain` silently dropped any charge against a provider that had no
   reservation.
 
+**Observability**
+- `gateway_requests_refused_total{reason}` — a refused request previously
+  reached no metric at all, since it raises before the handler records
+  anything. A gateway turning every request away looked identical to an idle
+  one. Five reasons, kept separate because each has a different fix.
+- Dashboard panel for refusals by reason, and an alert for the one that means
+  misconfiguration rather than spend (`GatewayRefusingUnpricedRequests`).
+- `gateway_provider_budget_spent_usd` is now graphed. It had been exported on
+  every ledger read and displayed nowhere.
+
 **Test coverage**
 - Coverage now traces SQLAlchemy's greenlets. Without it, every line after the
   first `await session.…` in a handler was reported as never executed —
