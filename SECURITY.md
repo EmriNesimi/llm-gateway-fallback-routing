@@ -20,6 +20,18 @@ Two things, in this order:
    token-bucket rate limiter — all enforced before a provider is reached, all
    failing closed if Redis is unreachable. See
    [decision 011](docs/decisions/011-hard-provider-spend-ceiling.md).
+
+   The ceiling is only as good as the number it reserves, so a request whose
+   cost cannot be computed is **refused rather than run**. A model with no
+   entry in `app/budget/pricing.py` used to produce a `$0` worst case, which
+   reserved nothing and let the request run outside the ceiling entirely — a
+   bypass in the control that is supposed not to have one. That provider is
+   now dropped from the chain; an entirely unpriced chain returns `503`. See
+   [decision 012](docs/decisions/012-uncostable-requests-are-refused.md).
+
+   Every refusal is counted in `gateway_requests_refused_total`, labelled by
+   reason. Refusals raise before the request counter is touched, so without it
+   a gateway turning all traffic away is indistinguishable from an idle one.
 2. **The credentials themselves.** Client keys are stored only as HMAC
    hashes, in the database and in Redis key names alike. Provider keys live in
    a git-ignored `.env` and are never logged, echoed in an error body, or
