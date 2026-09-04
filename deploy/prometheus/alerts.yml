@@ -10,6 +10,7 @@ groups:
         for: 2m
         labels: {severity: warning}
         annotations:
+          runbook_url: "https://github.com/EmriNesimi/llm-gateway-fallback-routing/blob/main/docs/runbook.md#providercircuitopen"
           summary: "{{ $labels.provider }} circuit is open"
           description: >-
             Every replica reporting open means the provider itself is failing;
@@ -22,6 +23,7 @@ groups:
         for: 5m
         labels: {severity: info}
         annotations:
+          runbook_url: "https://github.com/EmriNesimi/llm-gateway-fallback-routing/blob/main/docs/runbook.md#providercircuitdisagreement"
           summary: "replicas disagree about {{ $labels.provider }}"
           description: >-
             One instance sees this provider as failing and another doesn't —
@@ -39,6 +41,7 @@ groups:
         for: 1m
         labels: {severity: critical}
         annotations:
+          runbook_url: "https://github.com/EmriNesimi/llm-gateway-fallback-routing/blob/main/docs/runbook.md#gatewaytargetdown"
           summary: "the gateway is not being scraped"
           description: >-
             Prometheus cannot reach {{ $labels.instance }}. Either the gateway
@@ -63,6 +66,7 @@ groups:
         for: 10m
         labels: {severity: warning}
         annotations:
+          runbook_url: "https://github.com/EmriNesimi/llm-gateway-fallback-routing/blob/main/docs/runbook.md#gatewayrequestsfailingacrosswholechain"
           summary: "over 10% of requests are failing every provider"
           description: >-
             No division-by-zero guard is needed: with no traffic both rates are
@@ -82,6 +86,7 @@ groups:
         for: 0m
         labels: {severity: critical}
         annotations:
+          runbook_url: "https://github.com/EmriNesimi/llm-gateway-fallback-routing/blob/main/docs/runbook.md#gatewayrefusingunpricedrequests"
           summary: "requests refused because a model has no price"
           description: >-
             A routable model is missing from app/budget/pricing.py, so its cost
@@ -96,6 +101,7 @@ groups:
         for: 1m
         labels: {severity: warning}
         annotations:
+          runbook_url: "https://github.com/EmriNesimi/llm-gateway-fallback-routing/blob/main/docs/runbook.md#providerbudgetlow"
           summary: "{{ $labels.provider }} has under $1 of budget left"
 
       - alert: ProviderBudgetExhausted
@@ -103,4 +109,5 @@ groups:
         for: 1m
         labels: {severity: critical}
         annotations:
+          runbook_url: "https://github.com/EmriNesimi/llm-gateway-fallback-routing/blob/main/docs/runbook.md#providerbudgetexhausted"
           summary: "{{ $labels.provider }} is out of budget and is being skipped"
