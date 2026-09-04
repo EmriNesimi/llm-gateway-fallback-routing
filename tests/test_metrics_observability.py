@@ -403,3 +403,67 @@ def test_every_metric_is_graphed_or_alerted():
         f"{orphans} are exported but appear in no dashboard panel and no alert"
         " rule — nobody would ever see them"
     )
+
+
+def _alert_names_and_runbooks() -> list[tuple[str, str | None]]:
+    import pathlib
+    import re
+
+    text = pathlib.Path("deploy/prometheus/alerts.yml").read_text()
+    out, current = [], None
+    seen: dict[str, str | None] = {}
+    for line in text.splitlines():
+        m = re.match(r"\s*- alert: (\w+)", line)
+        if m:
+            current = m.group(1)
+            seen[current] = None
+        m = re.search(r"runbook_url:\s*\"([^\"]+)\"", line)
+        if m and current:
+            seen[current] = m.group(1)
+    out = list(seen.items())
+    assert out, "no alerts found — the guard would pass vacuously"
+    return out
+
+
+def test_every_alert_links_to_a_runbook_section():
+    """Alertmanager puts runbook_url in the notification, so the instructions
+    arrive with the page. An alert without one sends someone to go and find
+    them while the thing is on fire."""
+    missing = sorted(name for name, url in _alert_names_and_runbooks() if not url)
+    assert not missing, f"alert(s) {missing} have no runbook_url annotation"
+
+
+def test_no_runbook_link_points_at_a_missing_section():
+    """The dead-link case, which is worse than no link: it reads as help and
+    lands on a page with nothing about this alert."""
+    import pathlib
+    import re
+
+    runbook = pathlib.Path("docs/runbook.md").read_text()
+    # GitHub anchors a `## Heading` as #heading, lowercased.
+    anchors = {h.strip().lower() for h in re.findall(r"^## (.+)$", runbook, re.M)}
+    assert anchors, "runbook has no sections — the guard would pass vacuously"
+
+    broken = []
+    for name, url in _alert_names_and_runbooks():
+        fragment = url.split("#", 1)[1] if url and "#" in url else ""
+        if fragment not in anchors:
+            broken.append(f"{name} -> #{fragment}")
+
+    assert not broken, (
+        f"runbook links with no matching section: {broken}."
+        f" Sections present: {sorted(anchors)}"
+    )
+
+
+def test_the_runbook_has_no_sections_for_alerts_that_no_longer_exist():
+    """A section for a deleted alert is stale advice that reads as current."""
+    import pathlib
+    import re
+
+    runbook = pathlib.Path("docs/runbook.md").read_text()
+    documented = {h.strip() for h in re.findall(r"^## (.+)$", runbook, re.M)}
+    alerts = {name for name, _ in _alert_names_and_runbooks()}
+
+    orphaned = sorted(documented - alerts)
+    assert not orphaned, f"runbook documents alert(s) that no longer exist: {orphaned}"
