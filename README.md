@@ -434,6 +434,12 @@ priced is left does it fail, with `503` and `no pricing configured` rather
 than `402`. Money isn't the problem there and retrying won't fix it. See
 [decision 012](docs/decisions/012-uncostable-requests-are-refused.md).
 
+The ledger is kept in Redis with append-only persistence and a named volume,
+so it survives a restart. That sounds like plumbing and is not: without it the
+container started empty every time, so `docker compose down` reset spend to
+zero and a `$4` **lifetime** ceiling was really `$4` **per uptime window**. See
+[decision 013](docs/decisions/013-the-spend-ledger-is-persisted.md).
+
 Two things this rests on, both of which had to be fixed first:
 
 - **Request size is bounded** (`MAX_TOTAL_CONTENT_CHARS`, `MAX_MESSAGES`,
