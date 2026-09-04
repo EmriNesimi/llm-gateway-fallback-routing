@@ -18,3 +18,4 @@ and so a reader can tell a deliberate trade from an accident.
 | 010 | Circuit breakers stay per-process, not shared through Redis | [file](010-per-process-circuit-breakers.md) |
 | 011 | A hard per-provider spend ceiling, separate from the per-key budget | [file](011-hard-provider-spend-ceiling.md) |
 | 012 | A request that cannot be costed is refused, not run | [file](012-uncostable-requests-are-refused.md) |
+| 013 | The spend ledger is persisted, and lives only in Redis | [file](013-the-spend-ledger-is-persisted.md) |
