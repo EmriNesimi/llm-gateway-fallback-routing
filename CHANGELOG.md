@@ -41,6 +41,21 @@ quietly going stale.
   `_settle_chain` silently dropped any charge against a provider that had no
   reservation.
 
+**Cost control (continued)**
+- The spend ledger is now **persisted**. Redis ran with no volume and no
+  append-only file, so it started empty after every restart — which meant a
+  `$4` *lifetime* ceiling was really `$4` *per uptime window*, and
+  `docker compose down` refilled it. Nothing in the application code was
+  wrong; the storage under it was a scratch pad. See
+  [decision 013](docs/decisions/013-the-spend-ledger-is-persisted.md).
+
+**Operations**
+- [`docs/runbook.md`](docs/runbook.md) — one section per alert: what it means,
+  what to check, and for three of them what *not* to do. Every rule carries a
+  `runbook_url`, so the instructions arrive with the page.
+- The base image is pinned by digest as well as tag, so two builds of the same
+  commit produce the same userland.
+
 **Observability**
 - `gateway_requests_refused_total{reason}` — a refused request previously
   reached no metric at all, since it raises before the handler records
