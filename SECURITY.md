@@ -44,8 +44,12 @@ Two things, in this order:
   other.
 - **Public exposure without a reverse proxy.** There is no TLS termination and
   no WAF. `docker-compose.yml` binds every port to `127.0.0.1` deliberately.
-- **A durable spend ledger.** It lives in Redis; flushing Redis resets it.
-  A documented limitation, not an oversight.
+- **A tamper-proof spend ledger.** It lives in Redis, which now persists to
+  disk (`appendonly`) and survives a restart — until this batch it did not,
+  and every `docker compose down` silently reset the lifetime ceiling to zero.
+  Anyone who can reach Redis can still flush it, or delete the volume, and the
+  ceiling starts over. The password and loopback bind are what stand in the
+  way; there is no second copy of the number.
 
 ## Notes for anyone reading the code
 
