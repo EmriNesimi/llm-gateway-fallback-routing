@@ -3,12 +3,20 @@
 A real run of `scripts/load_test.js` (k6, 10 VUs ramped over 50s) against a
 local gateway instance, real Redis, and a live OpenAI key — not a mock.
 
-> **These numbers predate the spend ceiling.** They were recorded before the
-> per-provider budget reservation, the request-size bounds, and the
-> `/v1/chat/completions` half of the traffic the script now generates — so
-> latency here is missing one Redis round-trip per provider per request, and
-> the run couldn't have been refused with a 402. Treat them as a floor for
-> the routing path rather than a current benchmark; re-run to compare.
+> **These numbers predate the spend ceiling and everything built on it.**
+> They were recorded before the per-provider budget reservation, the
+> request-size bounds, the un-costable refusal, and the
+> `/v1/chat/completions` half of the traffic the script now generates.
+>
+> Concretely, what a re-run would add to each request's path: one Redis
+> `INCRBYFLOAT` per billable provider in the chain to reserve, one more to
+> settle, and a pricing lookup that can now refuse. The reservations are
+> also durable now (append-only Redis), which is a disk write these numbers
+> never paid for.
+>
+> Treat them as a floor for the routing path, not a current benchmark. They
+> are kept rather than deleted because the routing and fallback behaviour they
+> measured has not changed — only the accounting around it.
 
 ```
 checks_total.......: 3067    61.0/s
