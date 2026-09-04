@@ -11,7 +11,23 @@ services:
     # bind protects against the network, the password against anything that
     # gets past it — a container on the same bridge, a port-forward, or a
     # future compose edit that republishes this by accident.
-    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-localdevpassword}"]
+    # --appendonly yes, and a volume to write it to. Without both, the
+    # container starts empty every time — and what lives in here is the
+    # LIFETIME provider spend ledger. A `docker compose down` reset it to
+    # zero, which quietly turned a $4 lifetime ceiling into $4 per restart.
+    # That is the one number this project exists to hold.
+    #
+    # appendonly rather than the default RDB snapshotting: RDB loses whatever
+    # happened since the last snapshot, and "a few minutes of spend" is
+    # exactly the window a runaway loop would use.
+    command:
+      - "redis-server"
+      - "--requirepass"
+      - "${REDIS_PASSWORD:-localdevpassword}"
+      - "--appendonly"
+      - "yes"
+    volumes:
+      - redis-data:/data
     ports:
       - "127.0.0.1:6379:6379"
     healthcheck:
@@ -131,3 +147,4 @@ services:
 
 volumes:
   postgres-data:
+  redis-data:
