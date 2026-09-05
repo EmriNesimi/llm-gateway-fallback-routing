@@ -73,3 +73,48 @@ def test_decision_numbers_are_contiguous():
     assert numbers == list(range(1, len(numbers) + 1)), (
         f"decision numbers are not contiguous from 001: {numbers}"
     )
+
+
+def _citing_files() -> list[pathlib.Path]:
+    root = DECISIONS.parent.parent
+    files = list((root / "app").rglob("*.py"))
+    files += [f for f in (root / "docs").rglob("*.md") if f.parent != DECISIONS]
+    files += [root / "README.md", root / "SECURITY.md", root / "CHANGELOG.md"]
+    return [f for f in files if f.exists()]
+
+
+def test_every_cited_decision_exists():
+    """Code comments and prose cite decisions by number — "see decision 010",
+    "(decision 004)". Those citations are the main way anyone finds the
+    reasoning behind a piece of code, and a wrong number sends the reader to a
+    document about something else, which is worse than no citation at all.
+    """
+    numbers = set(_record_files())
+    assert numbers, "no decision records found — the guard would pass vacuously"
+
+    bad = []
+    for path in _citing_files():
+        text = path.read_text()
+        for cited in re.findall(r"decisions?[/ -](\d{3})", text):
+            if cited not in numbers:
+                bad.append(f"{path.name} cites {cited}")
+
+    assert not bad, f"citations pointing at decisions that do not exist: {sorted(set(bad))}"
+
+
+def test_every_decision_link_resolves_to_a_file():
+    """The markdown links are separate from the bare citations above and can
+    rot on their own — a renamed record leaves a link that looks live and
+    404s."""
+    numbers = _record_files()
+    broken = []
+    for path in _citing_files():
+        for target in re.findall(r"\(([^)]*decisions/[^)]+\.md)\)", path.read_text()):
+            name = target.rsplit("/", 1)[-1]
+            if not (DECISIONS / name).exists():
+                broken.append(f"{path.name} -> {name}")
+
+    assert not broken, (
+        f"links to decision files that do not exist: {sorted(set(broken))}."
+        f" Records present: {sorted(f.name for f in numbers.values())}"
+    )
