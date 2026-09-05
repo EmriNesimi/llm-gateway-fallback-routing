@@ -1,5 +1,15 @@
 global:
   scrape_interval: 5s
+  # Rules are evaluated on this interval, and the default is 1m — twelve times
+  # slower than the scrape. The practical effect is on the `for:` clauses: an
+  # alert with `for: 1m` needs the condition true across consecutive
+  # evaluations, so at a 1m interval it fires somewhere between one and two
+  # minutes late, and `for: 0m` on GatewayRefusingUnpricedRequests could sit
+  # for a full minute before anyone hears about it.
+  #
+  # 15s keeps evaluation meaningfully finer than the shortest `for:` here
+  # without re-running seven rules every scrape.
+  evaluation_interval: 15s
 
 rule_files:
   - alerts.yml
