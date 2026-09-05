@@ -87,7 +87,7 @@ flowchart LR
 
 ## 🚧 build log
 
-Phase 5 complete ✅ — the gateway is now something an existing application can actually be pointed at: a drop-in OpenAI-compatible endpoint, real multi-chain routing, sampling controls that reach the provider, and the observability to see what any of it is doing. Spend is now bounded by a hard per-provider ceiling rather than a cap that resets and multiplies. 435 tests, 99% line-and-branch coverage against a 99% floor enforced in CI.
+Phase 5 complete ✅ — the gateway is now something an existing application can actually be pointed at: a drop-in OpenAI-compatible endpoint, real multi-chain routing, sampling controls that reach the provider, and the observability to see what any of it is doing. Spend is now bounded by a hard per-provider ceiling rather than a cap that resets and multiplies. 437 tests, 99% line-and-branch coverage against a 99% floor enforced in CI.
 
 - [x] Project scaffold, config, security foundations
 - [x] Provider adapters (OpenAI / Anthropic / Ollama) + fallback chain

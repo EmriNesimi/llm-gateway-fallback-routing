@@ -46,3 +46,28 @@ def test_redis_has_somewhere_to_write_it():
     assert re.search(r"^volumes:\n(?:.*\n)*?  redis-data:", COMPOSE, re.M), (
         "redis-data is mounted but never declared under top-level volumes"
     )
+
+
+def test_redis_is_told_never_to_evict():
+    """noeviction is the default only while maxmemory is unset. Adding a
+    memory limit is an ordinary thing to do to something that looks like a
+    cache, and from that moment the policy decides which keys survive — with
+    no way to tell a disposable rate-limit bucket from the spend ledger."""
+    service = _redis_service()
+
+    assert "--maxmemory-policy" in service and '"noeviction"' in service, (
+        "redis does not pin maxmemory-policy, so a future memory limit could"
+        " silently evict the spend ledger and hand back the whole budget"
+    )
+
+
+def test_redis_fsyncs_every_write():
+    """The default (everysec) loses up to a second of writes on a host
+    failure. Those writes are reservations and settlements, so the ledger
+    returns understating spend — and the shortfall becomes headroom."""
+    service = _redis_service()
+
+    assert "--appendfsync" in service and '"always"' in service, (
+        "redis is not set to appendfsync always, so a crash can lose spend"
+        " that has already been incurred"
+    )
