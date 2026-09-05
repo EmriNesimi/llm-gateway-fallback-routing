@@ -12,6 +12,7 @@ starts calling it.
 import pathlib
 
 from app.main import app
+from tests.conftest import all_route_paths
 
 POLICY = (
     pathlib.Path(__file__).resolve().parent.parent / "docs" / "api-versioning.md"
@@ -24,11 +25,11 @@ _FRAMEWORK_ROUTES = {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"
 
 
 def _app_paths() -> set[str]:
-    return {
-        route.path
-        for route in app.routes
-        if getattr(route, "path", None) and route.path not in _FRAMEWORK_ROUTES
-    }
+    # Via the helper, not app.routes directly. FastAPI keeps an included
+    # router as one opaque entry with path=None and its children behind
+    # `original_router`, so a direct scan sees no /admin route at all — this
+    # guard passed over two thirds of the routes it claimed to check.
+    return {p for p in all_route_paths(app) if p not in _FRAMEWORK_ROUTES}
 
 
 def test_every_route_is_versioned_or_named_as_operational():

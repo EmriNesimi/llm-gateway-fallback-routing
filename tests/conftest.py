@@ -118,3 +118,33 @@ async def isolated_redis(monkeypatch):
     monkeypatch.setattr(budget_dependency.provider_budget, "_redis", fake)
 
     yield fake
+
+
+def all_route_paths(app) -> set[str]:
+    """Every path the app serves, including routes behind included routers.
+
+    `app.routes` does not flatten them: an `include_router` shows up as a
+    single `_IncludedRouter` entry with `path=None`, and its children are only
+    reachable by descending into it. Anything scanning `app.routes` directly
+    therefore misses every /admin route — which is how a guard meant to check
+    all routes silently checked two thirds of them.
+    """
+    found: set[str] = set()
+
+    def walk(routes) -> None:
+        for route in routes:
+            path = getattr(route, "path", None)
+            if path:
+                found.add(path)
+            # An include_router entry exposes its children under
+            # `original_router`, not `routes` — so a plain `.routes` walk
+            # still misses them.
+            nested = getattr(route, "routes", None)
+            if nested:
+                walk(nested)
+            included = getattr(route, "original_router", None)
+            if included is not None and getattr(included, "routes", None):
+                walk(included.routes)
+
+    walk(app.routes)
+    return found

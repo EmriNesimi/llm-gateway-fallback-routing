@@ -133,3 +133,38 @@ def test_readme_only_references_make_targets_that_exist():
         f"README tells the reader to run {missing}, which the Makefile does not"
         f" define (it has {sorted(defined)})"
     )
+
+
+def test_readme_only_documents_endpoints_that_exist():
+    """The README names endpoints in backticks — `GET /readyz`,
+    `/admin/key-events`. A renamed or removed route leaves the README
+    promising an endpoint that 404s, which is discovered by the first person
+    trying to use the project rather than by anyone maintaining it.
+
+    Checks only the direction that can mislead. Not every route needs to be in
+    the README; every path in the README needs to be a route.
+    """
+    from app.main import app
+    from tests.conftest import all_route_paths
+
+    # Via the helper: app.routes keeps an included router as a single opaque
+    # entry, so a direct scan cannot see any /admin route.
+    served = all_route_paths(app)
+    # FastAPI's own docs endpoints, which the README legitimately links to.
+    served |= {"/docs", "/openapi.json", "/redoc"}
+    # Collection paths cover their parameterised children: a README mentioning
+    # /admin/keys is satisfied by /admin/keys/{key_id} existing too.
+    served |= {p.split("/{", 1)[0] for p in served if "/{" in p}
+
+    documented = {
+        p
+        for p in re.findall(r"`(?:GET |POST |DELETE )?(/[a-z0-9/_-]+)`", README.read_text())
+        # "/v1/" and friends name a prefix, not a route.
+        if not p.endswith("/") or p == "/"
+    }
+    assert documented, "README documents no endpoints — the guard would pass vacuously"
+
+    missing = sorted(p for p in documented if p.rstrip("/") not in served and p not in served)
+    assert not missing, (
+        f"README documents {missing}, which the app does not serve"
+    )
