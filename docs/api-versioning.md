@@ -17,6 +17,25 @@ can change without a version bump.
 - Removing a virtual model name from `app/routing/model_map.py` that clients
   may already be passing as `"model"`.
 
+## Refusal statuses are part of the contract
+
+`/v1/` routes turn requests away in four ways, and the status is the only
+thing a client can branch on:
+
+| Status | Situation | Client should |
+|---|---|---|
+| `429` | rate limit | back off; `Retry-After` says how long |
+| `402` | budget exhausted — the caller's monthly cap, or the operator's lifetime provider ceiling | stop; retrying cannot help until a cap moves |
+| `502` | every provider in the chain failed | retry later; this is transient |
+| `503` | no pricing configured, so the cost cannot be bounded | stop; only an operator deploy fixes it |
+
+Adding a **new** refusal status for a **new** situation is additive and does
+not require a version bump — a client that doesn't know it treats it as an
+unexpected error, which is the correct behaviour anyway. Changing which status
+an **existing** situation returns is breaking, because clients branch on it:
+moving the un-costable refusal from `503` to `402` would make callers wait for
+a balance that was never the problem.
+
 ## What doesn't require a version bump
 
 - Adding a new optional request field with a backwards-compatible default.
