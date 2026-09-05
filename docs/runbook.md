@@ -88,3 +88,26 @@ diverging is itself worth understanding.
 
 **Do not** clear the Redis key to make it go away. That is the only copy of the
 number.
+
+## Working with the ledger
+
+Not an alert. This is the section the two budget alerts above point at when
+they say what not to do.
+
+**Read it:** `make ledger` prints spend and remaining headroom per provider,
+through the same settings the gateway uses — so it reports what the gateway
+would enforce, not what some other Redis happens to hold.
+
+**Raise the ceiling:** change `PROVIDER_LIFETIME_BUDGET_USD` and restart. The
+ledger is untouched; only the limit it is compared against moves. This is the
+right lever when the spend is real and you want to keep going.
+
+**Reset it:** deleting `provider_budget:<provider>` in Redis sets that
+provider's lifetime spend back to zero. There is no second copy, so this is
+not undoable and it discards the record of money that was genuinely spent. It
+is the right move only when the ledger is wrong — for example after testing
+against a fake provider inflated it.
+
+**Back it up:** the ledger lives in the `redis-data` volume. `docker compose
+down` keeps it; `docker compose down -v` deletes it, and that is the usual way
+this number is lost by accident.

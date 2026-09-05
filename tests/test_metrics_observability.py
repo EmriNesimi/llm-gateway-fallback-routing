@@ -462,7 +462,14 @@ def test_the_runbook_has_no_sections_for_alerts_that_no_longer_exist():
     import re
 
     runbook = pathlib.Path("docs/runbook.md").read_text()
-    documented = {h.strip() for h in re.findall(r"^## (.+)$", runbook, re.M)}
+    # Only headings shaped like an alert name. The runbook also carries
+    # operational sections ("Working with the ledger") that are not alerts and
+    # must not be mistaken for stale ones.
+    documented = {
+        h.strip()
+        for h in re.findall(r"^## (.+)$", runbook, re.M)
+        if re.fullmatch(r"[A-Z][A-Za-z]+", h.strip())
+    }
     alerts = {name for name, _ in _alert_names_and_runbooks()}
 
     orphaned = sorted(documented - alerts)
