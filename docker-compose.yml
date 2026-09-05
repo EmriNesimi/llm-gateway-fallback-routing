@@ -35,6 +35,17 @@ services:
       # the number the ceiling is built on.
       - "--maxmemory-policy"
       - "noeviction"
+      # fsync every write, not once a second. The default (everysec) loses up
+      # to a second of writes if the host dies — and the writes being lost are
+      # reservations and settlements, so the ledger comes back understating
+      # what was spent and hands the difference back as headroom.
+      #
+      # The usual argument against `always` is throughput. This gateway does
+      # two ledger writes per request per billable provider at single-digit
+      # requests per second; the fsync cost is irrelevant here and the failure
+      # it prevents is the only one this project actually cares about.
+      - "--appendfsync"
+      - "always"
     volumes:
       - redis-data:/data
     ports:
