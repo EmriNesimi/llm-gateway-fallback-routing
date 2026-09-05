@@ -26,6 +26,15 @@ services:
       - "${REDIS_PASSWORD:-localdevpassword}"
       - "--appendonly"
       - "yes"
+      # Never evict. The default is already noeviction, but that is a default
+      # of an unset maxmemory — set a memory limit later (a sensible-looking
+      # thing to do for a cache) and the policy suddenly decides which keys
+      # survive. The rate-limit buckets can be dropped; the spend ledger
+      # cannot, and Redis has no way to tell them apart. Stating it here means
+      # adding a limit fails loudly on writes instead of silently discarding
+      # the number the ceiling is built on.
+      - "--maxmemory-policy"
+      - "noeviction"
     volumes:
       - redis-data:/data
     ports:
