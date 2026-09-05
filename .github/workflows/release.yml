@@ -61,6 +61,7 @@ jobs:
             type=raw,value=${{ github.event.inputs.tag }},enable=${{ github.event_name == 'workflow_dispatch' }}
 
       - name: Build and push
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -78,5 +79,14 @@ jobs:
             echo
             echo '```'
             echo "${{ steps.meta.outputs.tags }}"
+            echo '```'
+            echo
+            # Tags move; the digest does not. It is the only thing that
+            # identifies exactly what shipped, and what anyone pinning
+            # this image downstream needs to quote.
+            echo "Digest (pin this, not the tag):"
+            echo
+            echo '```'
+            echo "${{ steps.build.outputs.digest }}"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
