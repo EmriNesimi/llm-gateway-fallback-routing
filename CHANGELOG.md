@@ -50,6 +50,16 @@ quietly going stale.
   [decision 013](docs/decisions/013-the-spend-ledger-is-persisted.md).
 
 **Operations**
+- Redis is now told never to evict (`maxmemory-policy noeviction`) and to
+  fsync every write (`appendfsync always`). The ledger holds money; the
+  defaults are tuned for a cache that can afford to lose a second of writes.
+- `make ledger` prints spend and remaining headroom per provider, so reading
+  the number no longer means guessing at a Redis key name.
+- `.env.example` warns that the bundled Redis needs a password in `REDIS_URL`
+  — without it the gateway starts fine and then fails closed on every request.
+- Guards for two properties that were only comments: every compose port binds
+  loopback, and every route is either under `/v1/` or named as operational in
+  the versioning policy.
 - [`docs/runbook.md`](docs/runbook.md) — one section per alert: what it means,
   what to check, and for three of them what *not* to do. Every rule carries a
   `runbook_url`, so the instructions arrive with the page.
