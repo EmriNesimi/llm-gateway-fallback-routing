@@ -1,4 +1,4 @@
-.PHONY: install check lint typecheck audit test run migrate migrate-check up down demo
+.PHONY: install check lint typecheck audit test run migrate migrate-check up down demo ledger
 
 install:
 	pip install -r requirements-dev.txt
@@ -46,6 +46,21 @@ run:
 # after pushing.
 migrate-check:
 	alembic check
+
+# Read the lifetime spend ledger. The runbook tells whoever is on the end of
+# a ProviderBudgetExhausted page not to clear the Redis key, since it is the
+# only copy of the number — so there needs to be a sanctioned way to look at
+# it that isn't redis-cli and a guess at the key name.
+#
+# Reads the same settings the gateway uses, so it reports what the gateway
+# would enforce rather than what a different Redis happens to hold.
+ledger:
+	@python -c "import asyncio, sys; \
+	from app.budget.dependency import provider_budget as b; \
+	from app.routing.model_map import billable_providers as bp; \
+	snap = asyncio.run(b.snapshot(bp())); \
+	cap = b.cap_usd; \
+	[print(f'{p:<12} spent \$${s:>8.4f}  of \$${cap:.2f}   remaining \$${max(0.0, cap-s):>8.4f}') for p, s in snap.items()]"
 
 migrate:
 	alembic upgrade head
