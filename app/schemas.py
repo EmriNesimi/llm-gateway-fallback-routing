@@ -2,7 +2,7 @@ from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.providers.base import SamplingParams
+from app.providers.base import DEFAULT_MAX_OUTPUT_TOKENS, SamplingParams
 
 # Every provider bills by the token, so an unbounded request is an unbounded
 # bill. These caps exist for cost control, not correctness — decision 008
@@ -20,7 +20,9 @@ from app.providers.base import SamplingParams
 MAX_CONTENT_CHARS = 50_000
 MAX_TOTAL_CONTENT_CHARS = 50_000
 MAX_MESSAGES = 50
-MAX_OUTPUT_TOKENS = 2048
+# The provider-side default is the same number by construction: budget is
+# reserved against this, so a provider that ignores it spends unreserved.
+MAX_OUTPUT_TOKENS = DEFAULT_MAX_OUTPUT_TOKENS
 
 
 class ChatMessageIn(BaseModel):

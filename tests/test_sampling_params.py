@@ -15,7 +15,11 @@ from app.providers.anthropic_provider import (
     _accepts_sampling_controls,
 )
 from app.providers.anthropic_provider import _sampling_kwargs as anthropic_kwargs
-from app.providers.base import ChatMessage, SamplingParams
+from app.providers.base import (
+    DEFAULT_MAX_OUTPUT_TOKENS,
+    ChatMessage,
+    SamplingParams,
+)
 from app.providers.ollama_provider import _sampling_payload
 from app.providers.openai_provider import _sampling_kwargs as openai_kwargs
 from app.schemas import ChatCompletionRequest
@@ -104,9 +108,41 @@ def test_out_of_range_values_are_rejected_at_the_boundary(kwargs):
 # --------------------------------------------------------------------------
 
 
-def test_openai_sends_nothing_when_nothing_was_set():
-    assert openai_kwargs(None) == {}
-    assert openai_kwargs(SamplingParams()) == {}
+def test_openai_always_sends_an_output_cap():
+    """max_tokens is the one control that is NOT safe to omit.
+
+    temperature and top_p can be left off — the provider's own default is a
+    sensible value nobody pays extra for. Omitting max_tokens lets the model
+    generate up to its own ceiling, which for gpt-4o-mini is many times the
+    2048 the gateway has already reserved budget against.
+
+    This test asserted the opposite until a review pointed out that it was
+    pinning the bug: the reservation was computed against a cap the request
+    never carried, so the reserved figure was not an upper bound on anything.
+    """
+    assert openai_kwargs(None) == {"max_tokens": DEFAULT_MAX_OUTPUT_TOKENS}
+    assert openai_kwargs(SamplingParams()) == {"max_tokens": DEFAULT_MAX_OUTPUT_TOKENS}
+
+
+def test_the_cap_sent_is_the_cap_the_budget_reserved_against():
+    """The two numbers have to be the same one.
+
+    app/main.py reserves worst_case_cost_usd(..., max_out=MAX_OUTPUT_TOKENS)
+    before calling a provider. If the provider is sent a larger cap — or
+    none — the request can cost more than was reserved, and the ceiling stops
+    bounding anything. Tying them to a single constant is what makes the
+    reservation honest.
+    """
+    from app.schemas import MAX_OUTPUT_TOKENS
+
+    assert DEFAULT_MAX_OUTPUT_TOKENS == MAX_OUTPUT_TOKENS
+    assert openai_kwargs(None)["max_tokens"] == MAX_OUTPUT_TOKENS
+
+
+def test_an_explicit_smaller_cap_is_respected():
+    """Callers may ask for less than the ceiling; they may not ask for more —
+    app/schemas.py caps max_tokens at MAX_OUTPUT_TOKENS at the boundary."""
+    assert openai_kwargs(SamplingParams(max_tokens=64))["max_tokens"] == 64
 
 
 def test_openai_uses_its_own_names():
@@ -118,7 +154,12 @@ def test_openai_uses_its_own_names():
 
 
 def test_openai_omits_unset_controls_rather_than_sending_null():
-    assert openai_kwargs(SamplingParams(temperature=0.5)) == {"temperature": 0.5}
+    """Everything except max_tokens, which is always sent — see
+    test_openai_always_sends_an_output_cap for why it is the exception."""
+    assert openai_kwargs(SamplingParams(temperature=0.5)) == {
+        "temperature": 0.5,
+        "max_tokens": DEFAULT_MAX_OUTPUT_TOKENS,
+    }
 
 
 def test_openai_forwards_a_zero_temperature():

@@ -9,6 +9,16 @@ class ChatMessage:
     content: str
 
 
+# The output cap the gateway assumes when a caller sets none.
+#
+# This is not a preference — app/main.py reserves budget against exactly this
+# number before calling a provider, so any provider that does not enforce it
+# is being called with an unbounded output while the ledger believes the cost
+# is capped. That breaks the one invariant the spend ceiling rests on: that
+# the reserved figure is a genuine upper bound.
+DEFAULT_MAX_OUTPUT_TOKENS = 2048
+
+
 @dataclass
 class SamplingParams:
     """Generation controls a caller can set, in provider-neutral form.

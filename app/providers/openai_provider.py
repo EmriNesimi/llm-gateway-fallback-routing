@@ -5,6 +5,7 @@ from openai import APIError, APIStatusError, AsyncOpenAI
 from openai.types.chat import ChatCompletionMessageParam
 
 from app.providers.base import (
+    DEFAULT_MAX_OUTPUT_TOKENS,
     BaseProvider,
     ChatMessage,
     ChatResponse,
@@ -19,14 +20,21 @@ def _sampling_kwargs(params: SamplingParams | None) -> dict:
     """Only the controls the caller actually set. Passing None values through
     would override the provider's own defaults with nulls."""
     if params is None:
-        return {}
+        return {"max_tokens": DEFAULT_MAX_OUTPUT_TOKENS}
     kwargs: dict = {}
     if params.temperature is not None:
         kwargs["temperature"] = params.temperature
     if params.top_p is not None:
         kwargs["top_p"] = params.top_p
-    if params.max_tokens is not None:
-        kwargs["max_tokens"] = params.max_tokens
+    # Always sent, unlike the others. temperature and top_p are safe to omit —
+    # the provider's own default is a sensible value nobody is paying extra
+    # for. max_tokens is not: omitting it lets the model generate up to its
+    # own ceiling, which for gpt-4o-mini is many times the 2048 tokens the
+    # gateway already reserved budget against. The reservation would stop
+    # being an upper bound, which is the entire basis of the spend ceiling.
+    kwargs["max_tokens"] = (
+        params.max_tokens if params.max_tokens is not None else DEFAULT_MAX_OUTPUT_TOKENS
+    )
     if params.stop is not None:
         kwargs["stop"] = params.stop
     return kwargs
