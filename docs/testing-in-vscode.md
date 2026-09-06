@@ -55,6 +55,21 @@ source .venv/bin/activate
 uvicorn app.main:app --reload
 ```
 
+`/healthz` and `/docs` work with nothing else running. `/v1/chat` does not:
+the rate limiter and both budget checks read Redis and **fail closed** when it
+is unreachable, so requests come back refused rather than unlimited. Start one
+(`make up`, or any local Redis) before expecting a chat response.
+
+If you are using the Redis from `docker compose`, it runs with a password, so
+`REDIS_URL` in `.env` needs credentials:
+
+```
+REDIS_URL=redis://:localdevpassword@localhost:6379/0
+```
+
+Without them every request fails with `NOAUTH` — the gateway starts up
+perfectly and then refuses everything, which is a confusing way to find out.
+
 Visit `http://localhost:8000/docs` for interactive Swagger UI — you can
 issue requests to `/v1/chat`, `/admin/keys`, etc. directly from the browser
 using the `Authorize` button (paste your `GATEWAY_API_KEYS` / `ADMIN_API_KEY`
@@ -97,6 +112,11 @@ Then:
 - `http://localhost:9090` — Prometheus
 - `http://localhost:3000` — Grafana (`admin`/`admin`), with the gateway
   dashboard already provisioned — no manual setup
+- `http://localhost:16686` — Jaeger, where a request's full retry-and-fallback
+  path shows up as spans
+
+Every one of these binds to `127.0.0.1` only, so nothing here is reachable
+from another machine on your network.
 
 The **Docker** extension (ms-azuretools.vscode-docker) adds a sidebar view
 of running containers and their logs, which is handy for watching `gateway`
