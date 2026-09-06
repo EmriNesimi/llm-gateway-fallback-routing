@@ -6,7 +6,11 @@
 # and remove both controls on what this gateway is allowed to spend.
 services:
   redis:
-    image: redis:7-alpine
+    # Exact version, like prometheus and grafana. `7-alpine` floats
+    # across the whole 7.x line, and this one holds the spend ledger
+    # and the rate-limit buckets — a minor upgrade arriving on its own
+    # schedule is not something that should happen to it silently.
+    image: redis:7.4.10-alpine
     # A password as well as the loopback bind. Two independent controls: the
     # bind protects against the network, the password against anything that
     # gets past it — a container on the same bridge, a port-forward, or a
@@ -61,7 +65,9 @@ services:
   # (postgresql+asyncpg://gateway:changeme@postgres:5432/gateway) to use it
   # for the admin API / audit log instead.
   postgres:
-    image: postgres:16-alpine
+    # Same reasoning. A floating tag here means the database the audit
+    # log lives in can change under a `docker compose pull`.
+    image: postgres:16.14-alpine
     ports:
       # 5433 on the host, not 5432. Anyone running a second Postgres container
       # — a different project, Postgres.app, a system install — already holds
