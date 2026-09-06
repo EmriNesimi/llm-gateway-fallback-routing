@@ -42,6 +42,14 @@ Two things, in this order:
 - **Multi-tenant isolation.** Client keys are separated by budget and rate
   limit, not by data. Any key that can reach `/admin` can mint or revoke any
   other.
+- **Bounded storage.** `audit_log` and `admin_audit_log` grow by one row per
+  request and per key operation, and nothing prunes them. On the default
+  SQLite file that is a file that only gets larger; on Postgres it is a table
+  that does. Neither is a problem at this project's volume, but a deployment
+  keeping this running would need a retention policy — and deleting rows is a
+  deliberate decision, since the audit log is the record of what was spent and
+  by whom.
+
 - **Public exposure without a reverse proxy.** There is no TLS termination and
   no WAF. `docker-compose.yml` binds every port to `127.0.0.1` deliberately.
 - **A tamper-proof spend ledger.** It lives in Redis, which now persists to
