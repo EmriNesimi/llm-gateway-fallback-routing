@@ -465,7 +465,7 @@ Reasoning in [decision 011](docs/decisions/011-hard-provider-spend-ceiling.md).
 - **CORS is closed by default.** No `Access-Control-Allow-Origin` header at all unless `CORS_ALLOWED_ORIGINS` is explicitly set — this API is meant to be called server-to-server, not from arbitrary browser origins.
 - **`pip-audit` runs in CI** (`make audit` locally) on every push, checking every pinned dependency against known CVE databases — a vulnerable transitive dependency fails the build instead of going unnoticed.
 - **Client keys are hashed everywhere they're stored** — in the database and in Redis key names alike, so anyone able to run `KEYS` against Redis sees hashes rather than live credentials.
-- **The container runs as a non-root user**, and every port in `docker-compose.yml` binds to `127.0.0.1` rather than all interfaces.
+- **The container runs as a non-root user**, drops every Linux capability, and sets `no-new-privileges` — so a compromise inside it cannot climb back out to root. Every port in `docker-compose.yml` binds to `127.0.0.1` rather than all interfaces, every image names an exact version, and the base image is pinned by digest. Tests assert all four, because each is a one-line deletion that changes nothing visible.
 - **Upstream provider errors are logged, never returned** — their bodies carry API key prefixes and organisation IDs. Callers get a generic message and the request ID.
 - Reporting and the full threat model, including what this deliberately does *not* protect, are in [`SECURITY.md`](SECURITY.md).
 - Secret scanning is enabled on this repository (auto-enabled for public GitHub repos).
