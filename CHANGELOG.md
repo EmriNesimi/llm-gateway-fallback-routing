@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 Nothing here changes how a request is routed or what it costs. It is all
 hardening around the edges — the image, CI, and guards against documentation
