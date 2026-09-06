@@ -111,3 +111,35 @@ against a fake provider inflated it.
 **Back it up:** the ledger lives in the `redis-data` volume. `docker compose
 down` keeps it; `docker compose down -v` deletes it, and that is the usual way
 this number is lost by accident.
+
+## The gateway is up but refusing everything
+
+Not an alert either — this is the shape of a misconfiguration that looks
+healthy from the outside, so no rule catches it.
+
+**Symptom:** `/healthz` returns 200, the process is running, and every request
+to `/v1/chat` comes back refused. `GatewayTargetDown` does not fire, because
+the gateway is up and being scraped.
+
+**First check `/readyz`.** It reports Redis and the database separately, and
+unlike `/healthz` it actually touches them.
+
+**If Redis reports `error`:** the usual cause is credentials. The bundled
+Redis runs with `--requirepass`, and `.env.example` ships a passwordless
+`REDIS_URL`, so running the gateway on the host against the compose stack
+fails with `NOAUTH` on every call. Fix by putting the password in the URL:
+
+```
+REDIS_URL=redis://:${REDIS_PASSWORD}@localhost:6379/0
+```
+
+The reason this presents as "refusing everything" rather than "crashing" is
+deliberate: the rate limiter and both budget checks **fail closed**
+([decision 004](decisions/004-best-effort-bookkeeping-vs-fail-closed-enforcement.md)).
+Being unable to prove there is budget left is not the same as having budget
+left, so an unreachable Redis refuses rather than waves requests through. The
+alternative would spend money on the strength of a broken connection.
+
+**If Redis reports `ok`:** check `gateway_requests_refused_total` by reason,
+or the response body — a `402` names the spend, a `503` names the unpriced
+providers, and a `429` is the rate limiter doing its job.
