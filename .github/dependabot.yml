@@ -20,6 +20,18 @@ updates:
     directory: /
     schedule: {interval: monthly}
 
+  # Covers the Dockerfile's base image and every image in
+  # docker-compose.yml. Pinning those to exact versions was the right call for
+  # reproducibility, but it also turned five floating tags into five things
+  # Dependabot can propose — and this repo has already had one ten-PR morning.
   - package-ecosystem: docker
     directory: /
     schedule: {interval: monthly}
+    open-pull-requests-limit: 3
+    groups:
+      # One PR for the whole stack. These images are upgraded together in
+      # practice anyway: the point of pinning them was that the stack is a
+      # known combination, and reviewing them one at a time does not test
+      # that combination.
+      container-images:
+        patterns: ["*"]
