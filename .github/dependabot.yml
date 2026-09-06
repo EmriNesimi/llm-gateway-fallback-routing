@@ -16,9 +16,18 @@ updates:
 
   # The actions are pinned by major tag (@v4, @v5), so these only move when a
   # new major lands — rare, and exactly when a human should look.
+  #
+  # Grouped anyway. "Rare" turned out to mean four PRs in one morning the
+  # first time Dependabot ran, and a major bump of setup-python is not usefully
+  # reviewed in isolation from a major bump of checkout — they run in the same
+  # job and fail together.
   - package-ecosystem: github-actions
     directory: /
     schedule: {interval: monthly}
+    open-pull-requests-limit: 3
+    groups:
+      workflow-actions:
+        patterns: ["*"]
 
   # Covers the Dockerfile's base image and every image in
   # docker-compose.yml. Pinning those to exact versions was the right call for
