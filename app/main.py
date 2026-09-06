@@ -349,7 +349,21 @@ async def _reserve_chain(
             continue
         billable += 1
         try:
-            cost = worst_case_cost_usd(provider, model, chars, max_out)
+            # Times the number of attempts this provider can actually make.
+            # FallbackRouter retries the SAME provider up to
+            # provider_retry_attempts more times on a retryable error, and a
+            # client-side timeout is retryable — so a provider that generated
+            # a full completion before the timeout fired gets asked to
+            # generate another one, and bills for both. Only the attempt that
+            # finally returns is settled, so the earlier ones were spend with
+            # no reservation and no ledger entry behind them.
+            #
+            # Reserving for the worst case means reserving for every attempt.
+            # The surplus is refunded at settle, so the only lasting effect is
+            # that concurrent admission is stricter — which is the safe
+            # direction for a control whose job is not overspending.
+            attempts = settings.provider_retry_attempts + 1
+            cost = worst_case_cost_usd(provider, model, chars, max_out) * attempts
         except UnpricedModelError:
             # Un-costable, so the ceiling cannot apply to it. Dropped from the
             # chain exactly like an exhausted provider rather than failing the

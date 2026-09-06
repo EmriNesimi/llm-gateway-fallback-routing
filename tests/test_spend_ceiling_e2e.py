@@ -19,7 +19,7 @@ import app.main as main_module
 from app.budget import dependency as budget_dependency
 from app.core.config import settings
 from app.main import app
-from app.providers.base import ChatResponse, StreamChunk
+from app.providers.base import ChatMessage, ChatResponse, StreamChunk
 from app.routing.fallback import AllProvidersFailedError
 from app.security.auth import require_api_key
 
@@ -484,3 +484,51 @@ async def test_one_failing_settle_does_not_strand_the_others(monkeypatch):
     )
 
     assert settled == ["openai"], "a failure on one provider skipped the rest"
+
+
+@pytest.mark.asyncio
+async def test_the_reservation_covers_every_retry_attempt(monkeypatch):
+    """FallbackRouter retries the SAME provider on a retryable error, and a
+    client-side timeout counts as retryable. A provider that generated a whole
+    completion before the timeout fired bills for it, then bills again for the
+    retry — while only the attempt that finally returns is ever settled.
+
+    So the reservation has to cover attempts, not one call, or "reserved" stops
+    being an upper bound on what the request can cost.
+    """
+    from app.core.config import settings
+
+    reserved: dict[str, float] = {}
+
+    class _Recording:
+        cap_usd = 1000.0
+
+        async def reserve(self, provider, amount):
+            reserved[provider] = amount
+
+        async def settle(self, *a, **k):
+            pass
+
+        async def record_unreserved(self, *a, **k):
+            pass
+
+        async def snapshot(self, providers):
+            return {}
+
+    monkeypatch.setattr(main_module, "provider_budget", _Recording())
+    monkeypatch.setattr(settings, "provider_retry_attempts", 2)
+
+    messages = [ChatMessage(role="user", content="hello")]
+    await main_module._reserve_chain("smart", messages, None, "req-retries")
+
+    from app.budget.pricing import worst_case_cost_usd
+    from app.routing.model_map import FALLBACK_CHAINS
+    from app.schemas import MAX_OUTPUT_TOKENS
+
+    chars = len("hello")
+    for provider, model in FALLBACK_CHAINS["smart"]:
+        if provider in reserved:
+            one_attempt = worst_case_cost_usd(provider, model, chars, MAX_OUTPUT_TOKENS)
+            assert reserved[provider] == pytest.approx(one_attempt * 3), (
+                f"{provider} reserved for one call, but can make 3 attempts"
+            )
