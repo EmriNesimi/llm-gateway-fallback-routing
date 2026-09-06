@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+**Hardening**
+- The gateway container drops every Linux capability and sets
+  `no-new-privileges`. It already ran as an unprivileged uid; these close the
+  routes back out of that.
+
+**Documentation**
+- A runbook section for the failure that looks healthy: process up, `/healthz`
+  green, every request refused. Usually the Redis password, and it presents
+  that way because the rate limiter and budget checks fail closed.
+- The VS Code guide no longer claims `/v1/chat` works with no external
+  services. It reads Redis for three separate checks, all of which fail
+  closed.
+
 ## 0.4.0
 
 Nothing here changes how a request is routed or what it costs. It is all
@@ -60,6 +75,11 @@ quietly going stale.
 - Guards for two properties that were only comments: every compose port binds
   loopback, and every route is either under `/v1/` or named as operational in
   the versioning policy.
+- Every image in the compose stack names an exact version. Redis and Postgres
+  were on `7-alpine` and `16-alpine`, which float across a whole major — and
+  Redis is the one holding the spend ledger.
+- The unbounded growth of `audit_log` is now stated as a known limitation
+  rather than left to be discovered as a full disk.
 - [`docs/runbook.md`](docs/runbook.md) — one section per alert: what it means,
   what to check, and for three of them what *not* to do. Every rule carries a
   `runbook_url`, so the instructions arrive with the page.
