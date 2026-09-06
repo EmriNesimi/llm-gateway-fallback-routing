@@ -433,3 +433,54 @@ def test_a_pricing_refusal_is_counted_under_its_own_reason(client, monkeypatch):
 
     assert r.status_code == 503
     assert _refusals("no_pricing_configured") == before + 1
+
+
+@pytest.mark.asyncio
+async def test_a_redis_failure_at_settle_does_not_discard_a_paid_response(monkeypatch):
+    """Decision 004's rule, applied to the ledger that had not got it.
+
+    settle() runs after the provider has answered and billed. If it raises,
+    the caller must still get their response — a 500 here throws away output
+    that has already been charged for. BudgetTracker.record_spend has always
+    worked this way; ProviderBudget.settle did not.
+    """
+
+    class _FailingSettle:
+        cap_usd = 4.0
+
+        async def settle(self, *a, **k):
+            raise ConnectionError("redis went away mid-settle")
+
+        async def record_unreserved(self, *a, **k):
+            raise ConnectionError("redis went away mid-settle")
+
+    monkeypatch.setattr(main_module, "provider_budget", _FailingSettle())
+
+    # Must not raise.
+    await main_module._settle_chain({"anthropic": 0.5}, "anthropic", 0.25)
+
+
+@pytest.mark.asyncio
+async def test_one_failing_settle_does_not_strand_the_others(monkeypatch):
+    """The loop used to abandon the rest of the chain on the first failure,
+    leaving their worst-case reservations claimed forever."""
+    settled = []
+
+    class _FlakyFirst:
+        cap_usd = 4.0
+
+        async def settle(self, provider, reserved, actual):
+            if provider == "anthropic":
+                raise ConnectionError("this one fails")
+            settled.append(provider)
+
+        async def record_unreserved(self, *a, **k):
+            pass
+
+    monkeypatch.setattr(main_module, "provider_budget", _FlakyFirst())
+
+    await main_module._settle_chain(
+        {"anthropic": 0.5, "openai": 0.5}, "openai", 0.25
+    )
+
+    assert settled == ["openai"], "a failure on one provider skipped the rest"

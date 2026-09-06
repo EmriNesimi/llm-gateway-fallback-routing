@@ -457,11 +457,36 @@ async def _settle_stream_on_abort(
 async def _settle_chain(
     reservations: dict[str, float], served_provider: str, actual_usd: float
 ) -> None:
-    """Swap reservations for the real cost. Unused providers get a full refund."""
+    """Swap reservations for the real cost. Unused providers get a full refund.
+
+    Best-effort, per decision 004, and for the same reason BudgetTracker.
+    record_spend is: this runs *after* a provider has answered and billed. A
+    Redis blip here must not turn a paid-for response into a 500 — that
+    discards output the provider has already charged for.
+
+    Every provider is attempted even if an earlier one fails. The loop used to
+    abandon the rest, leaving their full worst-case reservations claimed for a
+    request that was over — permanently shrinking headroom with no request
+    behind it, which provider_budget.settle's own docstring calls a leak.
+
+    Failing here over-counts spend (the reservation stays at worst case rather
+    than dropping to the real cost), so it errs toward refusing future
+    requests rather than allowing them. That is the right direction for a
+    control whose job is not overspending.
+    """
     for provider, reserved in reservations.items():
-        await provider_budget.settle(
-            provider, reserved, actual_usd if provider == served_provider else 0.0
-        )
+        try:
+            await provider_budget.settle(
+                provider, reserved, actual_usd if provider == served_provider else 0.0
+            )
+        except Exception:  # noqa: BLE001 - see docstring: must not fail a served request
+            logger.error(
+                "failed to settle $%.6f reserved against %s; the reservation stays"
+                " claimed at its worst-case value",
+                reserved,
+                provider,
+                exc_info=True,
+            )
 
     if served_provider and served_provider not in reservations:
         # Real spend with no reservation to swap. settle() would do nothing
@@ -469,7 +494,16 @@ async def _settle_chain(
         # be dropped, and dropped spend is how a ceiling stops being one.
         # ProviderBudget.record_unreserved exists for exactly this and was
         # never actually called from anywhere.
-        await provider_budget.record_unreserved(served_provider, actual_usd)
+        try:
+            await provider_budget.record_unreserved(served_provider, actual_usd)
+        except Exception:  # noqa: BLE001 - same reasoning as the loop above
+            logger.error(
+                "failed to record $%.6f of unreserved spend against %s — this"
+                " request's cost is missing from the ledger",
+                actual_usd,
+                served_provider,
+                exc_info=True,
+            )
 
 
 async def _serve_chat(
