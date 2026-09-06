@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from typing import cast
 
@@ -14,6 +15,12 @@ from app.providers.base import (
     StreamChunk,
     is_retryable_status_code,
 )
+
+logger = logging.getLogger("gateway.openai")
+
+# Matches app/budget/pricing.py. Deliberately low, so dividing by it
+# over-estimates tokens rather than under-estimating them.
+_CHARS_PER_TOKEN = 3
 
 
 def _sampling_kwargs(params: SamplingParams | None) -> dict:
@@ -87,14 +94,38 @@ class OpenAIProvider(BaseProvider):
             raise ProviderError("openai response contained no choices")
 
         choice = response.choices[0]
+        content = choice.message.content or ""
         usage = response.usage
 
+        if usage is None:
+            # Same class of oddity as the empty `choices` above — some proxies
+            # in front of the real API drop it. Reporting 0 tokens would make
+            # the request cost $0, and _settle_chain would hand the entire
+            # reservation back for a call the provider has already billed:
+            # real spend, refunded as if it never happened.
+            #
+            # Estimating from characters is wrong, but wrong in the safe
+            # direction and loudly. Silence was the actual problem.
+            input_tokens = max(1, sum(len(m.content) for m in messages) // _CHARS_PER_TOKEN)
+            output_tokens = max(1, len(content) // _CHARS_PER_TOKEN)
+            logger.warning(
+                "openai returned no usage for model %s — charging an estimate of"
+                " %d in / %d out from character counts. Spend for this request"
+                " is approximate.",
+                response.model,
+                input_tokens,
+                output_tokens,
+            )
+        else:
+            input_tokens = usage.prompt_tokens
+            output_tokens = usage.completion_tokens
+
         return ChatResponse(
-            content=choice.message.content or "",
+            content=content,
             provider=self.name,
             model=response.model,
-            input_tokens=usage.prompt_tokens if usage else 0,
-            output_tokens=usage.completion_tokens if usage else 0,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
         )
 
     async def chat_stream(

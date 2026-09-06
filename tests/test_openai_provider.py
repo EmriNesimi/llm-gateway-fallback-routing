@@ -4,7 +4,7 @@ import httpx
 import pytest
 from openai import APIConnectionError, BadRequestError, RateLimitError
 
-from app.providers.base import ProviderError
+from app.providers.base import ChatMessage, ProviderError
 from app.providers.openai_provider import OpenAIProvider
 
 
@@ -108,3 +108,41 @@ async def test_connection_error_is_retryable():
             await provider.chat("gpt-4o-mini", [])
 
     assert exc_info.value.retryable is True
+
+
+@pytest.mark.asyncio
+async def test_a_response_with_no_usage_is_still_charged(monkeypatch, caplog):
+    """A missing `usage` block used to report 0 tokens, which costs $0, which
+    makes _settle_chain refund the whole reservation for a call the provider
+    already billed. Real spend, erased.
+
+    The same proxies that drop `choices` drop this — the code eight lines up
+    already defends against that case, so it is not hypothetical.
+    """
+    import logging
+
+    provider = OpenAIProvider(api_key="test")
+
+    class _NoUsageResponse:
+        model = "gpt-4o-mini"
+        usage = None
+
+        class _Choice:
+            class message:
+                content = "x" * 300
+
+        choices = [_Choice()]
+
+    async def fake_create(**kwargs):
+        return _NoUsageResponse()
+
+    monkeypatch.setattr(provider._client.chat.completions, "create", fake_create)
+
+    with caplog.at_level(logging.WARNING):
+        result = await provider.chat(
+            "gpt-4o-mini", [ChatMessage(role="user", content="y" * 60)]
+        )
+
+    assert result.output_tokens > 0, "a billed response was recorded as free"
+    assert result.input_tokens > 0
+    assert "no usage" in caplog.text
