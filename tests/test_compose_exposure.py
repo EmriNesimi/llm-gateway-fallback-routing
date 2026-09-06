@@ -45,3 +45,27 @@ def test_every_published_port_binds_loopback():
         " network reaches them — including Redis, which holds the rate-limit"
         " counters and the lifetime spend ledger."
     )
+
+
+def _gateway_service() -> str:
+    """The gateway service block, up to the next top-level service."""
+    match = re.search(r"^  gateway:\n(.*?)(?=^  \w+:)", COMPOSE, re.M | re.S)
+    assert match, "no gateway service found in docker-compose.yml"
+    return match.group(1)
+
+
+def test_the_gateway_container_cannot_escalate_privileges():
+    """The image already runs as an unprivileged uid; this is what stops a
+    compromise climbing back out of it. Both lines look like boilerplate and
+    delete cleanly, and nothing about the running stack would look different
+    afterwards."""
+    service = _gateway_service()
+
+    assert "no-new-privileges:true" in service, (
+        "gateway does not set no-new-privileges, so a setuid binary inside the"
+        " container could raise privileges"
+    )
+    assert re.search(r"cap_drop:\s*\n\s*-\s*ALL", service), (
+        "gateway does not drop capabilities — it needs none of them, and"
+        " keeping them costs nothing to remove"
+    )
