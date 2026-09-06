@@ -109,6 +109,22 @@ services:
 
   gateway:
     build: .
+    # The container already runs as an unprivileged uid (see the Dockerfile).
+    # These close the two routes that would let a compromise climb back out of
+    # that: no-new-privileges blocks setuid binaries from raising privileges,
+    # and dropping every capability means even a root-owned process inside
+    # could not bind low ports, load modules, or change file ownership.
+    #
+    # Nothing here needs any of it: the gateway opens one high port, writes a
+    # SQLite file, and makes outbound HTTPS calls.
+    #
+    # Applied to this service only. redis and postgres are upstream images
+    # with their own startup requirements, and breaking the thing that holds
+    # the spend ledger to harden a dev stack is a poor trade.
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
     ports:
       - "127.0.0.1:8000:8000"
     env_file:
