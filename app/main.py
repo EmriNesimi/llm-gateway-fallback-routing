@@ -604,11 +604,21 @@ async def _serve_chat(
 # See docs/api-versioning.md — these are part of the contract.
 _CHAT_RESPONSES: dict[int | str, dict] = {
     401: {"description": "Missing or invalid client API key"},
-    402: {"description": "Budget exhausted — the caller's monthly cap, or the provider lifetime ceiling. Retrying does not help until a cap moves."},
+    402: {
+        "description": (
+            "Budget exhausted — the caller's monthly cap, or the provider"
+            " lifetime ceiling. Retrying does not help until a cap moves."
+        )
+    },
     404: {"description": "Unroutable model, when STRICT_MODEL_ROUTING is on"},
     429: {"description": "Rate limited. Retry-After says how long."},
     502: {"description": "Every provider in the chain failed. Transient; retrying is reasonable."},
-    503: {"description": "No pricing configured for a routable model, so cost cannot be bounded. Needs an operator, not a retry."},
+    503: {
+        "description": (
+            "No pricing configured for a routable model, so cost cannot be"
+            " bounded. Needs an operator, not a retry."
+        )
+    },
 }
 
 
