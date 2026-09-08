@@ -54,6 +54,14 @@ class _EndlessRouter:
         " tests/test_stream_disconnect_accounting.py pass because aclose()"
         " does resume the generator, which a disconnect does not."
         " strict=True so this fails loudly the day it is fixed."
+        " ROOT CAUSE (read from the pinned starlette/responses.py,"
+        " StreamingResponse.__call__): the `if self.background is not None:"
+        " await self.background()` line sits AFTER the streaming block, so any"
+        " exception out of stream_response skips it — including the"
+        " ClientDisconnect raised on the spec_version >= 2.4 path. That is why"
+        " attaching a BackgroundTask does not rescue this: the hook is"
+        " unreachable on exactly the path that needs it. Not yet confirmed"
+        " which of the two branches this app takes at runtime."
     ),
 )
 @pytest.mark.asyncio
