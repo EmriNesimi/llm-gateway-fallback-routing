@@ -597,7 +597,22 @@ async def _serve_chat(
     return result
 
 
-@app.post("/v1/chat", response_model=ChatResponseOut)
+# The refusals every /v1 route can return. Declared so they appear in
+# /openapi.json and in any generated client: a caller branching on status has
+# no other way to discover them, and the difference between 402 and 503 in
+# particular decides whether retrying can ever help.
+# See docs/api-versioning.md — these are part of the contract.
+_CHAT_RESPONSES: dict[int | str, dict] = {
+    401: {"description": "Missing or invalid client API key"},
+    402: {"description": "Budget exhausted — the caller's monthly cap, or the provider lifetime ceiling. Retrying does not help until a cap moves."},
+    404: {"description": "Unroutable model, when STRICT_MODEL_ROUTING is on"},
+    429: {"description": "Rate limited. Retry-After says how long."},
+    502: {"description": "Every provider in the chain failed. Transient; retrying is reasonable."},
+    503: {"description": "No pricing configured for a routable model, so cost cannot be bounded. Needs an operator, not a retry."},
+}
+
+
+@app.post("/v1/chat", response_model=ChatResponseOut, responses=_CHAT_RESPONSES)
 async def chat(
     request: ChatRequest,
     http_request: Request,
@@ -725,7 +740,7 @@ async def _event_stream(
     yield "data: [DONE]\n\n"
 
 
-@app.post("/v1/chat/stream")
+@app.post("/v1/chat/stream", responses=_CHAT_RESPONSES)
 async def chat_stream(
     request: ChatRequest, http_request: Request, api_key: str = Depends(enforce_budget)
 ) -> StreamingResponse:
@@ -882,7 +897,7 @@ async def _openai_event_stream(
 # StreamingResponse (stream=True returns one), which FastAPI cannot turn
 # into a response schema. It never generated one for this route anyway —
 # this says so explicitly rather than by omitting the annotation.
-@app.post("/v1/chat/completions", response_model=None)
+@app.post("/v1/chat/completions", response_model=None, responses=_CHAT_RESPONSES)
 async def chat_completions(
     request: ChatCompletionRequest,
     http_request: Request,
