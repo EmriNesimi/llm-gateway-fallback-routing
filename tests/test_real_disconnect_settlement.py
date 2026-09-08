@@ -17,6 +17,7 @@ import contextlib
 
 import pytest
 import uvicorn
+from fastapi import Request
 from redis.asyncio import Redis
 
 import app.main as main_module
@@ -41,29 +42,6 @@ class _EndlessRouter:
             await asyncio.sleep(0.01)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "KNOWN BUG, verified not hypothetical: on a real client disconnect the"
-        " streaming generator is never resumed — instrumenting every handler"
-        " showed no exception of any kind is delivered to it — so the"
-        " `except (GeneratorExit, CancelledError)` branch that charges for"
-        " already-generated tokens is dead code in production. The reservation"
-        " stays stranded at its worst-case value and the spend is never"
-        " recorded. The aclose()-based tests in"
-        " tests/test_stream_disconnect_accounting.py pass because aclose()"
-        " does resume the generator, which a disconnect does not."
-        " strict=True so this fails loudly the day it is fixed."
-        " ROOT CAUSE (read from the pinned starlette/responses.py,"
-        " StreamingResponse.__call__): the `if self.background is not None:"
-        " await self.background()` line sits AFTER the streaming block, so any"
-        " exception out of stream_response skips it — including the"
-        " ClientDisconnect raised on the spec_version >= 2.4 path. That is why"
-        " attaching a BackgroundTask does not rescue this: the hook is"
-        " unreachable on exactly the path that needs it. Not yet confirmed"
-        " which of the two branches this app takes at runtime."
-    ),
-)
 @pytest.mark.asyncio
 async def test_a_real_client_disconnect_still_settles_the_ledger(monkeypatch, isolated_db):
     # A REAL Redis, deliberately. fakeredis resolves without touching a
@@ -81,7 +59,19 @@ async def test_a_real_client_disconnect_still_settles_the_ledger(monkeypatch, is
     monkeypatch.setattr(
         main_module, "build_router", lambda m: ("smart", _EndlessRouter())
     )
-    app.dependency_overrides[enforce_budget] = lambda: "test-client-key"
+    # The override has to populate request.state as well. chat_stream builds
+    # its own Response and reads rate_limit_limit / rate_limit_remaining /
+    # budget_remaining_usd off state, which the real enforce_rate_limit and
+    # enforce_budget put there. A bare lambda skips that and the endpoint
+    # 500s with an AttributeError before streaming a single byte — which is
+    # exactly what an earlier version of this test was silently measuring.
+    async def _fake_budget(http_request: Request) -> str:
+        http_request.state.rate_limit_limit = 100
+        http_request.state.rate_limit_remaining = 99
+        http_request.state.budget_remaining_usd = 999.0
+        return "test-client-key"
+
+    app.dependency_overrides[enforce_budget] = _fake_budget
 
     config = uvicorn.Config(app, host="127.0.0.1", port=0, log_level="error")
     server = uvicorn.Server(config)
@@ -122,6 +112,9 @@ async def test_a_real_client_disconnect_still_settles_the_ledger(monkeypatch, is
         reserved = await budget.spent("anthropic")
         assert reserved > 0, "nothing was reserved; the test is not exercising the ceiling"
 
+        assert b"200 OK" in streamed[:40], (
+            f"the request did not stream; got {streamed[:120]!r}"
+        )
         writer.transport.abort()  # hard close — no FIN, exactly like a dead client
 
         settled = reserved
@@ -141,7 +134,10 @@ async def test_a_real_client_disconnect_still_settles_the_ledger(monkeypatch, is
         assert 0 < settled < reserved
     finally:
         app.dependency_overrides.pop(enforce_budget, None)
+        # aclose() alone leaves the pool's socket open, which trips
+        # filterwarnings = ["error"] on the ResourceWarning.
         await client.aclose()
+        await client.connection_pool.disconnect()
         server.should_exit = True
         with contextlib.suppress(Exception):
             await asyncio.wait_for(serve_task, timeout=10)
