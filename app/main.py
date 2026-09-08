@@ -75,8 +75,16 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # Close pooled connections explicitly on shutdown rather than letting the
     # process exit drop them — avoids noisy "connection reset" warnings from
     # Redis/Postgres when the container is stopped.
-    await get_redis().aclose()
-    await engine.dispose()
+    # Each independently: they were sequential, so a Redis close that raised
+    # (an already-broken connection during a container stop is the normal way
+    # to get here) skipped engine.dispose() entirely and left the database
+    # pool undisposed. Shutdown cleanup is exactly where one failure should
+    # not cancel the others.
+    for name, close in (("redis", get_redis().aclose), ("database", engine.dispose)):
+        try:
+            await close()
+        except Exception:  # noqa: BLE001 - shutdown must not raise past this point
+            logger.warning("failed to close %s cleanly on shutdown", name, exc_info=True)
 
 
 app = FastAPI(
