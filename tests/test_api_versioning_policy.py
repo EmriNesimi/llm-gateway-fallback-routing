@@ -76,3 +76,22 @@ def test_the_documented_statuses_match_the_openapi_ones():
         f"OpenAPI declares {sorted(declared)} and the policy documents"
         f" {sorted(documented)} — one of them is lying to a client"
     )
+
+
+def test_every_chat_route_advertises_the_refusal_statuses():
+    """`responses=_CHAT_RESPONSES` is one keyword on each of three decorators.
+    Dropping it from one route changes nothing observable — the route still
+    behaves identically — and the schema quietly stops telling clients that
+    route can 402 or 503, while the other two still do. An inconsistent
+    contract is worse than a uniformly silent one, because it looks
+    deliberate.
+    """
+    from app.main import _CHAT_RESPONSES, app
+
+    expected = {str(code) for code in _CHAT_RESPONSES}
+    document = app.openapi()
+
+    for path in ("/v1/chat", "/v1/chat/stream", "/v1/chat/completions"):
+        declared = set(document["paths"][path]["post"]["responses"])
+        missing = sorted(expected - declared)
+        assert not missing, f"{path} does not advertise {missing}"
