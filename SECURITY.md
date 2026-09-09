@@ -42,6 +42,19 @@ Two things, in this order:
 - **Multi-tenant isolation.** Client keys are separated by budget and rate
   limit, not by data. Any key that can reach `/admin` can mint or revoke any
   other.
+- **A per-key budget that holds under concurrency.**
+  `MONTHLY_BUDGET_USD_PER_KEY` is checked before a request and recorded after,
+  with nothing reserved in between — so simultaneous requests from one key all
+  observe the same pre-call total and are all admitted. A caller can exceed
+  their monthly share by up to a rate-limit burst's worth of spend.
+
+  This does not affect the operator's money. The lifetime provider ceiling
+  reserves atomically before every call
+  ([decision 011](docs/decisions/011-hard-provider-spend-ceiling.md)) and is
+  unaffected by this race, so the total that can be spent is still bounded.
+  What is not bounded is one caller's share of it, which matters only in a
+  multi-tenant deployment this is explicitly not built for.
+
 - **Bounded storage.** `audit_log` and `admin_audit_log` grow by one row per
   request and per key operation, and nothing prunes them. On the default
   SQLite file that is a file that only gets larger; on Postgres it is a table
