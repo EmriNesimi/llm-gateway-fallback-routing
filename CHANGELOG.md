@@ -22,6 +22,22 @@
   herd [decision 010](docs/decisions/010-per-process-circuit-breakers.md)
   assumes it prevents, aimed at a provider that bills for each attempt.
 
+**Guards and documentation**
+- The two hand-maintained lists of refusal statuses — the OpenAPI `responses=`
+  and the table in `docs/api-versioning.md` — are checked against each other.
+  The guard found drift immediately: the policy was missing `401` and `404`.
+- Every refusal reason label now maps to an action in the runbook, and a guard
+  keeps it that way. A label on a dashboard that leads nowhere is not
+  observability.
+- The runbook gained the commonest real question, which is not an alert: a
+  caller reporting refusals, and which of the five outcomes it is.
+- Prometheus's evaluation interval is held finer than the shortest `for:`
+  clause, because `for:` is counted in evaluations rather than wall time.
+- Two limitations are now stated with their reasoning rather than left to be
+  found: the per-key monthly budget races under concurrency (the operator's
+  ceiling does not), and invalid client keys are not rate limited (the admin
+  key is, deliberately).
+
 **API**
 - `/v1/chat`, `/v1/chat/stream` and `/v1/chat/completions` declare their
   refusal statuses in the OpenAPI document. Clients had no way to discover
