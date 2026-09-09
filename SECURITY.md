@@ -55,6 +55,19 @@ Two things, in this order:
   What is not bounded is one caller's share of it, which matters only in a
   multi-tenant deployment this is explicitly not built for.
 
+- **Throttled credential guessing on the client API.** The rate limiter is
+  keyed on the caller's API key, so it only runs once a key has been accepted.
+  An invalid key is rejected before the bucket is touched, and each guess costs
+  one indexed database lookup. The admin API is deliberately the other way
+  round — rate limited ahead of the key check — because that key mints client
+  keys.
+
+  Not mirrored on the client surface because throttling before authentication
+  means a single shared bucket for all unauthenticated traffic, which lets one
+  bad client starve every good one. Client keys are high-entropy; the trade
+  favours availability. Worth revisiting behind a reverse proxy that can supply
+  a trustworthy per-client identity.
+
 - **Bounded storage.** `audit_log` and `admin_audit_log` grow by one row per
   request and per key operation, and nothing prunes them. On the default
   SQLite file that is a file that only gets larger; on Postgres it is a table

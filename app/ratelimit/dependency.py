@@ -28,6 +28,23 @@ async def enforce_rate_limit(
     response: Response,
     api_key: str = Depends(require_api_key),
 ) -> str:
+    # NOTE the ordering, which is the opposite of the admin API's on purpose.
+    # require_api_key is a SUB-dependency here, so FastAPI resolves it first:
+    # an invalid key 401s before the bucket is touched, and a key that is not
+    # in GATEWAY_API_KEYS costs one indexed SELECT per guess. Guessing is
+    # therefore unthrottled on this surface.
+    #
+    # enforce_admin_rate_limit does it the other way — sibling dependency,
+    # listed first, keyed on a fixed label — because the admin key mints
+    # client keys and is worth protecting from guessing at volume.
+    #
+    # Accepted here rather than mirrored. Throttling pre-auth means one shared
+    # bucket for all unauthenticated traffic (there is no reliable per-client
+    # identity before auth, and no reverse proxy in front to supply one), which
+    # would let one bad client starve every good one. Client keys are
+    # high-entropy and the query is a single indexed lookup, so the trade
+    # favours availability. Revisit if this ever sits behind a proxy that can
+    # supply a trustworthy client identity.
     allowed, remaining = await _limiter.check(key=api_key)
 
     # Stashed for endpoints (like streaming) that build their own Response
