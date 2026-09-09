@@ -116,3 +116,58 @@ async def test_init_db_does_not_create_tables_on_postgres(monkeypatch, caplog):
         await session_module.init_db()
 
     assert "skipping create_all" in caplog.text
+
+
+# --------------------------------------------------------------------------
+# Shutdown
+# --------------------------------------------------------------------------
+
+
+class _BrokenRedis:
+    async def aclose(self):
+        raise ConnectionError("connection already reset")
+
+
+async def _noop():
+    return None
+
+
+@pytest.mark.asyncio
+async def test_a_failing_redis_close_still_disposes_the_database_pool(monkeypatch):
+    """The two cleanups ran back to back, so a Redis close that raised skipped
+    engine.dispose() entirely. An already-broken Redis connection during a
+    container stop is the ordinary way to reach shutdown, not an edge case."""
+    import app.main as main_module
+
+    disposed = []
+
+    class _Engine:
+        async def dispose(self):
+            disposed.append(True)
+
+    monkeypatch.setattr(main_module, "get_redis", lambda: _BrokenRedis())
+    monkeypatch.setattr(main_module, "engine", _Engine())
+    monkeypatch.setattr(main_module, "init_db", _noop)
+
+    async with main_module.lifespan(main_module.app):
+        pass
+
+    assert disposed == [True], "the database pool was never disposed"
+
+
+@pytest.mark.asyncio
+async def test_shutdown_never_raises(monkeypatch):
+    """Nothing here should propagate: the process is going away either way, and
+    an exception out of lifespan turns a clean stop into a noisy one."""
+    import app.main as main_module
+
+    class _Engine:
+        async def dispose(self):
+            raise OSError("this one is broken too")
+
+    monkeypatch.setattr(main_module, "get_redis", lambda: _BrokenRedis())
+    monkeypatch.setattr(main_module, "engine", _Engine())
+    monkeypatch.setattr(main_module, "init_db", _noop)
+
+    async with main_module.lifespan(main_module.app):
+        pass
