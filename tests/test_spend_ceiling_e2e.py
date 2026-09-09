@@ -532,3 +532,49 @@ async def test_the_reservation_covers_every_retry_attempt(monkeypatch):
             assert reserved[provider] == pytest.approx(one_attempt * 3), (
                 f"{provider} reserved for one call, but can make 3 attempts"
             )
+
+
+def test_the_openai_endpoint_also_refuses_an_uncostable_request(client, monkeypatch):
+    """/v1/chat/completions calls _reserve_chain itself rather than sharing
+    /v1/chat's call, so the refusal is a second code path. It is also the
+    endpoint an existing application is actually pointed at — the one where a
+    silent unmetered request would matter most.
+    """
+    from app.budget import pricing
+
+    monkeypatch.setattr(pricing, "_PRICING", {})
+    monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router()))
+
+    r = client.post(
+        "/v1/chat/completions",
+        json={"model": "smart", "messages": [{"role": "user", "content": "hi"}]},
+        headers=HEADERS,
+    )
+
+    assert r.status_code == 503
+    detail = r.json()["detail"]
+    assert detail["error"] == "no pricing configured"
+    assert detail["unpriced"] == ["anthropic", "openai"]
+
+
+def test_the_openai_endpoint_also_steps_over_an_unpriced_provider(client, monkeypatch):
+    """And the partial case: one provider unpriced, the chain still serves."""
+    from app.budget import pricing
+
+    original = pricing._PRICING.copy()
+    monkeypatch.setattr(
+        pricing,
+        "_PRICING",
+        {k: v for k, v in original.items() if not k.startswith("anthropic:")},
+    )
+    router = Router()
+    monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", router))
+
+    r = client.post(
+        "/v1/chat/completions",
+        json={"model": "smart", "messages": [{"role": "user", "content": "hi"}]},
+        headers=HEADERS,
+    )
+
+    assert r.status_code == 200
+    assert router.served == ["openai"], "the unpriced provider was called anyway"
