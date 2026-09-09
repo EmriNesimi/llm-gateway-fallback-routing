@@ -117,8 +117,14 @@ async def test_a_real_client_disconnect_still_settles_the_ledger(monkeypatch, is
         )
         writer.transport.abort()  # hard close — no FIN, exactly like a dead client
 
+        # Poll for up to 20s rather than 5. Settlement happens on the
+        # server's own timeline, and this test also runs under `make test`
+        # with coverage instrumentation attached, which is several times
+        # slower than a bare run. A window sized for the fast case turns a
+        # slow machine into a red build with a misleading message.
         settled = reserved
-        for _ in range(100):
+        deadline = asyncio.get_running_loop().time() + 20.0
+        while asyncio.get_running_loop().time() < deadline:
             await asyncio.sleep(0.05)
             settled = await budget.spent("anthropic")
             if settled != reserved:
@@ -127,9 +133,11 @@ async def test_a_real_client_disconnect_still_settles_the_ledger(monkeypatch, is
         # Settling replaces the worst-case reservation with the estimate from
         # what was actually streamed, which is far smaller.
         assert settled != reserved, (
-            f"the ledger still holds the untouched reservation (${reserved:.6f})."
-            " The abort handler never ran, so the reservation is stranded and"
-            " the tokens the provider already generated were never charged."
+            f"the ledger still holds the untouched reservation (${reserved:.6f})"
+            " after 20s. Either the abort handler never ran — leaving the"
+            " reservation stranded and the generated tokens uncharged — or"
+            " settlement is slower than this window, which is worth knowing"
+            " either way."
         )
         assert 0 < settled < reserved
     finally:
