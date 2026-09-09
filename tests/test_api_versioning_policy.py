@@ -52,3 +52,27 @@ def test_every_route_is_versioned_or_named_as_operational():
         " docs/api-versioning.md. Decide whether each is part of the client"
         " contract before something starts depending on it."
     )
+
+
+def test_the_documented_statuses_match_the_openapi_ones():
+    """The refusal statuses are written down twice: as a table in
+    docs/api-versioning.md, and as `responses=` on the routes so they reach
+    /openapi.json. Two hand-maintained lists of the same fact drift, and the
+    failure is quiet — the prose promises a status the schema never mentions,
+    or the schema advertises one the policy never explains.
+    """
+    import re
+
+    from app.main import _CHAT_RESPONSES
+
+    declared = {int(code) for code in _CHAT_RESPONSES}
+    assert declared, "no refusal statuses declared — the guard would pass vacuously"
+
+    # The policy table's first column, e.g. "| `402` | budget exhausted ..."
+    documented = {int(c) for c in re.findall(r"^\|\s*`(\d{3})`\s*\|", POLICY, re.M)}
+    assert documented, "docs/api-versioning.md no longer lists statuses in a table"
+
+    assert declared == documented, (
+        f"OpenAPI declares {sorted(declared)} and the policy documents"
+        f" {sorted(documented)} — one of them is lying to a client"
+    )

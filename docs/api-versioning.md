@@ -24,6 +24,8 @@ thing a client can branch on:
 
 | Status | Situation | Client should |
 |---|---|---|
+| `401` | missing or invalid client API key | fix the credential; retrying unchanged never succeeds |
+| `404` | the requested model is not routable, and `STRICT_MODEL_ROUTING` is on | pick a name from `/v1/models` |
 | `429` | rate limit | back off; `Retry-After` says how long |
 | `402` | budget exhausted — the caller's monthly cap, or the operator's lifetime provider ceiling | stop; retrying cannot help until a cap moves |
 | `502` | every provider in the chain failed | retry later; this is transient |
