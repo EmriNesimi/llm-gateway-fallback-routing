@@ -506,3 +506,50 @@ def test_every_refusal_reason_is_documented_in_the_runbook():
         f"refusal reason(s) {undocumented} are counted and graphed but appear"
         " nowhere in docs/runbook.md, so the dashboard leads nowhere"
     )
+
+
+def _duration_seconds(text: str) -> float:
+    """Prometheus durations, enough of them for this file: 30s, 5m, 1h."""
+    import re
+
+    units = {"s": 1, "m": 60, "h": 3600}
+    total = 0.0
+    for value, unit in re.findall(r"(\d+)([smh])", text):
+        total += int(value) * units[unit]
+    return total
+
+
+def test_rules_are_evaluated_finer_than_the_shortest_for_clause():
+    """`for:` is measured in evaluations, not wall time.
+
+    An alert saying `for: 1m` under a 1m evaluation_interval needs the
+    condition true across consecutive evaluations, so it fires somewhere
+    between one and two minutes late — and `for: 0m`, which reads as
+    "immediately", can sit a whole interval. The interval was left at
+    Prometheus's 1m default while the scrape ran every 5s, which is why it is
+    now pinned at 15s.
+
+    Raising the interval above any `for:` in the file silently makes that
+    alert slower than it claims to be.
+    """
+    import pathlib
+    import re
+
+    scrape = pathlib.Path("deploy/prometheus/prometheus.yml").read_text()
+    rules = pathlib.Path("deploy/prometheus/alerts.yml").read_text()
+
+    match = re.search(r"^\s*evaluation_interval:\s*(\S+)", scrape, re.M)
+    assert match, "prometheus.yml no longer pins evaluation_interval"
+    interval = _duration_seconds(match.group(1))
+    assert interval > 0
+
+    fors = [_duration_seconds(f) for f in re.findall(r"^\s*for:\s*(\S+)", rules, re.M)]
+    assert fors, "no `for:` clauses found — the guard would pass vacuously"
+
+    non_zero = [f for f in fors if f > 0]
+    assert non_zero, "every alert fires immediately; nothing to compare against"
+
+    assert interval <= min(non_zero), (
+        f"evaluation_interval is {interval}s but the shortest `for:` is"
+        f" {min(non_zero)}s — that alert cannot fire when it says it does"
+    )
