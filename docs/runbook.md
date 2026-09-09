@@ -143,3 +143,25 @@ alternative would spend money on the strength of a broken connection.
 **If Redis reports `ok`:** check `gateway_requests_refused_total` by reason,
 or the response body — a `402` names the spend, a `503` names the unpriced
 providers, and a `429` is the rate limiter doing its job.
+
+## A caller says they are being refused
+
+Not an alert — this arrives as a message from whoever is using the gateway,
+usually without the status code attached. Ask for it, because the five
+outcomes need five different answers and only one of them is your problem.
+
+| They see | Means | What to do |
+|---|---|---|
+| `401` | the key is not recognised | check it against `GATEWAY_API_KEYS`, or `/admin/keys` if it was issued through the admin API. A revoked key looks identical to a wrong one, by design |
+| `429` | rate limited | `Retry-After` says how long. If it is constant, raise `RATE_LIMIT_CAPACITY` / `RATE_LIMIT_REFILL_PER_SEC` — not the budget |
+| `402`, `"monthly budget exceeded for this API key"` | that caller has spent their own share | raise `MONTHLY_BUDGET_USD_PER_KEY`, or wait for the period to roll. The operator's balance is untouched |
+| `402`, `"provider budget exhausted"` | the operator's lifetime ceiling is gone | `make ledger` to see the real numbers, then decide: raise `PROVIDER_LIFETIME_BUDGET_USD` or stop. Waiting will not help — this ledger never resets |
+| `503`, `"no pricing configured"` | a routable model has no price, so its cost cannot be bounded | add the `_PRICING` entry and deploy. Nothing the caller does will fix it |
+
+The two `402`s are worth separating carefully: the message is the only thing
+distinguishing "this caller used their allowance" from "we are out of money".
+`gateway_requests_refused_total` splits them as `key_budget_exhausted` and
+`provider_budget_exhausted` if you would rather read it off the dashboard.
+
+If they report no status at all and the gateway looks healthy from outside,
+see [The gateway is up but refusing everything](#the-gateway-is-up-but-refusing-everything).
