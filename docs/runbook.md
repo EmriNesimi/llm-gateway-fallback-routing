@@ -160,8 +160,20 @@ outcomes need five different answers and only one of them is your problem.
 
 The two `402`s are worth separating carefully: the message is the only thing
 distinguishing "this caller used their allowance" from "we are out of money".
-`gateway_requests_refused_total` splits them as `key_budget_exhausted` and
-`provider_budget_exhausted` if you would rather read it off the dashboard.
+Every refusal is also counted in `gateway_requests_refused_total`, so the
+dashboard answers the same question without waiting to be asked. The labels
+map one to one onto the rows above:
+
+- `rate_limit` — a client hit its token bucket (`429`)
+- `admin_rate_limit` — the admin API's shared bucket; unlike the others this
+  one means something is hammering key issuance, not that a client is busy
+- `key_budget_exhausted` — that caller's monthly share (`402`)
+- `provider_budget_exhausted` — the operator's lifetime ceiling (`402`)
+- `no_pricing_configured` — un-costable model (`503`)
+
+The two `402` labels are the pair worth reading carefully: they are the only
+thing distinguishing "this caller used their allowance" from "we are out of
+money".
 
 If they report no status at all and the gateway looks healthy from outside,
 see [The gateway is up but refusing everything](#the-gateway-is-up-but-refusing-everything).

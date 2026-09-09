@@ -474,3 +474,35 @@ def test_the_runbook_has_no_sections_for_alerts_that_no_longer_exist():
 
     orphaned = sorted(documented - alerts)
     assert not orphaned, f"runbook documents alert(s) that no longer exist: {orphaned}"
+
+
+def test_every_refusal_reason_is_documented_in_the_runbook():
+    """A reason label is only useful if it leads somewhere. The dashboard
+    breaks refusals down by reason, and whoever is looking at it during an
+    incident needs the label to map onto an action — which lives in the
+    runbook.
+
+    Pairs with test_every_refusal_reason_is_a_distinct_label: that one keeps
+    the reasons separable, this one keeps them explicable.
+    """
+    import pathlib
+    import re
+
+    runbook = pathlib.Path("docs/runbook.md").read_text()
+
+    emitted = set()
+    for path in (
+        pathlib.Path("app/main.py"),
+        pathlib.Path("app/ratelimit/dependency.py"),
+        pathlib.Path("app/budget/dependency.py"),
+    ):
+        for line in path.read_text().splitlines():
+            if "reason=" in line:
+                emitted.update(re.findall(r'"([a-z_]+)"', line))
+    assert emitted, "no refusal reasons found — the guard would pass vacuously"
+
+    undocumented = sorted(r for r in emitted if f"`{r}`" not in runbook)
+    assert not undocumented, (
+        f"refusal reason(s) {undocumented} are counted and graphed but appear"
+        " nowhere in docs/runbook.md, so the dashboard leads nowhere"
+    )
