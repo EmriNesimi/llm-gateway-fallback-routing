@@ -220,6 +220,8 @@ Breaker state is **per process**, not shared through Redis the way rate limits a
 
 Each provider gets its own breaker: `CIRCUIT_BREAKER_FAILURE_THRESHOLD` consecutive failures trips it open, and it stays open (skipped, no network call) for `CIRCUIT_BREAKER_COOLDOWN_SECONDS` before a single trial request is allowed through (half-open). That trial succeeding closes the circuit; failing re-opens it. This keeps a dead provider from adding latency to every single request while it's down.
 
+"A single trial request" is enforced, not just described: the first request to arrive in the half-open window claims the trial and the rest are turned away as if the circuit were still open. Until recently it was only described — every concurrent request in that window was admitted, which is the thundering herd the state exists to prevent, aimed at a provider that is probably still broken and bills for each attempt. The claim is timestamped rather than a flag, so a trial whose caller never reports back cannot wedge the breaker shut. See [decision 010](docs/decisions/010-per-process-circuit-breakers.md).
+
 ## 🔁 retry before fallback
 
 A single transient error (a dropped connection, a momentary 5xx) doesn't need a full provider swap. Before the router gives up on a provider and moves to the next one in the chain, it retries the *same* provider `PROVIDER_RETRY_ATTEMPTS` times with a `PROVIDER_RETRY_BACKOFF_SECONDS` pause between tries. Only after retries are exhausted does the circuit breaker record a failure and the router falls back.
