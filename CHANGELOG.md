@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+**Cost control — from a security review**
+- OpenAI is now sent the output cap the budget reserved against. It was called
+  with no `max_tokens` at all while the reservation assumed 2048, so the
+  reserved figure bounded a limit the request never carried. Native `/v1/chat`
+  and `/v1/chat/stream` callers could not set one even deliberately.
+- The reservation covers every retry attempt, not one call. A provider that
+  times out client-side after generating a completion bills for it and bills
+  again for the retry; only the last attempt was ever settled.
+- Both are one rule, now written down as
+  [decision 014](docs/decisions/014-a-reservation-must-be-an-upper-bound.md).
+- Settling is best-effort, matching the rule `record_spend` already followed:
+  a Redis blip after a provider has answered no longer turns a paid-for
+  response into a 500, and one failure no longer strands the rest of the chain.
+- An OpenAI response arriving without a `usage` block is charged an estimate
+  instead of settling as free.
+- The circuit breaker's half-open state admits exactly one trial request. It
+  admitted every concurrent request in the cooldown window — the thundering
+  herd [decision 010](docs/decisions/010-per-process-circuit-breakers.md)
+  assumes it prevents, aimed at a provider that bills for each attempt.
+
+**API**
+- `/v1/chat`, `/v1/chat/stream` and `/v1/chat/completions` declare their
+  refusal statuses in the OpenAPI document. Clients had no way to discover
+  401/402/404/429/502/503 from the schema.
+
 **Hardening**
 - The gateway container drops every Linux capability and sets
   `no-new-privileges`. It already ran as an unprivileged uid; these close the
