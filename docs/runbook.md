@@ -85,6 +85,26 @@ but not failing is the usual cause.
 the reserved budget per request (decision 014) and spends more money on a
 provider that is already not working.
 
+## RequestLatencyDegraded
+
+**Means:** p95 end-to-end latency is over 10 seconds. Requests are still
+succeeding — this is about how long they take, not whether they work.
+
+**The histogram is end-to-end on purpose**, so it includes every retry and
+every fallback hop. A request that eventually succeeds after two timeouts and
+a fallback looks like a success to every other rule in this file, and like a
+thirty-second wait to the caller.
+
+**Check:** `gateway_provider_latency_seconds` per provider — the global
+histogram cannot tell you which one is slow, which is exactly why that panel
+exists. Then check whether `ProviderFallbackRateHigh` is also firing; if it
+is, the two have the same cause and the fallback rate is the more direct
+signal.
+
+**Do not** raise `PROVIDER_REQUEST_TIMEOUT_SECONDS` to stop the timeouts. That
+makes each failing attempt take longer before falling back, which is the
+opposite of what a caller waiting on a slow request needs.
+
 ## ProviderBudgetLow
 
 **Means:** under $1 of the lifetime ceiling remains for a provider. It is still

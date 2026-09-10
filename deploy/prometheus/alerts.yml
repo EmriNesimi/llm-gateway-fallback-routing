@@ -113,6 +113,29 @@ groups:
             Requests still succeed, so nothing else fires — but each one pays
             for a failed attempt first.
 
+      # End-to-end, so it includes every retry and every fallback hop — which
+      # is the point. A request that eventually succeeds after two timeouts
+      # and a fallback is a success to every other rule here and a
+      # thirty-second wait to the caller.
+      #
+      # 10s against a 30s per-provider timeout: high enough that ordinary
+      # generation never reaches it, low enough to fire before requests start
+      # timing out outright.
+      - alert: RequestLatencyDegraded
+        expr: >-
+          histogram_quantile(
+            0.95, sum(rate(gateway_request_latency_seconds_bucket[10m])) by (le)
+          ) > 10
+        for: 10m
+        labels: {severity: warning}
+        annotations:
+          runbook_url: "https://github.com/EmriNesimi/llm-gateway-fallback-routing/blob/main/docs/runbook.md#requestlatencydegraded"
+          summary: "p95 request latency is over 10s"
+          description: >-
+            Requests are succeeding but slowly. Usually a provider degrading
+            rather than failing, so the breaker stays closed and nothing else
+            fires.
+
       # The gauge added for exactly this. gateway_cost_usd_total only ever
       # says what has gone; without a headroom alert the first warning is a
       # 402 after the balance is spent.
