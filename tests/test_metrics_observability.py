@@ -553,3 +553,44 @@ def test_rules_are_evaluated_finer_than_the_shortest_for_clause():
         f"evaluation_interval is {interval}s but the shortest `for:` is"
         f" {min(non_zero)}s — that alert cannot fire when it says it does"
     )
+
+
+def test_every_alert_has_a_severity_from_the_known_set():
+    """Alertmanager routes on severity. A rule without one falls through to
+    whatever the default route is — in practice, nowhere — and a rule with a
+    novel value (`high`, `page`, `sev1`) matches no route at all while looking
+    perfectly reasonable in the file.
+
+    The three used here mean different things: critical is worth waking up
+    for, warning is worth looking at, info is worth knowing when something
+    else is already wrong.
+    """
+    import pathlib
+    import re
+
+    text = pathlib.Path("deploy/prometheus/alerts.yml").read_text()
+
+    known = {"critical", "warning", "info"}
+    current = None
+    severities: dict[str, str | None] = {}
+    for line in text.splitlines():
+        match = re.match(r"\s*- alert: (\w+)", line)
+        if match:
+            current = match.group(1)
+            severities[current] = None
+        match = re.search(r"severity:\s*(\w+)", line)
+        if match and current:
+            severities[current] = match.group(1)
+
+    assert severities, "no alerts found — the guard would pass vacuously"
+
+    missing = sorted(name for name, sev in severities.items() if sev is None)
+    assert not missing, f"alert(s) {missing} carry no severity label"
+
+    unknown = sorted(
+        f"{name}={sev}" for name, sev in severities.items() if sev not in known
+    )
+    assert not unknown, (
+        f"severity values {unknown} are not in {sorted(known)} — Alertmanager"
+        " would match no route for them"
+    )
