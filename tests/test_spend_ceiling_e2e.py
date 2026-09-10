@@ -578,3 +578,38 @@ def test_the_openai_endpoint_also_steps_over_an_unpriced_provider(client, monkey
 
     assert r.status_code == 200
     assert router.served == ["openai"], "the unpriced provider was called anyway"
+
+
+@pytest.mark.asyncio
+async def test_a_failing_unreserved_charge_does_not_break_the_response(monkeypatch, caplog):
+    """The other half of best-effort settling.
+
+    record_unreserved is reached when the provider that served has no
+    reservation to swap — the client-hangup case. If Redis is also unavailable
+    at that moment, the charge is lost, which is bad; failing the response as
+    well would be worse, because the provider has already generated and billed
+    for it.
+
+    The loss must be loud, though: this is spend that will never appear in the
+    ledger, so the log line has to carry the amount and the provider.
+    """
+    import logging
+
+    class _FailingUnreserved:
+        cap_usd = 4.0
+
+        async def settle(self, *a, **k):
+            pass
+
+        async def record_unreserved(self, provider, amount):
+            raise ConnectionError("redis unavailable")
+
+    monkeypatch.setattr(main_module, "provider_budget", _FailingUnreserved())
+
+    with caplog.at_level(logging.ERROR):
+        # served_provider is absent from reservations, so record_unreserved
+        # is the path taken.
+        await main_module._settle_chain({}, "anthropic", 0.25)
+
+    assert "anthropic" in caplog.text
+    assert "missing from the ledger" in caplog.text
