@@ -885,6 +885,17 @@ async def _openai_event_stream(
     REQUEST_COUNT.labels(status="success").inc()
 
     cost = 0.0
+    # The false branch of this is the one uncovered arc left in app/, and it
+    # stays that way on purpose. Every chunk the router yields carries a
+    # provider, so a stream that completes always has one — the branch is
+    # unreachable today.
+    #
+    # It is NOT marked `# pragma: no branch`, unlike the equivalent in
+    # fallback.py where unreachability follows from the control flow itself.
+    # Here it follows from a convention in a different module: that the router
+    # stamps chunk.provider. A future change that forgot to would make this
+    # reachable, and suppressing the arc would hide exactly that bug. An
+    # uncovered arc that says why is worth more than a clean report.
     if final_provider:
         cost = estimate_cost_usd(
             provider=final_provider,
