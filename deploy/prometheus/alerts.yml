@@ -136,6 +136,22 @@ groups:
             rather than failing, so the breaker stays closed and nothing else
             fires.
 
+      # Any unhandled exception is a bug, so the threshold is "more than
+      # none" rather than a rate. These are the failures that reach no other
+      # rule: they raise before or around a handler, so the request counter
+      # never moves and the graphs just go flat.
+      - alert: UnhandledExceptions
+        expr: increase(gateway_unhandled_exceptions_total[10m]) > 0
+        for: 5m
+        labels: {severity: warning}
+        annotations:
+          runbook_url: "https://github.com/EmriNesimi/llm-gateway-fallback-routing/blob/main/docs/runbook.md#unhandledexceptions"
+          summary: "requests are failing with unhandled exceptions"
+          description: >-
+            Something is raising past every handler. Most often a dependency
+            outage that was not caught closer to its source — Redis or the
+            database — rather than a bug in request handling.
+
       # The gauge added for exactly this. gateway_cost_usd_total only ever
       # says what has gone; without a headroom alert the first warning is a
       # 402 after the balance is spent.

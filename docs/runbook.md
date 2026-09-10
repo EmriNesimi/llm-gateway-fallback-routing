@@ -105,6 +105,26 @@ signal.
 makes each failing attempt take longer before falling back, which is the
 opposite of what a caller waiting on a slow request needs.
 
+## UnhandledExceptions
+
+**Means:** requests are failing with a 500 — something raised past every
+handler. Callers are getting `{"error": "internal server error"}` with a
+request id.
+
+**Why it needs its own rule:** these failures reach no other metric. The
+request counter is incremented inside the handlers, so anything raising before
+or around them leaves `gateway_requests_total` flat, which looks exactly like
+no traffic. This alert and its panel are the only places they appear.
+
+**Check:** the logs for that request id — the handler logs the full exception
+with `exc_info`, so the traceback is there. Then `/readyz`, because the
+commonest cause is a dependency outage that was not caught closer to its
+source rather than a bug in request handling. Redis raising inside the rate
+limiter produces exactly this.
+
+**If `/readyz` is healthy** it is a real bug, and the request id ties the
+report to the traceback.
+
 ## ProviderBudgetLow
 
 **Means:** under $1 of the lifetime ceiling remains for a provider. It is still
