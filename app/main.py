@@ -693,6 +693,16 @@ async def _event_stream(
                 final_model = final_model or chunk.model
             yield f"data: {json.dumps(asdict(chunk))}\n\n"
     except (GeneratorExit, asyncio.CancelledError):
+        # Counted, like the other two exits. This branch used to increment
+        # nothing, so a disconnected stream left gateway_requests_total
+        # untouched — while gateway_fallback_triggered_total had already been
+        # incremented if a fallback served it. ProviderFallbackRateHigh
+        # divides one by the other, so those requests inflated the ratio and
+        # in a disconnect-heavy window it was not even bounded by 1.
+        #
+        # A third status rather than "error": the request was not refused and
+        # nothing failed. The client left.
+        REQUEST_COUNT.labels(status="aborted").inc()
         # The client disconnected mid-stream. Starlette closes the generator,
         # so every line after the loop is skipped — which used to mean the
         # tokens the provider had already generated and billed were recorded
@@ -853,6 +863,16 @@ async def _openai_event_stream(
                 first = False
             yield envelope({"content": chunk.content}, None, chunk.model or requested_model)
     except (GeneratorExit, asyncio.CancelledError):
+        # Counted, like the other two exits. This branch used to increment
+        # nothing, so a disconnected stream left gateway_requests_total
+        # untouched — while gateway_fallback_triggered_total had already been
+        # incremented if a fallback served it. ProviderFallbackRateHigh
+        # divides one by the other, so those requests inflated the ratio and
+        # in a disconnect-heavy window it was not even bounded by 1.
+        #
+        # A third status rather than "error": the request was not refused and
+        # nothing failed. The client left.
+        REQUEST_COUNT.labels(status="aborted").inc()
         # See _settle_stream_on_abort: a client disconnect used to skip every
         # line below, recording $0.00 for tokens the provider had already
         # generated and billed.

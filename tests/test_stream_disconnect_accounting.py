@@ -94,3 +94,65 @@ async def test_hanging_up_on_the_openai_endpoint_still_charges(budget, isolated_
     spent = await budget.spent("anthropic")
     assert spent > 0, "a disconnect recorded nothing — the ceiling cannot advance"
     assert spent != pytest.approx(0.80), "the reservation was never settled"
+
+
+def _aborted_count() -> float:
+    from prometheus_client import REGISTRY
+
+    return REGISTRY.get_sample_value(
+        "gateway_requests_total", {"status": "aborted"}
+    ) or 0.0
+
+
+@pytest.mark.asyncio
+async def test_a_disconnected_stream_is_counted(budget, isolated_db):
+    """The disconnect branch incremented nothing, so a hung-up stream left
+    gateway_requests_total untouched — while gateway_fallback_triggered_total
+    had already counted it if a fallback served it.
+
+    ProviderFallbackRateHigh divides one by the other, so those requests
+    inflated the ratio, and in a disconnect-heavy window it was not bounded by
+    1 at all. Both halves now count the same population.
+    """
+    before = _aborted_count()
+
+    stream = main_module._event_stream(
+        _EndlessRouter(),
+        [ChatMessage(role="user", content="hi")],
+        "test-client-key",
+        "smart",
+        "req-counted-abort",
+        reservations={"anthropic": 0.80},
+    )
+    await _consume_then_hang_up(stream)
+
+    assert _aborted_count() == before + 1
+
+
+@pytest.mark.asyncio
+async def test_an_aborted_stream_is_not_counted_as_an_error(budget, isolated_db):
+    """A third status rather than reusing "error". Nothing failed — the client
+    left — and folding the two together would make
+    GatewayRequestsFailingAcrossWholeChain fire on people closing tabs."""
+    from prometheus_client import REGISTRY
+
+    def errors() -> float:
+        return REGISTRY.get_sample_value(
+            "gateway_requests_total", {"status": "error"}
+        ) or 0.0
+
+    before = errors()
+
+    stream = main_module._openai_event_stream(
+        _EndlessRouter(),
+        [ChatMessage(role="user", content="hi")],
+        "test-client-key",
+        "smart",
+        "req-abort-not-error",
+        completion_id="chatcmpl-x",
+        created=int(time.time()),
+        reservations={"anthropic": 0.80},
+    )
+    await _consume_then_hang_up(stream)
+
+    assert errors() == before, "an abandoned stream was recorded as a failure"
