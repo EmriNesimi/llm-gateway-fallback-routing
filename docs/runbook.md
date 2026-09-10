@@ -7,6 +7,26 @@ matters — what *not* to do.
 Written because the alerts were added by someone who had the failure modes in
 their head at the time, and that person is not the one who gets paged.
 
+**Alerts** — one section per rule in `deploy/prometheus/alerts.yml`:
+
+- [ProviderCircuitOpen](#providercircuitopen)
+- [ProviderCircuitDisagreement](#providercircuitdisagreement)
+- [GatewayTargetDown](#gatewaytargetdown)
+- [GatewayRequestsFailingAcrossWholeChain](#gatewayrequestsfailingacrosswholechain)
+- [GatewayRefusingUnpricedRequests](#gatewayrefusingunpricedrequests)
+- [ProviderFallbackRateHigh](#providerfallbackratehigh)
+- [RequestLatencyDegraded](#requestlatencydegraded)
+- [UnhandledExceptions](#unhandledexceptions)
+- [ProviderBudgetLow](#providerbudgetlow)
+- [ProviderBudgetExhausted](#providerbudgetexhausted)
+
+**Situations that fire no alert**, because from the outside nothing looks wrong:
+
+- [Working with the ledger](#working-with-the-ledger)
+- [The gateway is up but refusing everything](#the-gateway-is-up-but-refusing-everything)
+- [A caller says they are being refused](#a-caller-says-they-are-being-refused)
+
+
 ## ProviderCircuitOpen
 
 **Means:** every replica reports the breaker open for one provider, so it is
