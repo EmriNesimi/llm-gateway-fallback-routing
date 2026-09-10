@@ -64,6 +64,27 @@ missing `_PRICING` entry.
 help; this is a configuration error and only a deploy fixes it. The build guard
 that makes it unreachable has already failed if this is firing.
 
+## ProviderFallbackRateHigh
+
+**Means:** more than a quarter of requests are being answered by a fallback
+rather than the first provider in the chain. Requests are succeeding, which is
+why nothing else is firing.
+
+**Why no other alert catches it:** the breaker only opens on outright
+failures. A provider that times out and succeeds on retry, or fails just under
+`CIRCUIT_BREAKER_FAILURE_THRESHOLD`, never trips it — fallback absorbs the
+problem and hides it. The cost is real though: every affected request pays for
+a failed attempt before the one that works.
+
+**Check:** `gateway_provider_attempts_total` by provider and outcome to see
+which one is degrading, then that provider's status page. Compare
+`gateway_provider_latency_seconds` across providers — a primary that is slow
+but not failing is the usual cause.
+
+**Do not** raise `PROVIDER_RETRY_ATTEMPTS` to make it go away. That multiplies
+the reserved budget per request (decision 014) and spends more money on a
+provider that is already not working.
+
 ## ProviderBudgetLow
 
 **Means:** under $1 of the lifetime ceiling remains for a provider. It is still

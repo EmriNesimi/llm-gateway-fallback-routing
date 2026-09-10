@@ -93,6 +93,26 @@ groups:
             cannot be bounded and the chain has nothing usable left. Retrying
             will not help.
 
+      # The failure the breaker cannot see. A provider that errors outright
+      # trips the circuit; one that is merely degraded — timing out and
+      # succeeding on retry, or failing just under the threshold — never does.
+      # Fallback absorbs it silently, so the only symptom is that the primary
+      # has quietly stopped serving and every request costs an extra hop of
+      # latency and a second provider call.
+      - alert: ProviderFallbackRateHigh
+        expr: >-
+          sum(rate(gateway_fallback_triggered_total[10m]))
+            / sum(rate(gateway_requests_total[10m])) > 0.25
+        for: 15m
+        labels: {severity: warning}
+        annotations:
+          runbook_url: "https://github.com/EmriNesimi/llm-gateway-fallback-routing/blob/main/docs/runbook.md#providerfallbackratehigh"
+          summary: "over a quarter of requests are being served by a fallback"
+          description: >-
+            The primary provider in some chain is degraded rather than down.
+            Requests still succeed, so nothing else fires — but each one pays
+            for a failed attempt first.
+
       # The gauge added for exactly this. gateway_cost_usd_total only ever
       # says what has gone; without a headroom alert the first warning is a
       # 402 after the balance is spent.
