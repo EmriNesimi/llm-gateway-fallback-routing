@@ -22,6 +22,20 @@
   herd [decision 010](docs/decisions/010-per-process-circuit-breakers.md)
   assumes it prevents, aimed at a provider that bills for each attempt.
 
+**Observability — the failures nothing was watching**
+- `gateway_unhandled_exceptions_total`. A 500 reached no counter at all:
+  `gateway_requests_total` is incremented inside the handlers, so anything
+  raising before or around them left the request rate flat — which on a
+  dashboard is indistinguishable from nobody calling. Graphed and alerted.
+- `ProviderFallbackRateHigh`. The breaker only opens on outright failures, so
+  a provider that times out and succeeds on retry never trips it. Fallback
+  absorbs the problem silently while every affected request pays for a failed
+  attempt first.
+- `RequestLatencyDegraded`. Every other rule asks whether requests work; none
+  asked how long they take, which is the only thing a caller experiences.
+- Alert severities are pinned to the set Alertmanager routes on, since an
+  unroutable value looks perfectly reasonable in the file and matches nothing.
+
 **Guards and documentation**
 - The two hand-maintained lists of refusal statuses — the OpenAPI `responses=`
   and the table in `docs/api-versioning.md` — are checked against each other.
