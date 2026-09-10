@@ -17,6 +17,20 @@ REQUESTS_REFUSED = Counter(
     ["reason"],
 )
 
+# A 500 reaches no other counter. REQUEST_COUNT is incremented inside the
+# handlers, so anything that raises before or around them — a Redis outage
+# making the rate limiter throw, a bug in a dependency — is recorded nowhere:
+# gateway_requests_total simply stops rising, which on a dashboard is
+# indistinguishable from nobody calling.
+#
+# Deliberately unlabelled. The obvious label is the request path, and that is
+# attacker-controlled on a 404, so it would be an open invitation to blow up
+# cardinality.
+UNHANDLED_EXCEPTIONS = Counter(
+    "gateway_unhandled_exceptions_total",
+    "Requests that failed with an unhandled exception (HTTP 500)",
+)
+
 REQUEST_LATENCY = Histogram(
     "gateway_request_latency_seconds",
     "End-to-end latency of chat requests",

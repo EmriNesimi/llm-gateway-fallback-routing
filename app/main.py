@@ -36,6 +36,7 @@ from app.observability.metrics import (
     REQUEST_LATENCY,
     REQUESTS_REFUSED,
     TOKENS,
+    UNHANDLED_EXCEPTIONS,
 )
 from app.observability.request_id import RequestIDMiddleware
 from app.observability.security_headers import SecurityHeadersMiddleware
@@ -141,6 +142,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> Respo
     add_middleware()'d layer (RequestIDMiddleware included) — so this
     response never passes back through that middleware and must set its own
     X-Request-ID header rather than relying on it."""
+    UNHANDLED_EXCEPTIONS.inc()
     request_id = getattr(request.state, "request_id", "")
     logger.error(
         "[request_id=%s] unhandled exception on %s %s: %s",
