@@ -128,8 +128,16 @@ opposite of what a caller waiting on a slow request needs.
 ## UnhandledExceptions
 
 **Means:** requests are failing with a 500 — something raised past every
-handler. Callers are getting `{"error": "internal server error"}` with a
-request id.
+handler.
+
+**What the caller sees depends on whether the response had started.** For
+`/v1/chat` and non-streaming `/v1/chat/completions`, they get
+`{"error": "internal server error"}` with a request id, and that id ties their
+report to the traceback. For the streaming endpoints, an exception raised
+*after* the first SSE chunk cannot change a status line already sent as 200 —
+the stream simply stops, with no `data: [DONE]` and no error event. Those
+callers have nothing to quote at you, so the counter and the logs are the only
+record.
 
 **Why it needs its own rule:** these failures reach no other metric. The
 request counter is incremented inside the handlers, so anything raising before
