@@ -107,8 +107,9 @@ provider that is already not working.
 
 ## RequestLatencyDegraded
 
-**Means:** p95 end-to-end latency is over 10 seconds. Requests are still
-succeeding — this is about how long they take, not whether they work.
+**Means:** p95 end-to-end latency is over 20 seconds, against a 30s
+per-provider timeout. Requests are still succeeding — this is about how long
+they take, not whether they work.
 
 **The histogram is end-to-end on purpose**, so it includes every retry and
 every fallback hop. A request that eventually succeeds after two timeouts and

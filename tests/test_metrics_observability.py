@@ -594,3 +594,54 @@ def test_every_alert_has_a_severity_from_the_known_set():
         f"severity values {unknown} are not in {sorted(known)} — Alertmanager"
         " would match no route for them"
     )
+
+
+def test_latency_buckets_reach_past_every_configured_timeout():
+    """A histogram cannot measure past its largest finite bucket.
+
+    The defaults stop at 10s while this gateway allows a provider 30s (Ollama
+    60s), so every slow request landed in +Inf: p50, p95 and p99 all read the
+    same, and no alert threshold above 10s could ever be true. That is how
+    RequestLatencyDegraded shipped asserting `> 10` against a histogram whose
+    top bucket was 10.
+
+    Tied to the timeouts rather than to a literal, so raising a timeout
+    without widening the buckets fails here instead of silently making the
+    percentiles useless again.
+    """
+    from app.core.config import settings
+    from app.observability.metrics import PROVIDER_LATENCY, REQUEST_LATENCY
+
+    slowest = max(
+        settings.provider_request_timeout_seconds,
+        settings.ollama_request_timeout_seconds,
+    )
+
+    for metric in (REQUEST_LATENCY, PROVIDER_LATENCY):
+        finite = [b for b in metric._upper_bounds if b != float("inf")]
+        assert finite, f"{metric._name} has no finite buckets"
+        assert max(finite) >= slowest, (
+            f"{metric._name}'s largest finite bucket is {max(finite)}s but a"
+            f" request may take {slowest}s — anything slower is unmeasurable"
+        )
+
+
+def test_the_latency_alert_threshold_is_inside_the_buckets():
+    """An alert comparing a quantile against a number past the last finite
+    bucket can only be true by way of +Inf, which makes it fire on a cliff
+    rather than on the threshold it names."""
+    import pathlib
+    import re
+
+    from app.observability.metrics import REQUEST_LATENCY
+
+    rules = pathlib.Path("deploy/prometheus/alerts.yml").read_text()
+    match = re.search(r"histogram_quantile\(\s*\n?\s*0\.95.*?\)\s*>\s*(\d+)", rules, re.S)
+    assert match, "RequestLatencyDegraded no longer compares a quantile to a number"
+
+    threshold = int(match.group(1))
+    finite = [b for b in REQUEST_LATENCY._upper_bounds if b != float("inf")]
+    assert threshold < max(finite), (
+        f"the alert fires above {threshold}s but the histogram cannot resolve"
+        f" past {max(finite)}s"
+    )

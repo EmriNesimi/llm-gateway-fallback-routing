@@ -31,9 +31,20 @@ UNHANDLED_EXCEPTIONS = Counter(
     "Requests that failed with an unhandled exception (HTTP 500)",
 )
 
+# Explicit buckets, because the prometheus_client defaults stop at 10s and
+# this gateway's own PROVIDER_REQUEST_TIMEOUT_SECONDS is 30 (Ollama's is 60).
+# With the defaults, everything slower than 10s fell into +Inf: p50, p95 and
+# p99 all read the same, and no alert threshold above 10s was expressible.
+#
+# Chosen to be dense where a fast path lives and sparse where a slow one does,
+# and to bracket both timeouts so a request that dies at its limit is
+# distinguishable from one that merely took a while.
+_LATENCY_BUCKETS = (0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0, 20.0, 30.0, 45.0, 60.0, 90.0)
+
 REQUEST_LATENCY = Histogram(
     "gateway_request_latency_seconds",
     "End-to-end latency of chat requests",
+    buckets=_LATENCY_BUCKETS,
 )
 
 PROVIDER_ATTEMPTS = Counter(
@@ -63,6 +74,7 @@ PROVIDER_LATENCY = Histogram(
     "gateway_provider_latency_seconds",
     "Latency of a single provider attempt, excluding retries and fallback",
     ["provider"],
+    buckets=_LATENCY_BUCKETS,
 )
 
 # Cost only reached the audit database before, which means no alert could fire
