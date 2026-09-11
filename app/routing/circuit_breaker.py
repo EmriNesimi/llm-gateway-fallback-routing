@@ -1,4 +1,5 @@
 import time
+from collections.abc import Callable
 from enum import Enum
 
 
@@ -16,7 +17,20 @@ class CircuitBreaker:
     (half-open); success closes the circuit, failure re-opens it.
     """
 
-    def __init__(self, failure_threshold: int, cooldown_seconds: float):
+    def __init__(
+        self,
+        failure_threshold: int,
+        cooldown_seconds: float,
+        clock: Callable[[], float] = time.time,
+    ):
+        # Injectable so the tests can advance time instead of sleeping through
+        # it. Every state transition here is a clock comparison, so a test that
+        # races real time is testing the machine's scheduler as much as the
+        # breaker: the trial claim ages out after one cooldown, and any pause
+        # between claiming it and asserting it is held — a GC pause, a loaded
+        # CI box, coverage instrumentation — turns a correct breaker into a red
+        # build. Widening the window only makes that rarer. Issue #17.
+        self._clock = clock
         self._failure_threshold = failure_threshold
         self._cooldown_seconds = cooldown_seconds
         self._failure_count = 0
@@ -38,7 +52,7 @@ class CircuitBreaker:
         if (
             self._state is CircuitState.OPEN
             and self._opened_at is not None
-            and time.time() - self._opened_at >= self._cooldown_seconds
+            and self._clock() - self._opened_at >= self._cooldown_seconds
         ):
             self._state = CircuitState.HALF_OPEN
 
@@ -52,7 +66,7 @@ class CircuitBreaker:
         if self._state is CircuitState.OPEN:
             return False
         if self._state is CircuitState.HALF_OPEN:
-            now = time.time()
+            now = self._clock()
             claimed = self._trial_started_at
             if claimed is not None and now - claimed < self._cooldown_seconds:
                 return False
@@ -72,7 +86,7 @@ class CircuitBreaker:
             or self._failure_count >= self._failure_threshold
         ):
             self._state = CircuitState.OPEN
-            self._opened_at = time.time()
+            self._opened_at = self._clock()
         self._trial_started_at = None
 
     @property
