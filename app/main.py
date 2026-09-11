@@ -790,8 +790,11 @@ async def _event_stream(
     finally:
         REQUEST_LATENCY.observe(time.perf_counter() - start)
 
-    REQUEST_COUNT.labels(status="success").inc()
-
+    # Counted after the bookkeeping, not before. Incrementing "success" here
+    # and then failing in the tail would record the same request as both a
+    # success and an unhandled exception, while the caller was told it failed.
+    # The status a request is counted under has to match what the caller got.
+    #
     # The bookkeeping runs after the last chunk, so a failure here also lands
     # on a response already committed to 200. `settled` exists so the handler
     # cannot settle a second time: settle() computes a delta against the
@@ -842,9 +845,11 @@ async def _event_stream(
                     request_id,
                     exc_info=True,
                 )
+        REQUEST_COUNT.labels(status="error").inc()
         yield _stream_error_frame(request_id)
         return
 
+    REQUEST_COUNT.labels(status="success").inc()
     yield "data: [DONE]\n\n"
 
 
@@ -999,10 +1004,8 @@ async def _openai_event_stream(
     finally:
         REQUEST_LATENCY.observe(time.perf_counter() - start)
 
-    REQUEST_COUNT.labels(status="success").inc()
-
-    # Same reasoning as _event_stream: this runs on a response already
-    # committed to 200, and `settled` stops the handler settling twice.
+    # Same reasoning as _event_stream, including counting the request only
+    # once the bookkeeping has succeeded.
     settled = False
     try:
         cost = 0.0
@@ -1062,9 +1065,11 @@ async def _openai_event_stream(
                     request_id,
                     exc_info=True,
                 )
+        REQUEST_COUNT.labels(status="error").inc()
         yield _stream_error_frame(request_id)
         return
 
+    REQUEST_COUNT.labels(status="success").inc()
     yield "data: [DONE]\n\n"
 
 

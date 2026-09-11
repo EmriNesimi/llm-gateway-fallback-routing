@@ -154,3 +154,33 @@ def test_a_failure_inside_the_loop_is_reported_in_band(exploding_client, path, b
     assert "event: error" in r.text, "the stream stopped without telling the caller"
     assert "data: [DONE]" not in r.text
     assert "router blew up" not in r.text, "internal detail leaked to the caller"
+
+
+def test_a_failed_stream_is_not_counted_as_a_success(client, monkeypatch):
+    """Raised in review: `success` was incremented before the tail
+    bookkeeping, so a tail failure recorded the same request as both a success
+    and an unhandled exception — while the caller was told it failed.
+
+    The status a request is counted under has to match what the caller got,
+    otherwise the ratio alerts that divide by this counter are measuring
+    something other than reality.
+    """
+    from prometheus_client import REGISTRY
+
+    def count(status: str) -> float:
+        return REGISTRY.get_sample_value(
+            "gateway_requests_total", {"status": status}
+        ) or 0.0
+
+    def boom(**kwargs):
+        raise RuntimeError("pricing table exploded")
+
+    monkeypatch.setattr(main_module, "estimate_cost_usd", boom)
+
+    before_success, before_error = count("success"), count("error")
+
+    r = client.post("/v1/chat/stream", json=BODY, headers=HEADERS)
+
+    assert "event: error" in r.text
+    assert count("success") == before_success, "a failed stream counted as a success"
+    assert count("error") == before_error + 1
