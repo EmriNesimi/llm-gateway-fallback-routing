@@ -15,11 +15,12 @@ Two things, in this order:
 
 1. **The operator's provider balances.** The gateway holds OpenAI and
    Anthropic credentials, so a bug or an unauthorised caller spends real
-   money. Controls: a per-key monthly budget, a hard per-provider lifetime
-   ceiling reserved atomically before each call, request size bounds, and a
-   token-bucket rate limiter — all enforced before a provider is reached, all
-   failing closed if Redis is unreachable. See
-   [decision 011](docs/decisions/011-hard-provider-spend-ceiling.md).
+   money. Controls: a per-key monthly budget and a hard per-provider lifetime
+   ceiling, both reserved atomically before each call, plus request size bounds
+   and a token-bucket rate limiter — all enforced before a provider is reached,
+   all failing closed if Redis is unreachable. See
+   [decision 011](docs/decisions/011-hard-provider-spend-ceiling.md) and
+   [decision 015](docs/decisions/015-both-spend-ledgers-reserve.md).
 
    The ceiling is only as good as the number it reserves, so a request whose
    cost cannot be computed is **refused rather than run**. A model with no
@@ -42,19 +43,6 @@ Two things, in this order:
 - **Multi-tenant isolation.** Client keys are separated by budget and rate
   limit, not by data. Any key that can reach `/admin` can mint or revoke any
   other.
-- **A per-key budget that holds under concurrency.**
-  `MONTHLY_BUDGET_USD_PER_KEY` is checked before a request and recorded after,
-  with nothing reserved in between — so simultaneous requests from one key all
-  observe the same pre-call total and are all admitted. A caller can exceed
-  their monthly share by up to a rate-limit burst's worth of spend.
-
-  This does not affect the operator's money. The lifetime provider ceiling
-  reserves atomically before every call
-  ([decision 011](docs/decisions/011-hard-provider-spend-ceiling.md)) and is
-  unaffected by this race, so the total that can be spent is still bounded.
-  What is not bounded is one caller's share of it, which matters only in a
-  multi-tenant deployment this is explicitly not built for.
-
 - **Throttled credential guessing on the client API.** The rate limiter is
   keyed on the caller's API key, so it only runs once a key has been accepted.
   An invalid key is rejected before the bucket is touched, and each guess costs

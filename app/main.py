@@ -25,6 +25,7 @@ from app.budget.pricing import (
     worst_case_cost_usd,
 )
 from app.budget.provider_budget import FREE_PROVIDERS, ProviderBudgetExhausted
+from app.budget.tracker import KeyBudgetExhausted
 from app.core.config import settings
 from app.core.redis_client import get_redis
 from app.db.audit import record_audit_log
@@ -328,9 +329,14 @@ def _record_usage(
 
 
 async def _reserve_chain(
-    chain_name: str, messages: list[ChatMessage], params: SamplingParams | None, request_id: str
+    chain_name: str,
+    messages: list[ChatMessage],
+    params: SamplingParams | None,
+    request_id: str,
+    api_key: str,
 ) -> tuple[dict[str, float], set[str]]:
-    """Claim worst-case budget on every billable provider the chain may reach.
+    """Claim worst-case budget on every billable provider the chain may reach,
+    and the same total against the caller's own monthly share.
 
     Reserving up front rather than checking-then-calling is what makes the
     ceiling hold under concurrency: with a burst allowance of 20, twenty
@@ -342,6 +348,14 @@ async def _reserve_chain(
     surplus is refunded in _settle_chain — which every caller must reach, on
     success and on failure alike, or the reservation leaks out of the budget
     permanently.
+
+    Both ledgers reserve here, at the one point in the request that knows
+    the resolved chain and so the worst case. The per-key cap used to be
+    checked in a FastAPI dependency and recorded afterwards, with nothing
+    claimed in between — the same time-of-check/time-of-use race decision
+    011 closed for the provider ceiling, left open on the caller's share
+    (issue #15). It is closed here rather than in enforce_budget because
+    the worst case is not knowable until the chain is resolved.
 
     Returns (reservations, skip) — `skip` being providers already at their
     ceiling, which the router drops from the chain without calling them.
@@ -418,6 +432,47 @@ async def _reserve_chain(
                 "request_id": request_id,
             },
         )
+
+    # The caller's own share, claimed against the same worst case. Summed
+    # rather than maxed because fallback can bill more than one hop: a
+    # provider that generated a completion and then timed out is charged for
+    # it, and the next provider in the chain is charged again. The surplus
+    # comes back at settle, so the only lasting effect of summing is that
+    # concurrent admission is stricter — the safe direction for a control
+    # whose job is not overspending.
+    key_reserved = sum(reservations.values())
+    if key_reserved:
+        try:
+            await budget_tracker.reserve(api_key, key_reserved)
+        except KeyBudgetExhausted as exc:
+            # The provider reservations are already claimed and this request
+            # will never use them, so they have to go back before the raise.
+            # Settling the *key* here would be wrong — its reservation never
+            # landed — which is why this refunds the providers only.
+            await _settle_providers(reservations, "", 0.0)
+            REQUESTS_REFUSED.labels(reason="key_budget_exhausted").inc()
+            logger.warning(
+                "[request_id=%s] refusing: caller is at its monthly budget"
+                " ($%.4f of $%.2f claimed)",
+                request_id,
+                exc.spent,
+                exc.cap,
+            )
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "error": "monthly budget exceeded for this API key",
+                    "request_id": request_id,
+                },
+                headers={"X-Budget-Remaining-USD": "0.0000"},
+            ) from exc
+        except Exception:
+            # Redis refused to answer. Same unwind — without it the provider
+            # ceiling loses this request's worth of headroom permanently, for
+            # a request that was never served.
+            await _settle_providers(reservations, "", 0.0)
+            raise
+
     return reservations, skip
 
 
@@ -465,7 +520,7 @@ async def _settle_stream_on_abort(
     exactly how a ceiling quietly stops being one.
     """
     if not provider:
-        await _settle_chain(reservations or {}, "", 0.0)
+        await _settle_chain(api_key, reservations or {}, "", 0.0)
         return
 
     estimated_output = max(1, streamed_chars // 3)
@@ -483,9 +538,8 @@ async def _settle_stream_on_abort(
         provider,
         streamed_chars,
     )
-    await _settle_chain(reservations or {}, provider, cost)
+    await _settle_chain(api_key, reservations or {}, provider, cost)
     _record_usage(provider, model, input_tokens, estimated_output, cost)
-    await budget_tracker.record_spend(api_key, cost)
     await record_audit_log(
         api_key,
         requested_model=requested_model,
@@ -500,14 +554,34 @@ async def _settle_stream_on_abort(
 
 
 async def _settle_chain(
+    api_key: str,
+    reservations: dict[str, float],
+    served_provider: str,
+    actual_usd: float,
+) -> None:
+    """Settle both ledgers for a finished request.
+
+    The single exit point for the reservations _reserve_chain claimed, so that
+    the per-key ledger cannot be settled on a path that forgets it — which is
+    how the money path has broken before. Every caller reaches exactly one of
+    these, on success and on failure alike.
+    """
+    await _settle_providers(reservations, served_provider, actual_usd)
+    # Mirrors the provider settle: best-effort, and erring toward leaving the
+    # worst case claimed if Redis is down (refusing future requests) rather
+    # than dropping the charge (allowing them).
+    await budget_tracker.settle(api_key, sum(reservations.values()), actual_usd)
+
+
+async def _settle_providers(
     reservations: dict[str, float], served_provider: str, actual_usd: float
 ) -> None:
-    """Swap reservations for the real cost. Unused providers get a full refund.
+    """Swap provider reservations for the real cost. Unused ones get a full refund.
 
     Best-effort, per decision 004, and for the same reason BudgetTracker.
-    record_spend is: this runs *after* a provider has answered and billed. A
-    Redis blip here must not turn a paid-for response into a 500 — that
-    discards output the provider has already charged for.
+    settle is: this runs *after* a provider has answered and billed. A Redis
+    blip here must not turn a paid-for response into a 500 — that discards
+    output the provider has already charged for.
 
     Every provider is attempted even if an earlier one fails. The loop used to
     abandon the rest, leaving their full worst-case reservations claimed for a
@@ -574,7 +648,7 @@ async def _serve_chat(
         )
     except AllProvidersFailedError as exc:
         # Nothing was served, so every reservation comes straight back.
-        await _settle_chain(reservations or {}, "", 0.0)
+        await _settle_chain(api_key, reservations or {}, "", 0.0)
         REQUEST_COUNT.labels(status="error").inc()
         await record_audit_log(
             api_key,
@@ -609,11 +683,10 @@ async def _serve_chat(
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,
     )
-    await _settle_chain(reservations or {}, result.provider, cost)
+    await _settle_chain(api_key, reservations or {}, result.provider, cost)
     _record_usage(
         result.provider, result.model, result.input_tokens, result.output_tokens, cost
     )
-    await budget_tracker.record_spend(api_key, cost)
     await record_audit_log(
         api_key,
         requested_model=requested_model,
@@ -664,7 +737,9 @@ async def chat(
     chain_name, router = _route(request.model, request_id)
     response.headers["X-Gateway-Chain"] = chain_name
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
-    reservations, skip = await _reserve_chain(chain_name, messages, None, request_id)
+    reservations, skip = await _reserve_chain(
+        chain_name, messages, None, request_id, api_key
+    )
 
     result = await _serve_chat(
         router, messages, api_key, request.model, request_id,
@@ -810,9 +885,8 @@ async def _event_stream(
                 output_tokens=output_tokens,
             )
             _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
-            await budget_tracker.record_spend(api_key, cost)
 
-        await _settle_chain(reservations or {}, final_provider, cost)
+        await _settle_chain(api_key, reservations or {}, final_provider, cost)
         settled = True
 
         await record_audit_log(
@@ -860,7 +934,9 @@ async def chat_stream(
     request_id = http_request.state.request_id
     chain_name, router = _route(request.model, request_id)
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
-    reservations, skip = await _reserve_chain(chain_name, messages, None, request_id)
+    reservations, skip = await _reserve_chain(
+        chain_name, messages, None, request_id, api_key
+    )
     response = StreamingResponse(
         _event_stream(
             router, messages, api_key, request.model, request_id,
@@ -1028,9 +1104,8 @@ async def _openai_event_stream(
                 output_tokens=output_tokens,
             )
             _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
-            await budget_tracker.record_spend(api_key, cost)
 
-        await _settle_chain(reservations or {}, final_provider, cost)
+        await _settle_chain(api_key, reservations or {}, final_provider, cost)
         settled = True
 
         await record_audit_log(
@@ -1106,7 +1181,9 @@ async def chat_completions(
             ", ".join(ignored),
         )
 
-    reservations, skip = await _reserve_chain(chain_name, messages, params, request_id)
+    reservations, skip = await _reserve_chain(
+        chain_name, messages, params, request_id, api_key
+    )
 
     if request.stream:
         stream_response = StreamingResponse(

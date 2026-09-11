@@ -457,7 +457,7 @@ async def test_a_redis_failure_at_settle_does_not_discard_a_paid_response(monkey
     monkeypatch.setattr(main_module, "provider_budget", _FailingSettle())
 
     # Must not raise.
-    await main_module._settle_chain({"anthropic": 0.5}, "anthropic", 0.25)
+    await main_module._settle_providers({"anthropic": 0.5}, "anthropic", 0.25)
 
 
 @pytest.mark.asyncio
@@ -479,7 +479,7 @@ async def test_one_failing_settle_does_not_strand_the_others(monkeypatch):
 
     monkeypatch.setattr(main_module, "provider_budget", _FlakyFirst())
 
-    await main_module._settle_chain(
+    await main_module._settle_providers(
         {"anthropic": 0.5, "openai": 0.5}, "openai", 0.25
     )
 
@@ -519,7 +519,7 @@ async def test_the_reservation_covers_every_retry_attempt(monkeypatch):
     monkeypatch.setattr(settings, "provider_retry_attempts", 2)
 
     messages = [ChatMessage(role="user", content="hello")]
-    await main_module._reserve_chain("smart", messages, None, "req-retries")
+    await main_module._reserve_chain("smart", messages, None, "req-retries", "k")
 
     from app.budget.pricing import worst_case_cost_usd
     from app.routing.model_map import FALLBACK_CHAINS
@@ -609,7 +609,7 @@ async def test_a_failing_unreserved_charge_does_not_break_the_response(monkeypat
     with caplog.at_level(logging.ERROR):
         # served_provider is absent from reservations, so record_unreserved
         # is the path taken.
-        await main_module._settle_chain({}, "anthropic", 0.25)
+        await main_module._settle_providers({}, "anthropic", 0.25)
 
     assert "anthropic" in caplog.text
     assert "missing from the ledger" in caplog.text

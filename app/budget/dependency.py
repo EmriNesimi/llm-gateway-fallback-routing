@@ -26,20 +26,17 @@ async def enforce_budget(
     response: Response,
     api_key: str = Depends(enforce_rate_limit),
 ) -> str:
-    # Checked, not reserved — unlike the provider ceiling, which reserves
-    # atomically for exactly this reason (decision 011). Concurrent requests
-    # from one key all read the same pre-call total and are all admitted, so a
-    # caller can overshoot their monthly cap by up to a rate-limit burst's
-    # worth of requests.
+    # A fast refusal for a caller already over its cap, not the enforcement
+    # itself. Enforcement is the atomic reservation in _reserve_chain
+    # (decision 015): the worst case depends on the resolved chain and model,
+    # which is not known this early, so a dependency can only ever check —
+    # and a check on its own is the time-of-check/time-of-use race that let
+    # concurrent requests from one key all read the same pre-call total and
+    # all be admitted (issue #15).
     #
-    # Left as a check deliberately. The cap this races is the per-caller
-    # share, not the operator's money: the lifetime provider ceiling reserves
-    # before every call and is unaffected, so overshooting here cannot spend
-    # more than the operator has allowed in total. Closing it properly means
-    # reserving against the worst case, which is only known in _reserve_chain
-    # — a restructure that would buy a fairness guarantee this project (one
-    # key, one user) does not need. Stated in SECURITY.md rather than left to
-    # be discovered.
+    # Worth keeping in front of that: it turns an exhausted key away before
+    # routing, and `spent` now includes live reservations, so what it reads is
+    # the same number the reservation will be measured against.
     spent = await tracker.spent_usd(api_key)
     remaining = max(0.0, settings.monthly_budget_usd_per_key - spent)
 
