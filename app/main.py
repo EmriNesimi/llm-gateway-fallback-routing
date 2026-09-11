@@ -421,6 +421,27 @@ async def _reserve_chain(
     return reservations, skip
 
 
+def _stream_error_frame(request_id: str) -> str:
+    """The in-band failure report for a stream that has already sent a 200.
+
+    Once the first chunk is out the status line cannot change, so an
+    unexpected failure has exactly two options: report itself inside the
+    stream, or stop dead. Stopping dead is indistinguishable from a complete
+    response — the caller sees output that simply ends, with no way to tell a
+    truncated answer from a finished one, which is worse than an error because
+    it gets acted on.
+
+    Deliberately generic. This is the same text the non-streaming 500 returns,
+    and for the same reason: the exception may carry provider error detail,
+    which is logged and never handed to a caller.
+    """
+    return (
+        "event: error\ndata: "
+        + json.dumps({"error": "internal server error", "request_id": request_id})
+        + "\n\n"
+    )
+
+
 async def _settle_stream_on_abort(
     api_key: str,
     requested_model: str,
@@ -737,35 +758,92 @@ async def _event_stream(
             + "\n\n"
         )
         return
+    except Exception as exc:  # noqa: BLE001 - see _stream_error_frame
+        # Anything unexpected, once the 200 is already out. Reported in-band
+        # rather than allowed to truncate the stream silently.
+        #
+        # `except Exception`, not BaseException: GeneratorExit and
+        # CancelledError must keep reaching the disconnect branch above.
+        UNHANDLED_EXCEPTIONS.inc()
+        REQUEST_COUNT.labels(status="error").inc()
+        logger.error(
+            "[request_id=%s] unhandled exception mid-stream", request_id, exc_info=exc
+        )
+        try:
+            await _settle_stream_on_abort(
+                api_key, requested_model, final_provider, final_model,
+                input_tokens, streamed_chars, reservations, request_id, start,
+            )
+        except Exception:  # noqa: BLE001
+            # The settle recomputes cost through the same code that just
+            # failed, so it can fail identically. Telling the caller matters
+            # more than the bookkeeping here — losing the frame would truncate
+            # the stream, which is the whole failure this handler exists to
+            # prevent.
+            logger.error(
+                "[request_id=%s] could not settle after a mid-stream failure",
+                request_id,
+                exc_info=True,
+            )
+        yield _stream_error_frame(request_id)
+        return
     finally:
         REQUEST_LATENCY.observe(time.perf_counter() - start)
 
     REQUEST_COUNT.labels(status="success").inc()
 
-    cost = 0.0
-    if final_provider:
-        cost = estimate_cost_usd(
+    # The bookkeeping runs after the last chunk, so a failure here also lands
+    # on a response already committed to 200. `settled` exists so the handler
+    # cannot settle a second time: settle() computes a delta against the
+    # reservation, and running it twice would refund money that was spent.
+    settled = False
+    try:
+        cost = 0.0
+        if final_provider:
+            cost = estimate_cost_usd(
+                provider=final_provider,
+                model=final_model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
+            _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
+            await budget_tracker.record_spend(api_key, cost)
+
+        await _settle_chain(reservations or {}, final_provider, cost)
+        settled = True
+
+        await record_audit_log(
+            api_key,
+            requested_model=requested_model,
+            outcome="success",
             provider=final_provider,
-            model=final_model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            cost_usd=cost,
+            latency_ms=(time.perf_counter() - start) * 1000,
+            request_id=request_id,
         )
-        _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
-        await budget_tracker.record_spend(api_key, cost)
-
-    await _settle_chain(reservations or {}, final_provider, cost)
-
-    await record_audit_log(
-        api_key,
-        requested_model=requested_model,
-        outcome="success",
-        provider=final_provider,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        cost_usd=cost,
-        latency_ms=(time.perf_counter() - start) * 1000,
-        request_id=request_id,
-    )
+    except Exception as exc:  # noqa: BLE001 - see _stream_error_frame
+        UNHANDLED_EXCEPTIONS.inc()
+        logger.error(
+            "[request_id=%s] unhandled exception after the last chunk",
+            request_id,
+            exc_info=exc,
+        )
+        if not settled:
+            try:
+                await _settle_stream_on_abort(
+                    api_key, requested_model, final_provider, final_model,
+                    input_tokens, streamed_chars, reservations, request_id, start,
+                )
+            except Exception:  # noqa: BLE001 - same reasoning as above
+                logger.error(
+                    "[request_id=%s] could not settle after a mid-stream failure",
+                    request_id,
+                    exc_info=True,
+                )
+        yield _stream_error_frame(request_id)
+        return
 
     yield "data: [DONE]\n\n"
 
@@ -899,48 +977,94 @@ async def _openai_event_stream(
             + "\n\n"
         )
         return
+    except Exception as exc:  # noqa: BLE001 - see _stream_error_frame
+        UNHANDLED_EXCEPTIONS.inc()
+        REQUEST_COUNT.labels(status="error").inc()
+        logger.error(
+            "[request_id=%s] unhandled exception mid-stream", request_id, exc_info=exc
+        )
+        try:
+            await _settle_stream_on_abort(
+                api_key, requested_model, final_provider, final_model,
+                input_tokens, streamed_chars, reservations, request_id, start,
+            )
+        except Exception:  # noqa: BLE001
+            logger.error(
+                "[request_id=%s] could not settle after a mid-stream failure",
+                request_id,
+                exc_info=True,
+            )
+        yield _stream_error_frame(request_id)
+        return
     finally:
         REQUEST_LATENCY.observe(time.perf_counter() - start)
 
     REQUEST_COUNT.labels(status="success").inc()
 
-    cost = 0.0
-    # The false branch of this is the one uncovered arc left in app/, and it
-    # stays that way on purpose. Every chunk the router yields carries a
-    # provider, so a stream that completes always has one — the branch is
-    # unreachable today.
-    #
-    # It is NOT marked `# pragma: no branch`, unlike the equivalent in
-    # fallback.py where unreachability follows from the control flow itself.
-    # Here it follows from a convention in a different module: that the router
-    # stamps chunk.provider. A future change that forgot to would make this
-    # reachable, and suppressing the arc would hide exactly that bug. An
-    # uncovered arc that says why is worth more than a clean report.
-    if final_provider:
-        cost = estimate_cost_usd(
+    # Same reasoning as _event_stream: this runs on a response already
+    # committed to 200, and `settled` stops the handler settling twice.
+    settled = False
+    try:
+        cost = 0.0
+        # The false branch of this is the one uncovered arc left in app/, and it
+        # stays that way on purpose. Every chunk the router yields carries a
+        # provider, so a stream that completes always has one — the branch is
+        # unreachable today.
+        #
+        # It is NOT marked `# pragma: no branch`, unlike the equivalent in
+        # fallback.py where unreachability follows from the control flow itself.
+        # Here it follows from a convention in a different module: that the router
+        # stamps chunk.provider. A future change that forgot to would make this
+        # reachable, and suppressing the arc would hide exactly that bug. An
+        # uncovered arc that says why is worth more than a clean report.
+        if final_provider:
+            cost = estimate_cost_usd(
+                provider=final_provider,
+                model=final_model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
+            _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
+            await budget_tracker.record_spend(api_key, cost)
+
+        await _settle_chain(reservations or {}, final_provider, cost)
+        settled = True
+
+        await record_audit_log(
+            api_key,
+            requested_model=requested_model,
+            outcome="success",
             provider=final_provider,
-            model=final_model,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
+            cost_usd=cost,
+            latency_ms=(time.perf_counter() - start) * 1000,
+            request_id=request_id,
         )
-        _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
-        await budget_tracker.record_spend(api_key, cost)
 
-    await _settle_chain(reservations or {}, final_provider, cost)
+        yield envelope({}, "stop", final_model)
+    except Exception as exc:  # noqa: BLE001 - see _stream_error_frame
+        UNHANDLED_EXCEPTIONS.inc()
+        logger.error(
+            "[request_id=%s] unhandled exception after the last chunk",
+            request_id,
+            exc_info=exc,
+        )
+        if not settled:
+            try:
+                await _settle_stream_on_abort(
+                    api_key, requested_model, final_provider, final_model,
+                    input_tokens, streamed_chars, reservations, request_id, start,
+                )
+            except Exception:  # noqa: BLE001
+                logger.error(
+                    "[request_id=%s] could not settle after a mid-stream failure",
+                    request_id,
+                    exc_info=True,
+                )
+        yield _stream_error_frame(request_id)
+        return
 
-    await record_audit_log(
-        api_key,
-        requested_model=requested_model,
-        outcome="success",
-        provider=final_provider,
-        input_tokens=input_tokens,
-        output_tokens=output_tokens,
-        cost_usd=cost,
-        latency_ms=(time.perf_counter() - start) * 1000,
-        request_id=request_id,
-    )
-
-    yield envelope({}, "stop", final_model)
     yield "data: [DONE]\n\n"
 
 
