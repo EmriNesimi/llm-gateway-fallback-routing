@@ -3,20 +3,55 @@
 A real run of `scripts/load_test.js` (k6, 10 VUs ramped over 50s) against a
 local gateway instance, real Redis, and a live OpenAI key — not a mock.
 
+**Measured at `db8af9e` (2026-08-10). Not re-run since.** Read the staleness
+note below before quoting any number here.
+
+## Staleness
+
 > **These numbers predate the spend ceiling and everything built on it.**
-> They were recorded before the per-provider budget reservation, the
-> request-size bounds, the un-costable refusal, and the
-> `/v1/chat/completions` half of the traffic the script now generates.
->
-> Concretely, what a re-run would add to each request's path: one Redis
-> `INCRBYFLOAT` per billable provider in the chain to reserve, one more to
-> settle, and a pricing lookup that can now refuse. The reservations are
-> also durable now (append-only Redis), which is a disk write these numbers
-> never paid for.
->
 > Treat them as a floor for the routing path, not a current benchmark. They
 > are kept rather than deleted because the routing and fallback behaviour they
-> measured has not changed — only the accounting around it.
+> measured has not changed — only the accounting around it, which has only
+> ever been added to.
+
+Everything on the request path that did not exist when this was measured, in
+the order it landed:
+
+| Change | Cost per request | Where |
+|---|---|---|
+| Per-provider budget reservation | two Redis round-trips per billable provider (reserve, then settle) | [decision 011](decisions/011-hard-provider-spend-ceiling.md) |
+| Request-size bounds | validation over the message list | `app/schemas.py` |
+| Un-costable refusal | a pricing lookup that can reject before any provider is called | [decision 012](decisions/012-uncostable-requests-are-refused.md) |
+| `/v1/chat/completions` | a second endpoint, and half the traffic the script now generates | `app/main.py` |
+| Durable ledger | `appendfsync always` — a disk write per ledger update | [decision 013](decisions/013-the-spend-ledger-is-persisted.md) |
+| Reservations cover every retry | larger reservations, so stricter admission under load | [decision 014](decisions/014-a-reservation-must-be-an-upper-bound.md) |
+| Per-key budget reservation | two more Redis round-trips per request, on the same ledger | [decision 015](decisions/015-both-spend-ledgers-reserve.md) |
+
+The last row is the newest and the one this document has never reflected at
+all: the per-key cap used to be a single `GET` before the call and an
+`INCRBYFLOAT` after, and is now a reserve/settle pair like the provider
+ceiling.
+
+### Why it has not been re-run
+
+`scripts/load_test.js` drives real traffic to real providers. A re-run spends
+actual money against `PROVIDER_LIFETIME_BUDGET_USD`, which is a lifetime
+ceiling that does not reset — so it is a deliberate act for the repository
+owner, not routine maintenance. The number in this document is worth less than
+the budget a re-run would consume.
+
+### What a re-run should capture
+
+- Both endpoints, since the script already generates both.
+- The reservation overhead specifically. It is the largest addition to the
+  request path and the one these numbers most obviously lack — now four Redis
+  round-trips per request on a two-provider chain, where there were none.
+- The commit it was measured at, replacing the pin at the top of this file, so
+  the next staleness assessment starts from a fact rather than a guess.
+- Ideally a paired run with the providers stubbed, which isolates the
+  gateway's own overhead from the upstream round trip and costs nothing. The
+  absolute latencies would not be comparable to the run below, but the
+  delta that this table is all about would be.
 
 ```
 checks_total.......: 3067    61.0/s
