@@ -111,6 +111,37 @@ def test_a_wrong_admin_key_is_also_rate_limited(client, monkeypatch):
     assert 429 in statuses, f"guesses were never limited: {set(statuses)}"
 
 
+def test_a_wrong_client_key_is_deliberately_not_rate_limited(client, monkeypatch):
+    """The mirror image of the two above, and the opposite answer on purpose.
+
+    enforce_rate_limit takes the API key as a SUB-dependency, so FastAPI
+    resolves require_api_key first and an invalid key 401s without touching the
+    bucket. Throttling earlier would mean one shared bucket for all
+    unauthenticated traffic — there is no trustworthy per-client identity
+    before auth and no reverse proxy to supply one — which lets one bad client
+    starve every good one. Decision 016 has the full reasoning.
+
+    Pinned because the ordering reads as an accident in both files. Anyone
+    "fixing" the asymmetry by flipping this to match the admin surface fails
+    here and gets pointed at the decision, instead of quietly trading
+    availability for a threat that is already not realistic.
+    """
+    monkeypatch.setattr(settings, "gateway_api_keys", "the-real-key")
+    monkeypatch.setattr(settings, "rate_limit_capacity", 3)
+
+    body = {"model": "default", "messages": [{"role": "user", "content": "hi"}]}
+    statuses = {
+        client.post("/v1/chat", json=body, headers={"X-API-Key": f"guess-{i}"}).status_code
+        for i in range(25)
+    }
+
+    assert statuses == {401}, (
+        f"expected every guess to 401 untouched by the limiter, got {statuses}."
+        " A 429 here means the client API now throttles before authenticating,"
+        " which reverses decision 016."
+    )
+
+
 # --------------------------------------------------------------------------
 # System prompts reaching Anthropic
 # --------------------------------------------------------------------------

@@ -54,7 +54,8 @@ Two things, in this order:
   means a single shared bucket for all unauthenticated traffic, which lets one
   bad client starve every good one. Client keys are high-entropy; the trade
   favours availability. Worth revisiting behind a reverse proxy that can supply
-  a trustworthy per-client identity.
+  a trustworthy per-client identity. See
+  [decision 016](docs/decisions/016-no-pre-auth-rate-limit-on-the-client-api.md).
 
 - **Bounded storage.** `audit_log` and `admin_audit_log` grow by one row per
   request and per key operation, and nothing prunes them. On the default

@@ -21,3 +21,4 @@ and so a reader can tell a deliberate trade from an accident.
 | 013 | The spend ledger is persisted, and lives only in Redis | [file](013-the-spend-ledger-is-persisted.md) |
 | 014 | A reservation must be an upper bound on what the request can cost | [file](014-a-reservation-must-be-an-upper-bound.md) |
 | 015 | Both spend ledgers reserve; neither only checks | [file](015-both-spend-ledgers-reserve.md) |
+| 016 | The client API is rate limited after authentication, not before | [file](016-no-pre-auth-rate-limit-on-the-client-api.md) |
