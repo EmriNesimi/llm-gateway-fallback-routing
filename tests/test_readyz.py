@@ -1,5 +1,4 @@
 import asyncio
-import time
 
 from fastapi.testclient import TestClient
 from redis.asyncio import Redis
@@ -9,27 +8,45 @@ from app.main import app
 
 
 def test_readyz_runs_checks_concurrently_not_sequentially(isolated_db, monkeypatch):
-    # Each fake check sleeps 0.3s. If they ran sequentially, /readyz would
-    # take ~0.6s; run concurrently (via asyncio.gather), it should take
-    # close to 0.3s — the max of the two, not the sum.
+    """Each check waits for the other to arrive before returning.
+
+    Run concurrently, both arrive and both return immediately. Run one after
+    the other, the first waits for a check that has not started yet and never
+    will — so it times out, its `error` fails /readyz, and this returns 503.
+    Concurrency is asserted directly rather than inferred from a stopwatch.
+
+    It used to be a stopwatch: two 0.3s sleeps, asserting the whole round trip
+    came in under 0.5s. That measured TestClient's startup as well as the
+    checks, and 0.2s of headroom does not survive a loaded machine — under the
+    coverage instrumentation `make test` adds, this is a red build on code
+    that is perfectly correct. Issue #17.
+    """
+    redis_started = asyncio.Event()
+    database_started = asyncio.Event()
+
     async def slow_redis_check():
-        await asyncio.sleep(0.3)
+        redis_started.set()
+        # Long enough that only genuine serialisation trips it, short enough
+        # that a broken /readyz fails the suite rather than hanging it.
+        await asyncio.wait_for(database_started.wait(), timeout=10)
         return "ok"
 
     async def slow_database_check():
-        await asyncio.sleep(0.3)
+        database_started.set()
+        await asyncio.wait_for(redis_started.wait(), timeout=10)
         return "ok"
 
     monkeypatch.setattr(main_module, "_check_redis", slow_redis_check)
     monkeypatch.setattr(main_module, "_check_database", slow_database_check)
 
     with TestClient(app) as client:
-        start = time.perf_counter()
         r = client.get("/readyz")
-        elapsed = time.perf_counter() - start
 
-    assert r.status_code == 200
-    assert elapsed < 0.5  # well under 0.6s (what sequential would take)
+    assert r.status_code == 200, (
+        "the readiness checks did not overlap — /readyz is running them"
+        f" sequentially: {r.json()}"
+    )
+    assert r.json()["checks"] == {"redis": "ok", "database": "ok"}
 
 
 def test_readyz_reports_unavailable_when_redis_unreachable(isolated_db, monkeypatch):
