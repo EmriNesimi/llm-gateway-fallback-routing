@@ -3,6 +3,7 @@ import time
 
 from redis.asyncio import Redis
 
+from app.observability.metrics import BUDGET_RESERVATION_LEAKED
 from app.security.api_keys import hash_key
 
 logger = logging.getLogger("gateway.budget")
@@ -102,6 +103,9 @@ class BudgetTracker:
                 worst_case_usd,
                 exc_info=True,
             )
+            # Not labelled by key: that label would be unbounded, and which
+            # caller leaked matters far less than that the gateway is leaking.
+            BUDGET_RESERVATION_LEAKED.labels(ledger="key").inc(worst_case_usd)
 
         logger.warning(
             "refusing request: key would exceed its $%.2f monthly budget"

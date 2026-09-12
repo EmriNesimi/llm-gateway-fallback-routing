@@ -175,3 +175,15 @@ groups:
         annotations:
           runbook_url: "https://github.com/EmriNesimi/llm-gateway-fallback-routing/blob/main/docs/runbook.md#providerbudgetexhausted"
           summary: "{{ $labels.provider }} is out of budget and is being skipped"
+
+      # Any leak at all is worth knowing about. It fails in the safe direction
+      # — the ceiling gets smaller, never larger — which is precisely why
+      # nobody would spot it: spend looks normal and headroom quietly erodes.
+      # No `for:` clause, because this is a discrete event rather than a
+      # condition that persists long enough to be sampled twice.
+      - alert: BudgetReservationLeaked
+        expr: increase(gateway_budget_reservation_leaked_usd_total[10m]) > 0
+        labels: {severity: warning}
+        annotations:
+          runbook_url: "https://github.com/EmriNesimi/llm-gateway-fallback-routing/blob/main/docs/runbook.md#budgetreservationleaked"
+          summary: "{{ $labels.ledger }} ledger lost a reservation it could not refund"

@@ -19,6 +19,7 @@ their head at the time, and that person is not the one who gets paged.
 - [UnhandledExceptions](#unhandledexceptions)
 - [ProviderBudgetLow](#providerbudgetlow)
 - [ProviderBudgetExhausted](#providerbudgetexhausted)
+- [BudgetReservationLeaked](#budgetreservationleaked)
 
 **Situations that fire no alert**, because from the outside nothing looks wrong:
 
@@ -178,6 +179,35 @@ diverging is itself worth understanding.
 
 **Do not** clear the Redis key to make it go away. That is the only copy of the
 number.
+
+## BudgetReservationLeaked
+
+**Means:** a request claimed budget, was refused for being over its cap, and
+then the hand-back failed — so the ledger is permanently short by that amount
+with no request behind it. Redis was reachable for the claim and not for the
+refund.
+
+The gateway kept working and answered the caller correctly: a `402` is the
+right answer for a request over its cap whether or not the refund landed. What
+is wrong is the ledger, not the request.
+
+**Check:** which ledger, from the `ledger` label.
+
+- `provider` — the lifetime ceiling now sits lower than the money actually
+  spent, and it will not correct itself. `make ledger` shows the inflated
+  figure. Cross-check `gateway_cost_usd_total` and the provider's own billing
+  page to establish the true number before deciding anything.
+- `key` — one caller's monthly share is short. It rights itself when the
+  period rolls over, so it is usually not worth touching.
+
+**Then:** look for what made Redis unavailable for a single round-trip. One
+leak is a blip; a run of them means Redis is unhealthy, and the same window
+also makes `settle` drop spend it should have recorded — so the ledger is
+unreliable in both directions until that is fixed.
+
+**Correcting it** is the "Reset it" lever below, applied deliberately. There is
+no separate undo for a leak, because the ledger keeps no record that a
+reservation ever existed — which is the whole reason this alert exists.
 
 ## Working with the ledger
 

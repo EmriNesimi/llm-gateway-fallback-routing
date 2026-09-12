@@ -111,3 +111,20 @@ PROVIDER_BUDGET_REMAINING = Gauge(
     "Lifetime USD still available before a provider is refused",
     ["provider"],
 )
+
+# A reservation that was claimed and could not be handed back, because Redis
+# failed between the two. The ledger stays permanently short by that much with
+# no request behind it — the ceiling quietly gets smaller.
+#
+# It needs a metric rather than only a log line for the same reason the two
+# gauges above exist: the failure is in the safe direction (it refuses more,
+# never less), which is exactly what makes it easy to never notice. Spend looks
+# normal, headroom just erodes, and Redis holds the only copy of the number.
+# `ledger` is which one it leaked out of, because the fix differs: the provider
+# ceiling needs a deliberate correction, a per-key leak rights itself when the
+# period rolls over.
+BUDGET_RESERVATION_LEAKED = Counter(
+    "gateway_budget_reservation_leaked_usd_total",
+    "USD claimed as a reservation that could not be refunded",
+    ["ledger"],  # provider | key
+)

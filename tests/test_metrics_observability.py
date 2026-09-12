@@ -645,3 +645,96 @@ def test_the_latency_alert_threshold_is_inside_the_buckets():
         f"the alert fires above {threshold}s but the histogram cannot resolve"
         f" past {max(finite)}s"
     )
+
+
+# --------------------------------------------------------------------------
+# Leaked reservations
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_stranded_reservation_is_counted_not_just_logged():
+    """A claim that could not be handed back makes the ceiling permanently
+    smaller with no request behind it.
+
+    It fails in the safe direction — refusing more, never less — which is
+    exactly what makes it easy to never notice: spend looks normal, headroom
+    quietly erodes, and Redis holds the only copy of the number. A log line
+    cannot be alerted on, which is why the budget gauges beside it exist.
+    """
+    import fakeredis.aioredis
+
+    from app.budget.provider_budget import ProviderBudget, ProviderBudgetExhausted
+
+    redis = fakeredis.aioredis.FakeRedis()
+    budget = ProviderBudget(redis=redis, cap_usd=4.0)
+    before = _sample("gateway_budget_reservation_leaked_usd_total", ledger="provider")
+
+    real = redis.incrbyfloat
+    calls = {"n": 0}
+
+    async def flaky(key, amount):
+        calls["n"] += 1
+        if calls["n"] > 1:  # the refund
+            raise ConnectionError("redis went away")
+        return await real(key, amount)
+
+    redis.incrbyfloat = flaky
+    with pytest.raises(ProviderBudgetExhausted):
+        await budget.reserve("leaky-provider", 9.0)
+
+    after = _sample("gateway_budget_reservation_leaked_usd_total", ledger="provider")
+    assert after - before == pytest.approx(9.0)
+
+
+@pytest.mark.asyncio
+async def test_a_stranded_reservation_does_not_leave_the_gauge_optimistic():
+    """The gauge has to show what Redis actually holds after the failed
+    refund, not the pre-claim total. Publishing the latter would advertise
+    headroom that is no longer there, on the one path where it just shrank —
+    and nothing else reads this provider again to correct it."""
+    import fakeredis.aioredis
+
+    from app.budget.provider_budget import ProviderBudget, ProviderBudgetExhausted
+
+    redis = fakeredis.aioredis.FakeRedis()
+    budget = ProviderBudget(redis=redis, cap_usd=4.0)
+
+    real = redis.incrbyfloat
+    calls = {"n": 0}
+
+    async def flaky(key, amount):
+        calls["n"] += 1
+        if calls["n"] > 1:
+            raise ConnectionError("redis went away")
+        return await real(key, amount)
+
+    redis.incrbyfloat = flaky
+    with pytest.raises(ProviderBudgetExhausted):
+        await budget.reserve("stale-gauge-provider", 9.0)
+
+    spent = _sample("gateway_provider_budget_spent_usd", provider="stale-gauge-provider")
+    remaining = _sample(
+        "gateway_provider_budget_remaining_usd", provider="stale-gauge-provider"
+    )
+    assert spent == pytest.approx(9.0), "the gauge understates what Redis holds"
+    assert remaining == pytest.approx(0.0), "the gauge still advertises headroom"
+
+
+@pytest.mark.asyncio
+async def test_the_key_ledger_counts_its_leaks_too():
+    import fakeredis.aioredis
+
+    from app.budget.tracker import BudgetTracker, KeyBudgetExhausted
+    from tests.test_budget_tracker import _FailAfterN
+
+    redis = fakeredis.aioredis.FakeRedis()
+    tracker = BudgetTracker(redis=redis, monthly_cap_usd=1.0)
+    before = _sample("gateway_budget_reservation_leaked_usd_total", ledger="key")
+
+    redis.pipeline = _FailAfterN(redis.pipeline, 1)
+    with pytest.raises(KeyBudgetExhausted):
+        await tracker.reserve("leaky-key", 5.0)
+
+    after = _sample("gateway_budget_reservation_leaked_usd_total", ledger="key")
+    assert after - before == pytest.approx(5.0)

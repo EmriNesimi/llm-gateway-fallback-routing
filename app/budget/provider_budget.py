@@ -30,6 +30,7 @@ import logging
 from redis.asyncio import Redis
 
 from app.observability.metrics import (
+    BUDGET_RESERVATION_LEAKED,
     PROVIDER_BUDGET_REMAINING,
     PROVIDER_BUDGET_SPENT,
 )
@@ -152,6 +153,13 @@ class ProviderBudget:
                 provider,
                 exc_info=True,
             )
+            BUDGET_RESERVATION_LEAKED.labels(ledger="provider").inc(worst_case_usd)
+            # Publish the stranded total, not the pre-claim one. The refund did
+            # not land, so `total` is what Redis actually holds — and a gauge
+            # left showing `spent` would advertise headroom that is no longer
+            # there, on the one path where the ceiling just shrank. Nothing
+            # else reads this provider again to correct it.
+            self._publish(provider, total)
         else:
             self._publish(provider, spent)
 
