@@ -294,3 +294,50 @@ async def test_free_providers_publish_no_budget_gauges(budget):
 
     for metric in ("gateway_provider_budget_spent_usd", "gateway_provider_budget_remaining_usd"):
         assert REGISTRY.get_sample_value(metric, {"provider": "ollama"}) is None
+
+
+@pytest.mark.asyncio
+async def test_a_failed_refund_still_refuses_rather_than_erroring(monkeypatch, caplog):
+    """The over-cap increment lands, then the hand-back fails.
+
+    Same shape as BudgetTracker.reserve, and it matters more here: this is the
+    operator's actual money, and a ProviderBudgetExhausted replaced by a raw
+    ConnectionError is a 500 where the correct answer was "no". The stranded
+    claim shrinks the lifetime ceiling for a request that was never served, so
+    it has to be logged — nothing downstream knows a reservation was made.
+    """
+    import logging
+
+    redis = fakeredis.aioredis.FakeRedis()
+    budget = ProviderBudget(redis=redis, cap_usd=4.0)
+
+    real_incrbyfloat = redis.incrbyfloat
+    calls = {"n": 0}
+
+    async def flaky(key, amount):
+        calls["n"] += 1
+        if calls["n"] > 1:  # the refund, not the claim
+            raise ConnectionError("redis went away")
+        return await real_incrbyfloat(key, amount)
+
+    monkeypatch.setattr(redis, "incrbyfloat", flaky)
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(ProviderBudgetExhausted):
+            await budget.reserve("anthropic", 99.0)
+
+    assert "stays claimed" in caplog.text, "a stranded reservation was not logged"
+
+
+@pytest.mark.asyncio
+async def test_the_refusal_reports_the_spend_it_actually_observed(budget):
+    """The figure in the exception is the total before this request's claim,
+    which is what the caller and the log both mean by "already spent"."""
+    await budget.reserve("anthropic", 3.0)
+    await budget.settle("anthropic", 3.0, 3.0)
+
+    with pytest.raises(ProviderBudgetExhausted) as exc_info:
+        await budget.reserve("anthropic", 2.0)
+
+    assert exc_info.value.spent == pytest.approx(3.0)
+    assert exc_info.value.cap == pytest.approx(4.0)

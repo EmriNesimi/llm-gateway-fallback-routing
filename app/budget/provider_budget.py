@@ -123,18 +123,47 @@ class ProviderBudget:
 
         key = self._key(provider)
         total = float(await self._redis.incrbyfloat(key, worst_case_usd))
-        if total > self._cap_usd:
+        if total <= self._cap_usd:
+            return
+
+        # Derived from the total this call already read, rather than a third
+        # round-trip. Re-reading was one more thing that could fail between
+        # the refund and the raise, and under concurrency it could come back
+        # holding somebody else's live reservation — this is the figure this
+        # caller actually observed before claiming.
+        spent = total - worst_case_usd
+        try:
             await self._redis.incrbyfloat(key, -worst_case_usd)
-            spent = await self.spent(provider)
-            logger.warning(
-                "refusing request: %s would exceed its $%.2f lifetime budget"
-                " (spent $%.4f, this request could cost up to $%.4f)",
-                provider,
-                self._cap_usd,
-                spent,
+        except Exception:  # noqa: BLE001 - the refusal below stands either way
+            # The claim landed and the hand-back did not, so the ceiling is
+            # permanently lower by a request that was never served. Nothing
+            # downstream can undo it: nothing downstream knows this
+            # reservation existed.
+            #
+            # Raise ProviderBudgetExhausted anyway. Being over the cap is true
+            # whether or not the refund succeeded, and letting this exception
+            # through would report a broken gateway for a working one saying
+            # no. The leak refuses more, never less, which is the direction
+            # this control is supposed to fail in.
+            logger.error(
+                "failed to hand back a $%.6f reservation refused at %s's"
+                " lifetime cap; it stays claimed against the ceiling",
                 worst_case_usd,
+                provider,
+                exc_info=True,
             )
-            raise ProviderBudgetExhausted(provider, spent, self._cap_usd)
+        else:
+            self._publish(provider, spent)
+
+        logger.warning(
+            "refusing request: %s would exceed its $%.2f lifetime budget"
+            " (spent $%.4f, this request could cost up to $%.4f)",
+            provider,
+            self._cap_usd,
+            spent,
+            worst_case_usd,
+        )
+        raise ProviderBudgetExhausted(provider, spent, self._cap_usd)
 
     async def settle(self, provider: str, reserved_usd: float, actual_usd: float) -> None:
         """Replace a reservation with what the request really cost.
