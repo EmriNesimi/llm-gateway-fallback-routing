@@ -77,16 +77,40 @@ class BudgetTracker:
             return
 
         total = await self._apply(api_key, worst_case_usd, swallow=False)
-        if total > self._monthly_cap_usd:
+        if total <= self._monthly_cap_usd:
+            return
+
+        spent = total - worst_case_usd
+        try:
             await self._apply(api_key, -worst_case_usd, swallow=False)
-            logger.warning(
-                "refusing request: key would exceed its $%.2f monthly budget"
-                " (claimed $%.4f, this request could cost up to $%.4f)",
-                self._monthly_cap_usd,
-                total - worst_case_usd,
+        except Exception:  # noqa: BLE001 - the refusal below stands either way
+            # The increment landed and the hand-back did not, so the claim is
+            # stranded: this caller's month is permanently smaller by a request
+            # that was never served. Nothing downstream can undo it, because
+            # nothing downstream knows a reservation was ever made.
+            #
+            # Raise KeyBudgetExhausted anyway. Being over the cap is true
+            # whether or not the refund succeeded, and letting this exception
+            # through instead would report a broken gateway for what is
+            # actually a working one saying no. The leak is in the safe
+            # direction — it refuses more, never less — so it is logged loudly
+            # rather than allowed to change the answer.
+            logger.error(
+                "failed to hand back a $%.6f reservation refused at the monthly"
+                " cap; it stays claimed against this key until the period rolls"
+                " over",
                 worst_case_usd,
+                exc_info=True,
             )
-            raise KeyBudgetExhausted(total - worst_case_usd, self._monthly_cap_usd)
+
+        logger.warning(
+            "refusing request: key would exceed its $%.2f monthly budget"
+            " (claimed $%.4f, this request could cost up to $%.4f)",
+            self._monthly_cap_usd,
+            spent,
+            worst_case_usd,
+        )
+        raise KeyBudgetExhausted(spent, self._monthly_cap_usd)
 
     async def settle(self, api_key: str, reserved_usd: float, actual_usd: float) -> None:
         """Replace a reservation with what the request really cost.

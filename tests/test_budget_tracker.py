@@ -183,3 +183,62 @@ async def test_settling_at_exactly_the_reserved_cost_is_a_no_op():
     await tracker.settle("key1", reserved_usd=0.25, actual_usd=0.25)
 
     assert await tracker.spent_usd("key1") == pytest.approx(0.25)
+
+
+class _FailAfterN:
+    """Wraps the real pipeline factory, working N times and then failing.
+
+    Takes the factory as an argument rather than reaching through the Redis
+    instance: monkeypatching `redis.pipeline` and then calling
+    `redis.pipeline()` from inside here would recurse into this stub instead
+    of the real one, quietly making it a no-op that never fails at all.
+    """
+
+    def __init__(self, factory, n):
+        self._factory, self._n = factory, n
+
+    def __call__(self):
+        self._inner = self._factory()
+        return self
+
+    def incrbyfloat(self, key, amount):
+        self._inner.incrbyfloat(key, amount)
+        return self
+
+    def expire(self, *a, **kw):
+        self._inner.expire(*a, **kw)
+        return self
+
+    async def execute(self):
+        if self._n <= 0:
+            raise ConnectionError("redis went away")
+        self._n -= 1
+        return await self._inner.execute()
+
+
+@pytest.mark.asyncio
+async def test_a_failed_refund_still_refuses_rather_than_erroring(monkeypatch, caplog):
+    """The over-cap increment lands, then the hand-back fails.
+
+    Being over the cap is true whether or not the refund landed, so the caller
+    must still get KeyBudgetExhausted. Letting the refund's ConnectionError
+    through instead turns a clean 402 into a 500 — the caller is told the
+    gateway is broken when it is actually working and saying no.
+    """
+    import logging
+
+    redis = fakeredis.aioredis.FakeRedis()
+    tracker = BudgetTracker(redis=redis, monthly_cap_usd=1.0)
+
+    # First execute succeeds (the over-cap increment); the second — the refund
+    # — raises.
+    monkeypatch.setattr(redis, "pipeline", _FailAfterN(redis.pipeline, 1))
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(KeyBudgetExhausted):
+            await tracker.reserve("key1", 5.0)
+
+    assert "stays claimed" in caplog.text, (
+        "a stranded reservation has to be logged — it permanently reduces this"
+        " caller's month with no request behind it"
+    )
