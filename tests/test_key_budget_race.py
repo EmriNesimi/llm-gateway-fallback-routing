@@ -225,3 +225,66 @@ def test_a_redis_failure_at_key_reserve_releases_the_provider_reservations(
     assert after == pytest.approx(before), (
         f"a failed reserve stranded ${after - before:.4f} of provider headroom"
     )
+
+
+def test_a_redis_failure_mid_chain_does_not_strand_the_first_reservation(
+    client, monkeypatch
+):
+    """The provider loop reserves one hop at a time. If a later hop's reserve
+    dies on something other than "out of budget" — a Redis blip between two
+    providers in the same chain — the earlier hop's claim used to ride out of
+    _reserve_chain uncaught, with nothing downstream to hand it back.
+
+    That is a denial of service against the operator's own ceiling: headroom
+    disappears for a request that was never served, and only a manual edit of
+    the ledger gets it back.
+    """
+    monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router()))
+
+    real_reserve = budget_dependency.provider_budget.reserve
+    seen = []
+
+    async def flaky(provider, amount):
+        seen.append(provider)
+        if len(seen) > 1:  # the second hop in the chain
+            raise ConnectionError("redis went away mid-chain")
+        return await real_reserve(provider, amount)
+
+    monkeypatch.setattr(budget_dependency.provider_budget, "reserve", flaky)
+
+    before = client.portal.call(budget_dependency.provider_budget.spent, "anthropic")
+
+    with pytest.raises(ConnectionError):
+        client.post("/v1/chat", json=BODY, headers=HEADERS)
+
+    after = client.portal.call(budget_dependency.provider_budget.spent, "anthropic")
+    assert len(seen) > 1, "the chain only reserved one provider; the test proved nothing"
+    assert after == pytest.approx(before), (
+        f"a mid-chain failure stranded ${after - before:.4f} of the lifetime ceiling"
+    )
+
+
+def test_a_provider_listed_twice_in_a_chain_is_fully_refunded(client, monkeypatch):
+    """`reservations` is keyed by provider, but a chain is a list of
+    (provider, model) pairs — nothing stops the same provider appearing twice
+    on different models. Both hops reserve against the one Redis key, so a
+    dict that remembered only the last cost would refund less than was
+    claimed and strand the difference on the ceiling forever."""
+    from app.routing.model_map import FALLBACK_CHAINS
+
+    doubled = [("anthropic", "claude-opus-5"), ("anthropic", "claude-haiku-4-5")]
+    monkeypatch.setitem(FALLBACK_CHAINS, "smart", doubled)
+
+    class Failing:
+        async def chat(self, *a, **k):
+            raise AllProvidersFailedError("nothing served")
+
+    monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Failing()))
+
+    before = client.portal.call(budget_dependency.provider_budget.spent, "anthropic")
+    assert client.post("/v1/chat", json=BODY, headers=HEADERS).status_code == 502
+    after = client.portal.call(budget_dependency.provider_budget.spent, "anthropic")
+
+    assert after == pytest.approx(before), (
+        f"a duplicated provider stranded ${after - before:.4f} on the ceiling"
+    )

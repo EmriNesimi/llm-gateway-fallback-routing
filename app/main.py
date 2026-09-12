@@ -357,6 +357,14 @@ async def _reserve_chain(
     (issue #15). It is closed here rather than in enforce_budget because
     the worst case is not knowable until the chain is resolved.
 
+    Nothing claimed here may outlive a failure. Every exit that is not a
+    successful return hands back everything reserved so far, because a
+    reservation with no request behind it is headroom that never comes back —
+    only `_settle_chain` refunds, and it is only reached if this returns. The
+    unwind catches BaseException rather than Exception on purpose: a client
+    that disconnects mid-reservation raises CancelledError, which is not an
+    Exception, and a cancelled request leaks exactly like a failed one.
+
     Returns (reservations, skip) — `skip` being providers already at their
     ceiling, which the router drops from the chain without calling them.
     """
@@ -368,110 +376,121 @@ async def _reserve_chain(
     unpriced: set[str] = set()
     billable = 0
 
-    for provider, model in FALLBACK_CHAINS[chain_name]:
-        if provider in FREE_PROVIDERS:
-            continue
-        billable += 1
-        try:
-            # Times the number of attempts this provider can actually make.
-            # FallbackRouter retries the SAME provider up to
-            # provider_retry_attempts more times on a retryable error, and a
-            # client-side timeout is retryable — so a provider that generated
-            # a full completion before the timeout fired gets asked to
-            # generate another one, and bills for both. Only the attempt that
-            # finally returns is settled, so the earlier ones were spend with
-            # no reservation and no ledger entry behind them.
-            #
-            # Reserving for the worst case means reserving for every attempt.
-            # The surplus is refunded at settle, so the only lasting effect is
-            # that concurrent admission is stricter — which is the safe
-            # direction for a control whose job is not overspending.
-            attempts = settings.provider_retry_attempts + 1
-            cost = worst_case_cost_usd(provider, model, chars, max_out) * attempts
-        except UnpricedModelError:
-            # Un-costable, so the ceiling cannot apply to it. Dropped from the
-            # chain exactly like an exhausted provider rather than failing the
-            # whole request — a priced provider further down can still serve
-            # it, and refusing outright would turn one missing table entry
-            # into a total outage.
-            skip.add(provider)
-            unpriced.add(provider)
-            continue
-        try:
-            await provider_budget.reserve(provider, cost)
-            reservations[provider] = cost
-        except ProviderBudgetExhausted:
-            skip.add(provider)
+    try:
 
-    has_free_hop = any(p in FREE_PROVIDERS for p, _ in FALLBACK_CHAINS[chain_name])
-    if billable and len(skip) == billable and not has_free_hop:
-        exhausted = skip - unpriced
-        logger.error(
-            "[request_id=%s] refusing: no usable provider in chain %r"
-            " (out of budget: %s; unpriced: %s)",
-            request_id,
-            chain_name,
-            sorted(exhausted) or "none",
-            sorted(unpriced) or "none",
-        )
-        REQUESTS_REFUSED.labels(
-            reason="provider_budget_exhausted" if exhausted else "no_pricing_configured"
-        ).inc()
-        # 402 when money is why, 503 when it is a missing pricing entry —
-        # the first is the caller's problem to wait out, the second is an
-        # operator misconfiguration and retrying will never fix it.
-        raise HTTPException(
-            status_code=402 if exhausted else 503,
-            detail={
-                "error": (
-                    "provider budget exhausted" if exhausted else "no pricing configured"
-                ),
-                "spent": await provider_budget.snapshot(billable_providers()),
-                "cap_usd": provider_budget.cap_usd,
-                "unpriced": sorted(unpriced),
-                "request_id": request_id,
-            },
-        )
+        for provider, model in FALLBACK_CHAINS[chain_name]:
+            if provider in FREE_PROVIDERS:
+                continue
+            billable += 1
+            try:
+                # Times the number of attempts this provider can actually make.
+                # FallbackRouter retries the SAME provider up to
+                # provider_retry_attempts more times on a retryable error, and a
+                # client-side timeout is retryable — so a provider that generated
+                # a full completion before the timeout fired gets asked to
+                # generate another one, and bills for both. Only the attempt that
+                # finally returns is settled, so the earlier ones were spend with
+                # no reservation and no ledger entry behind them.
+                #
+                # Reserving for the worst case means reserving for every attempt.
+                # The surplus is refunded at settle, so the only lasting effect is
+                # that concurrent admission is stricter — which is the safe
+                # direction for a control whose job is not overspending.
+                attempts = settings.provider_retry_attempts + 1
+                cost = worst_case_cost_usd(provider, model, chars, max_out) * attempts
+            except UnpricedModelError:
+                # Un-costable, so the ceiling cannot apply to it. Dropped from the
+                # chain exactly like an exhausted provider rather than failing the
+                # whole request — a priced provider further down can still serve
+                # it, and refusing outright would turn one missing table entry
+                # into a total outage.
+                skip.add(provider)
+                unpriced.add(provider)
+                continue
+            try:
+                await provider_budget.reserve(provider, cost)
+                # Accumulated, not assigned. The ledger is keyed by provider
+                # but a chain is a list of (provider, model) pairs, so nothing
+                # stops one from listing the same provider twice on different
+                # models. reserve() would then charge Redis twice while this
+                # dict remembered only the second cost, and settle would hand
+                # back less than was claimed — stranding the difference. No
+                # chain does that today; this makes sure the first one that
+                # does is not silently wrong.
+                reservations[provider] = reservations.get(provider, 0.0) + cost
+            except ProviderBudgetExhausted:
+                skip.add(provider)
 
-    # The caller's own share, claimed against the same worst case. Summed
-    # rather than maxed because fallback can bill more than one hop: a
-    # provider that generated a completion and then timed out is charged for
-    # it, and the next provider in the chain is charged again. The surplus
-    # comes back at settle, so the only lasting effect of summing is that
-    # concurrent admission is stricter — the safe direction for a control
-    # whose job is not overspending.
-    key_reserved = sum(reservations.values())
-    if key_reserved:
-        try:
-            await budget_tracker.reserve(api_key, key_reserved)
-        except KeyBudgetExhausted as exc:
-            # The provider reservations are already claimed and this request
-            # will never use them, so they have to go back before the raise.
-            # Settling the *key* here would be wrong — its reservation never
-            # landed — which is why this refunds the providers only.
-            await _settle_providers(reservations, "", 0.0)
-            REQUESTS_REFUSED.labels(reason="key_budget_exhausted").inc()
-            logger.warning(
-                "[request_id=%s] refusing: caller is at its monthly budget"
-                " ($%.4f of $%.2f claimed)",
+        has_free_hop = any(p in FREE_PROVIDERS for p, _ in FALLBACK_CHAINS[chain_name])
+        if billable and len(skip) == billable and not has_free_hop:
+            exhausted = skip - unpriced
+            logger.error(
+                "[request_id=%s] refusing: no usable provider in chain %r"
+                " (out of budget: %s; unpriced: %s)",
                 request_id,
-                exc.spent,
-                exc.cap,
+                chain_name,
+                sorted(exhausted) or "none",
+                sorted(unpriced) or "none",
             )
+            REQUESTS_REFUSED.labels(
+                reason="provider_budget_exhausted" if exhausted else "no_pricing_configured"
+            ).inc()
+            # 402 when money is why, 503 when it is a missing pricing entry —
+            # the first is the caller's problem to wait out, the second is an
+            # operator misconfiguration and retrying will never fix it.
             raise HTTPException(
-                status_code=402,
+                status_code=402 if exhausted else 503,
                 detail={
-                    "error": "monthly budget exceeded for this API key",
+                    "error": (
+                        "provider budget exhausted" if exhausted else "no pricing configured"
+                    ),
+                    "spent": await provider_budget.snapshot(billable_providers()),
+                    "cap_usd": provider_budget.cap_usd,
+                    "unpriced": sorted(unpriced),
                     "request_id": request_id,
                 },
-                headers={"X-Budget-Remaining-USD": "0.0000"},
-            ) from exc
-        except Exception:
-            # Redis refused to answer. Same unwind — without it the provider
-            # ceiling loses this request's worth of headroom permanently, for
-            # a request that was never served.
-            await _settle_providers(reservations, "", 0.0)
-            raise
+            )
+
+        # The caller's own share, claimed against the same worst case. Summed
+        # rather than maxed because fallback can bill more than one hop: a
+        # provider that generated a completion and then timed out is charged for
+        # it, and the next provider in the chain is charged again. The surplus
+        # comes back at settle, so the only lasting effect of summing is that
+        # concurrent admission is stricter — the safe direction for a control
+        # whose job is not overspending.
+        key_reserved = sum(reservations.values())
+        if key_reserved:
+            try:
+                await budget_tracker.reserve(api_key, key_reserved)
+            except KeyBudgetExhausted as exc:
+                # No refund here; the unwind below does it on the way out. The
+                # key's own claim needs none — reserve() hands that back itself
+                # before raising — and settling the key ledger here would subtract
+                # a reservation that never landed.
+                REQUESTS_REFUSED.labels(reason="key_budget_exhausted").inc()
+                logger.warning(
+                    "[request_id=%s] refusing: caller is at its monthly budget"
+                    " ($%.4f of $%.2f claimed)",
+                    request_id,
+                    exc.spent,
+                    exc.cap,
+                )
+                raise HTTPException(
+                    status_code=402,
+                    detail={
+                        "error": "monthly budget exceeded for this API key",
+                        "request_id": request_id,
+                    },
+                    headers={"X-Budget-Remaining-USD": "0.0000"},
+                ) from exc
+    except BaseException:
+        # Catches CancelledError too, which `except Exception` walks straight
+        # past — a client that disconnects mid-reservation strands a claim
+        # exactly like a Redis failure does. The HTTPExceptions raised above
+        # for an exhausted chain or an exhausted key leave through here as
+        # well, so no refusal can leave headroom behind either.
+        await _settle_providers(reservations, "", 0.0)
+        raise
 
     return reservations, skip
 
