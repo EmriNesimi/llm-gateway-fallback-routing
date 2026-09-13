@@ -586,13 +586,20 @@ async def _settle_chain(
     how the money path has broken before. Every caller reaches exactly one of
     these, on success and on failure alike.
     """
-    await _settle_providers(reservations, served_provider, actual_usd, request_id)
-    # Mirrors the provider settle: best-effort, and erring toward leaving the
-    # worst case claimed if Redis is down (refusing future requests) rather
-    # than dropping the charge (allowing them).
-    await budget_tracker.settle(
-        api_key, sum(reservations.values()), actual_usd, request_id=request_id
-    )
+    try:
+        await _settle_providers(reservations, served_provider, actual_usd, request_id)
+    finally:
+        # In a finally so the two ledgers cannot end a request in different
+        # states. _settle_providers re-raises a cancellation that interrupted
+        # it, and without this that would skip the key ledger entirely,
+        # leaving its reservation claimed for a request that is over.
+        #
+        # Mirrors the provider settle otherwise: best-effort, and erring
+        # toward leaving the worst case claimed if Redis is down (refusing
+        # future requests) rather than dropping the charge (allowing them).
+        await budget_tracker.settle(
+            api_key, sum(reservations.values()), actual_usd, request_id=request_id
+        )
 
 
 async def _settle_providers(
@@ -623,6 +630,12 @@ async def _settle_providers(
     audit table disagree by $X" otherwise means correlating on timestamps,
     and the audit log records request_id for every outcome already.
     """
+    # A cancellation landing mid-loop, held until the loop is done. Raised
+    # after the refunds rather than swallowed: a task that quietly eats
+    # CancelledError can wedge a shutdown, so cleanup finishes first and the
+    # cancellation then carries on its way.
+    cancellation: BaseException | None = None
+
     for provider, reserved in reservations.items():
         try:
             await provider_budget.settle(
@@ -637,6 +650,22 @@ async def _settle_providers(
                 provider,
                 exc_info=True,
             )
+        except BaseException as exc:  # noqa: BLE001 - re-raised below, after cleanup
+            # CancelledError is not an Exception, so the clause above walks
+            # straight past it — and this loop is reached *from* a
+            # BaseException handler in _reserve_chain, where a second
+            # cancellation is exactly what turns up. It used to abandon every
+            # remaining provider, with no log line, because the loop just
+            # stopped.
+            logger.error(
+                "[request_id=%s] interrupted while settling $%.6f against %s;"
+                " refunding the rest of the chain before propagating",
+                request_id,
+                reserved,
+                provider,
+                exc_info=True,
+            )
+            cancellation = cancellation or exc
 
     if served_provider and served_provider not in reservations:
         # Real spend with no reservation to swap. settle() would do nothing
@@ -655,6 +684,9 @@ async def _settle_providers(
                 served_provider,
                 exc_info=True,
             )
+
+    if cancellation is not None:
+        raise cancellation
 
 
 async def _serve_chat(

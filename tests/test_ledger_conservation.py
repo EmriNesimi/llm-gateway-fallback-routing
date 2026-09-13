@@ -171,3 +171,46 @@ def test_mixed_traffic_does_not_drift(client, monkeypatch):
     assert key == pytest.approx(anthropic + openai, abs=1e-6), (
         f"drifted ${abs(key - anthropic - openai):.6f} over 30 requests"
     )
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_provider_settle_still_settles_the_key_ledger(monkeypatch):
+    """The two ledgers must not end a request in different states.
+
+    _settle_providers re-raises a cancellation that interrupted it, so without
+    the key settle being unconditional it would be skipped — leaving one
+    caller's reservation claimed against a request that is already over, with
+    the provider side correctly refunded. The conservation property above
+    would then be false, and nothing would say so.
+    """
+    import asyncio
+
+    import fakeredis.aioredis
+
+    from app.budget.tracker import BudgetTracker
+
+    tracker = BudgetTracker(redis=fakeredis.aioredis.FakeRedis(), monthly_cap_usd=100.0)
+    monkeypatch.setattr(main_module, "budget_tracker", tracker)
+
+    class _Cancels:
+        cap_usd = 4.0
+
+        async def settle(self, *a, **k):
+            raise asyncio.CancelledError()
+
+        async def record_unreserved(self, *a, **k):
+            pass
+
+    monkeypatch.setattr(main_module, "provider_budget", _Cancels())
+
+    await tracker.reserve("cancelled-key", 0.5)
+    assert await tracker.spent_usd("cancelled-key") == pytest.approx(0.5)
+
+    with pytest.raises(asyncio.CancelledError):
+        await main_module._settle_chain(
+            "cancelled-key", {"anthropic": 0.5}, "anthropic", 0.2, "req-cancel"
+        )
+
+    assert await tracker.spent_usd("cancelled-key") == pytest.approx(0.2), (
+        "the key ledger kept its reservation when the provider settle was cancelled"
+    )

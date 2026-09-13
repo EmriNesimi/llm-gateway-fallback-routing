@@ -12,6 +12,8 @@ streaming loop, and a disconnect skips everything after the loop, so the
 ledger never advanced and no ceiling was ever reached.
 """
 
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -647,3 +649,44 @@ async def test_a_settle_failure_names_the_request_it_belongs_to(monkeypatch, cap
 
     assert "req-correlate-me" in caplog.text
     assert "anthropic" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_cancellation_mid_refund_still_refunds_the_rest(monkeypatch, caplog):
+    """_reserve_chain catches BaseException so a disconnected client's
+    CancelledError still refunds. The refund loop itself only caught
+    Exception, so a second cancellation landing while it ran escaped, and
+    every provider after the current one kept its reservation — with no log
+    line, because the loop simply stopped.
+
+    Cleanup finishes first, then the cancellation carries on. Suppressing it
+    outright would be worse: a task that swallows CancelledError can wedge a
+    shutdown.
+    """
+    import logging
+
+    settled = []
+
+    class _CancelsOnFirst:
+        cap_usd = 4.0
+
+        async def settle(self, provider, reserved, actual):
+            if provider == "anthropic":
+                raise asyncio.CancelledError()
+            settled.append(provider)
+
+        async def record_unreserved(self, *a, **k):
+            pass
+
+    monkeypatch.setattr(main_module, "provider_budget", _CancelsOnFirst())
+
+    with caplog.at_level(logging.ERROR):
+        with pytest.raises(asyncio.CancelledError):
+            await main_module._settle_providers(
+                {"anthropic": 0.5, "openai": 0.5}, "openai", 0.25, "req-cancelled"
+            )
+
+    assert settled == ["openai"], (
+        "a cancellation on the first provider stranded the rest of the chain"
+    )
+    assert "req-cancelled" in caplog.text
