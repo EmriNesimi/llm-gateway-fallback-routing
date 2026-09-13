@@ -489,7 +489,7 @@ async def _reserve_chain(
         # exactly like a Redis failure does. The HTTPExceptions raised above
         # for an exhausted chain or an exhausted key leave through here as
         # well, so no refusal can leave headroom behind either.
-        await _settle_providers(reservations, "", 0.0)
+        await _settle_providers(reservations, "", 0.0, request_id)
         raise
 
     return reservations, skip
@@ -539,7 +539,7 @@ async def _settle_stream_on_abort(
     exactly how a ceiling quietly stops being one.
     """
     if not provider:
-        await _settle_chain(api_key, reservations or {}, "", 0.0)
+        await _settle_chain(api_key, reservations or {}, "", 0.0, request_id)
         return
 
     estimated_output = max(1, streamed_chars // 3)
@@ -557,7 +557,7 @@ async def _settle_stream_on_abort(
         provider,
         streamed_chars,
     )
-    await _settle_chain(api_key, reservations or {}, provider, cost)
+    await _settle_chain(api_key, reservations or {}, provider, cost, request_id)
     _record_usage(provider, model, input_tokens, estimated_output, cost)
     await record_audit_log(
         api_key,
@@ -577,6 +577,7 @@ async def _settle_chain(
     reservations: dict[str, float],
     served_provider: str,
     actual_usd: float,
+    request_id: str,
 ) -> None:
     """Settle both ledgers for a finished request.
 
@@ -585,15 +586,20 @@ async def _settle_chain(
     how the money path has broken before. Every caller reaches exactly one of
     these, on success and on failure alike.
     """
-    await _settle_providers(reservations, served_provider, actual_usd)
+    await _settle_providers(reservations, served_provider, actual_usd, request_id)
     # Mirrors the provider settle: best-effort, and erring toward leaving the
     # worst case claimed if Redis is down (refusing future requests) rather
     # than dropping the charge (allowing them).
-    await budget_tracker.settle(api_key, sum(reservations.values()), actual_usd)
+    await budget_tracker.settle(
+        api_key, sum(reservations.values()), actual_usd, request_id=request_id
+    )
 
 
 async def _settle_providers(
-    reservations: dict[str, float], served_provider: str, actual_usd: float
+    reservations: dict[str, float],
+    served_provider: str,
+    actual_usd: float,
+    request_id: str,
 ) -> None:
     """Swap provider reservations for the real cost. Unused ones get a full refund.
 
@@ -611,6 +617,11 @@ async def _settle_providers(
     than dropping to the real cost), so it errs toward refusing future
     requests rather than allowing them. That is the right direction for a
     control whose job is not overspending.
+
+    request_id is carried purely so these failures can be joined to the audit
+    row for the request that caused them. Reconciling "the ledger and the
+    audit table disagree by $X" otherwise means correlating on timestamps,
+    and the audit log records request_id for every outcome already.
     """
     for provider, reserved in reservations.items():
         try:
@@ -619,8 +630,9 @@ async def _settle_providers(
             )
         except Exception:  # noqa: BLE001 - see docstring: must not fail a served request
             logger.error(
-                "failed to settle $%.6f reserved against %s; the reservation stays"
-                " claimed at its worst-case value",
+                "[request_id=%s] failed to settle $%.6f reserved against %s; the"
+                " reservation stays claimed at its worst-case value",
+                request_id,
                 reserved,
                 provider,
                 exc_info=True,
@@ -636,8 +648,9 @@ async def _settle_providers(
             await provider_budget.record_unreserved(served_provider, actual_usd)
         except Exception:  # noqa: BLE001 - same reasoning as the loop above
             logger.error(
-                "failed to record $%.6f of unreserved spend against %s — this"
-                " request's cost is missing from the ledger",
+                "[request_id=%s] failed to record $%.6f of unreserved spend"
+                " against %s — this request's cost is missing from the ledger",
+                request_id,
                 actual_usd,
                 served_provider,
                 exc_info=True,
@@ -667,7 +680,7 @@ async def _serve_chat(
         )
     except AllProvidersFailedError as exc:
         # Nothing was served, so every reservation comes straight back.
-        await _settle_chain(api_key, reservations or {}, "", 0.0)
+        await _settle_chain(api_key, reservations or {}, "", 0.0, request_id)
         REQUEST_COUNT.labels(status="error").inc()
         await record_audit_log(
             api_key,
@@ -702,7 +715,7 @@ async def _serve_chat(
         input_tokens=result.input_tokens,
         output_tokens=result.output_tokens,
     )
-    await _settle_chain(api_key, reservations or {}, result.provider, cost)
+    await _settle_chain(api_key, reservations or {}, result.provider, cost, request_id)
     _record_usage(
         result.provider, result.model, result.input_tokens, result.output_tokens, cost
     )
@@ -905,7 +918,9 @@ async def _event_stream(
             )
             _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
 
-        await _settle_chain(api_key, reservations or {}, final_provider, cost)
+        await _settle_chain(
+            api_key, reservations or {}, final_provider, cost, request_id
+        )
         settled = True
 
         await record_audit_log(
@@ -1124,7 +1139,9 @@ async def _openai_event_stream(
             )
             _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
 
-        await _settle_chain(api_key, reservations or {}, final_provider, cost)
+        await _settle_chain(
+            api_key, reservations or {}, final_provider, cost, request_id
+        )
         settled = True
 
         await record_audit_log(

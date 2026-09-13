@@ -116,7 +116,13 @@ class BudgetTracker:
         )
         raise KeyBudgetExhausted(spent, self._monthly_cap_usd)
 
-    async def settle(self, api_key: str, reserved_usd: float, actual_usd: float) -> None:
+    async def settle(
+        self,
+        api_key: str,
+        reserved_usd: float,
+        actual_usd: float,
+        request_id: str = "",
+    ) -> None:
         """Replace a reservation with what the request really cost.
 
         Always called after a reserve, including when the request failed — in
@@ -130,13 +136,15 @@ class BudgetTracker:
         """
         delta = actual_usd - reserved_usd
         if delta:
-            await self._apply(api_key, delta, swallow=True)
+            await self._apply(api_key, delta, swallow=True, request_id=request_id)
 
     async def record_spend(self, api_key: str, amount_usd: float) -> None:
         """Charge spend that never had a reservation. See `settle`."""
         await self.settle(api_key, reserved_usd=0.0, actual_usd=amount_usd)
 
-    async def _apply(self, api_key: str, delta_usd: float, *, swallow: bool) -> float:
+    async def _apply(
+        self, api_key: str, delta_usd: float, *, swallow: bool, request_id: str = ""
+    ) -> float:
         """Move the ledger by `delta_usd` and return the new total.
 
         The expire travels with every increment because INCRBYFLOAT on a
@@ -161,7 +169,9 @@ class BudgetTracker:
             if not swallow:
                 raise
             logger.error(
-                "failed to record $%.6f for a request that already succeeded",
+                "[request_id=%s] failed to record $%.6f against this key for a"
+                " request that already succeeded",
+                request_id or "unknown",
                 delta_usd,
                 exc_info=True,
             )

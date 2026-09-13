@@ -457,7 +457,9 @@ async def test_a_redis_failure_at_settle_does_not_discard_a_paid_response(monkey
     monkeypatch.setattr(main_module, "provider_budget", _FailingSettle())
 
     # Must not raise.
-    await main_module._settle_providers({"anthropic": 0.5}, "anthropic", 0.25)
+    await main_module._settle_providers(
+        {"anthropic": 0.5}, "anthropic", 0.25, "req-settle-fails"
+    )
 
 
 @pytest.mark.asyncio
@@ -480,7 +482,7 @@ async def test_one_failing_settle_does_not_strand_the_others(monkeypatch):
     monkeypatch.setattr(main_module, "provider_budget", _FlakyFirst())
 
     await main_module._settle_providers(
-        {"anthropic": 0.5, "openai": 0.5}, "openai", 0.25
+        {"anthropic": 0.5, "openai": 0.5}, "openai", 0.25, "req-flaky-first"
     )
 
     assert settled == ["openai"], "a failure on one provider skipped the rest"
@@ -609,7 +611,39 @@ async def test_a_failing_unreserved_charge_does_not_break_the_response(monkeypat
     with caplog.at_level(logging.ERROR):
         # served_provider is absent from reservations, so record_unreserved
         # is the path taken.
-        await main_module._settle_providers({}, "anthropic", 0.25)
+        await main_module._settle_providers({}, "anthropic", 0.25, "req-unreserved")
 
     assert "anthropic" in caplog.text
     assert "missing from the ledger" in caplog.text
+    # Correlated to a request. Reconciling a ledger against the audit table
+    # otherwise means matching on timestamps.
+    assert "req-unreserved" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_a_settle_failure_names_the_request_it_belongs_to(monkeypatch, caplog):
+    """The symptom of these failures is the ledger and the audit table
+    disagreeing by some amount. Provider and dollars alone leave correlating
+    on timestamps as the only way back to the request that caused it — and the
+    audit log records request_id for every outcome already.
+    """
+    import logging
+
+    class _FailingSettle:
+        cap_usd = 4.0
+
+        async def settle(self, *a, **k):
+            raise ConnectionError("redis went away mid-settle")
+
+        async def record_unreserved(self, *a, **k):
+            pass
+
+    monkeypatch.setattr(main_module, "provider_budget", _FailingSettle())
+
+    with caplog.at_level(logging.ERROR):
+        await main_module._settle_providers(
+            {"anthropic": 0.5}, "anthropic", 0.25, "req-correlate-me"
+        )
+
+    assert "req-correlate-me" in caplog.text
+    assert "anthropic" in caplog.text
