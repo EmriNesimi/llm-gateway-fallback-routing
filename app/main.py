@@ -633,8 +633,10 @@ async def _settle_providers(
     # A cancellation landing mid-loop, held until the loop is done. Raised
     # after the refunds rather than swallowed: a task that quietly eats
     # CancelledError can wedge a shutdown, so cleanup finishes first and the
-    # cancellation then carries on its way.
-    cancellation: BaseException | None = None
+    # cancellation then carries on its way. Verified against a real cancelled
+    # asyncio.Task, not just a stub that raises synchronously — delivery is
+    # one-shot, so the awaits for the remaining providers do complete.
+    cancellation: asyncio.CancelledError | GeneratorExit | None = None
 
     for provider, reserved in reservations.items():
         try:
@@ -650,13 +652,17 @@ async def _settle_providers(
                 provider,
                 exc_info=True,
             )
-        except BaseException as exc:  # noqa: BLE001 - re-raised below, after cleanup
-            # CancelledError is not an Exception, so the clause above walks
-            # straight past it — and this loop is reached *from* a
-            # BaseException handler in _reserve_chain, where a second
-            # cancellation is exactly what turns up. It used to abandon every
-            # remaining provider, with no log line, because the loop just
-            # stopped.
+        except (asyncio.CancelledError, GeneratorExit) as exc:
+            # Neither is an Exception, so the clause above walks straight past
+            # both — and this loop is reached *from* a BaseException handler
+            # in _reserve_chain, where a second cancellation is exactly what
+            # turns up. It used to abandon every remaining provider, with no
+            # log line, because the loop just stopped.
+            #
+            # Named rather than `except BaseException`, which would also hold
+            # a KeyboardInterrupt or SystemExit behind however many Redis
+            # round-trips are left — the operator asked for the process to
+            # stop, and refunding a reservation is not worth overriding that.
             logger.error(
                 "[request_id=%s] interrupted while settling $%.6f against %s;"
                 " refunding the rest of the chain before propagating",
@@ -665,7 +671,10 @@ async def _settle_providers(
                 provider,
                 exc_info=True,
             )
-            cancellation = cancellation or exc
+            # First one wins. `or` would read the same today but asks the
+            # exception whether it is truthy, which is not the question.
+            if cancellation is None:
+                cancellation = exc
 
     if served_provider and served_provider not in reservations:
         # Real spend with no reservation to swap. settle() would do nothing

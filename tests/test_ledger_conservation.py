@@ -20,6 +20,14 @@ Two invariants, checked across the matrix:
 2. **The per-key ledger moves by exactly what the provider ledgers moved.**
    They count the same dollars from different angles. Any gap between them is
    a reservation that was claimed and not released, or released twice.
+
+3. **What is left is the real cost, not the reservation.** The first two are
+   not enough on their own, and it took a review to notice: _reserve_chain
+   claims the same total on both ledgers, so if settling stopped happening
+   entirely, both would sit frozen at that worst case — still balanced, still
+   never negative, and invariant 2 would hold trivially while every request
+   permanently leaked the gap between its reservation and its cost. So the
+   exact figure is pinned per outcome.
 """
 
 import pytest
@@ -30,6 +38,7 @@ from app.budget import dependency as budget_dependency
 from app.core.config import settings
 from app.main import app
 from app.providers.base import ChatResponse, StreamChunk
+from app.ratelimit import dependency as ratelimit_dependency
 from app.routing.fallback import AllProvidersFailedError
 from app.security.auth import require_api_key
 
@@ -84,6 +93,14 @@ def client(monkeypatch, isolated_db, isolated_redis):
     monkeypatch.setattr(budget_dependency.provider_budget, "_cap_usd", 10_000.0)
     monkeypatch.setattr(settings, "monthly_budget_usd_per_key", 10_000.0)
     monkeypatch.setattr(budget_dependency.tracker, "_monthly_cap_usd", 10_000.0)
+    # And the rate limiter out of the way with them. Its capacity is read once
+    # at import, so patching the setting does nothing — the live limiter has
+    # to be moved. Without this the thirty-request test below quietly became a
+    # twenty-request one: the rest came back 429 having never reached the
+    # money path, and the ledger assertions held because a refused request
+    # reserves nothing. Exactly the kind of test that passes while measuring
+    # a third less than it says it does.
+    monkeypatch.setattr(ratelimit_dependency._limiter, "_capacity", 10_000)
     app.dependency_overrides[require_api_key] = lambda: "test-client-key"
     with TestClient(app) as c:
         yield c
@@ -107,16 +124,29 @@ def _drive(client, endpoint):
     happened to the response is deliberately not asserted here; this file is
     only about what the ledgers hold afterwards.
     """
-    try:
-        client.post(endpoint, json=BODY, headers=HEADERS).read()
-    except RuntimeError:
-        # The mid-stream death staged by Router(mode="abort").
-        pass
+    # No try/except: the mid-stream death staged by Router(mode="abort") is
+    # absorbed by _event_stream's own handler and reported in-band, so it
+    # never reaches the client. An `except` here would be dead code implying
+    # a failure mode that does not exist.
+    client.post(endpoint, json=BODY, headers=HEADERS).read()
 
 
 def _deltas(client, before):
     after = client.portal.call(_ledgers)
     return tuple(after[i] - before[i] for i in range(3))
+
+
+# What each outcome really costs on claude-opus-5 ($5/1M in, $25/1M out).
+#
+#   ok     1000 in + 40 out                         -> 0.005 + 0.001
+#   abort  3 chunks x 100 chars, no usage totals, so
+#          the estimate is 300 // 3 = 100 output     -> 0.0025
+#   fail   nothing was served                        -> 0
+#
+# Spelled out rather than computed from the same helper the app uses, so a
+# change to that helper has to be acknowledged here rather than silently
+# agreeing with itself.
+_EXPECTED_COST = {"ok": 0.006, "abort": 0.0025, "fail": 0.0}
 
 
 @pytest.mark.parametrize(
@@ -146,6 +176,17 @@ def test_every_outcome_leaves_both_ledgers_consistent(client, monkeypatch, mode,
         f"the key ledger moved ${key:.6f} while the providers moved"
         f" ${anthropic + openai:.6f} — a reservation was stranded or released twice"
     )
+    # Invariant 3. Without this the two above pass with settling switched off
+    # entirely: both ledgers just stay at the worst case _reserve_chain put
+    # there, balanced against each other and never negative, while the
+    # difference between reservation and cost leaks on every request.
+    expected = _EXPECTED_COST[mode]
+    assert key == pytest.approx(expected, abs=1e-9), (
+        f"expected ${expected:.6f} to remain on the ledgers, found ${key:.6f}."
+        " Equal to the worst-case reservation means the request reserved and"
+        " never settled"
+    )
+
     if mode == "fail":
         assert anthropic == pytest.approx(0.0) and openai == pytest.approx(0.0), (
             "a request that served nothing still charged for something"
@@ -157,19 +198,33 @@ def test_mixed_traffic_does_not_drift(client, monkeypatch):
     one request's rounding still compounds over thirty of them, and the ledger
     that matters here is lifetime — it never resets to wash the drift out."""
     before = client.portal.call(_ledgers)
+    expected = 0.0
 
     for i in range(30):
         mode = ["ok", "fail", "abort", "ok"][i % 4]
+        endpoint = ["/v1/chat", "/v1/chat/stream", "/v1/chat/completions"][i % 3]
         monkeypatch.setattr(
             main_module, "build_router", lambda m, _m=mode: ("smart", Router(_m))
         )
-        _drive(client, ["/v1/chat", "/v1/chat/stream", "/v1/chat/completions"][i % 3])
+        _drive(client, endpoint)
+        # "abort" only means anything to chat_stream; the non-streaming
+        # endpoints take the ordinary path and cost the ordinary amount.
+        if mode == "abort" and endpoint != "/v1/chat/stream":
+            expected += _EXPECTED_COST["ok"]
+        else:
+            expected += _EXPECTED_COST[mode]
 
     anthropic, openai, key = _deltas(client, before)
 
-    assert key > 0, "thirty requests moved nothing; the test proved nothing"
     assert key == pytest.approx(anthropic + openai, abs=1e-6), (
         f"drifted ${abs(key - anthropic - openai):.6f} over 30 requests"
+    )
+    # Invariant 3 again, and the reason this test needs it as much as the
+    # per-outcome one: reserving without ever settling also accumulates a
+    # nonzero, perfectly balanced total. Only the exact figure separates
+    # "settled thirty times" from "leaked thirty reservations".
+    assert key == pytest.approx(expected, abs=1e-6), (
+        f"thirty requests should leave ${expected:.6f}, found ${key:.6f}"
     )
 
 

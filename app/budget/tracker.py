@@ -138,9 +138,13 @@ class BudgetTracker:
         if delta:
             await self._apply(api_key, delta, swallow=True, request_id=request_id)
 
-    async def record_spend(self, api_key: str, amount_usd: float) -> None:
+    async def record_spend(
+        self, api_key: str, amount_usd: float, request_id: str = ""
+    ) -> None:
         """Charge spend that never had a reservation. See `settle`."""
-        await self.settle(api_key, reserved_usd=0.0, actual_usd=amount_usd)
+        await self.settle(
+            api_key, reserved_usd=0.0, actual_usd=amount_usd, request_id=request_id
+        )
 
     async def _apply(
         self, api_key: str, delta_usd: float, *, swallow: bool, request_id: str = ""

@@ -653,40 +653,112 @@ async def test_a_settle_failure_names_the_request_it_belongs_to(monkeypatch, cap
 
 @pytest.mark.asyncio
 async def test_a_cancellation_mid_refund_still_refunds_the_rest(monkeypatch, caplog):
-    """_reserve_chain catches BaseException so a disconnected client's
-    CancelledError still refunds. The refund loop itself only caught
-    Exception, so a second cancellation landing while it ran escaped, and
-    every provider after the current one kept its reservation — with no log
+    """_reserve_chain catches CancelledError so a disconnected client's
+    reservations still go back. The refund loop it calls only caught
+    Exception, so a cancellation landing while that loop ran escaped it — and
+    every provider after the current one kept its reservation, with no log
     line, because the loop simply stopped.
 
-    Cleanup finishes first, then the cancellation carries on. Suppressing it
-    outright would be worse: a task that swallows CancelledError can wedge a
-    shutdown.
+    Driven by cancelling a real asyncio.Task rather than raising
+    CancelledError from a stub. The two are not the same test: cancellation
+    delivery is one-shot, and the whole fix depends on the awaits for the
+    *remaining* providers completing normally afterwards. A synchronous raise
+    never exercises that, so it would pass even if the premise were wrong.
     """
     import logging
 
     settled = []
+    reached_anthropic = asyncio.Event()
 
-    class _CancelsOnFirst:
+    class _SlowSettle:
         cap_usd = 4.0
 
         async def settle(self, provider, reserved, actual):
             if provider == "anthropic":
-                raise asyncio.CancelledError()
+                reached_anthropic.set()
+                await asyncio.sleep(10)  # cancelled here
             settled.append(provider)
 
         async def record_unreserved(self, *a, **k):
             pass
 
-    monkeypatch.setattr(main_module, "provider_budget", _CancelsOnFirst())
+    monkeypatch.setattr(main_module, "provider_budget", _SlowSettle())
 
     with caplog.at_level(logging.ERROR):
-        with pytest.raises(asyncio.CancelledError):
-            await main_module._settle_providers(
-                {"anthropic": 0.5, "openai": 0.5}, "openai", 0.25, "req-cancelled"
+        task = asyncio.create_task(
+            main_module._settle_providers(
+                {"anthropic": 0.5, "openai": 0.5, "third": 0.5},
+                "openai",
+                0.25,
+                "req-cancelled",
             )
+        )
+        await reached_anthropic.wait()
+        task.cancel()
 
-    assert settled == ["openai"], (
-        "a cancellation on the first provider stranded the rest of the chain"
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    assert settled == ["openai", "third"], (
+        f"a cancellation stranded the rest of the chain: only {settled} refunded"
     )
+    assert task.cancelled(), "the cancellation was swallowed instead of propagated"
     assert "req-cancelled" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_repeated_cancellations_still_finish_the_chain(monkeypatch, caplog):
+    """A disconnect and a shutdown can both land on the same request.
+
+    Each interruption is caught independently and the loop keeps going, so the
+    last provider is still refunded. The first cancellation is the one that
+    propagates — the later ones describe the same ending, and replacing it
+    would report the interruption that happened to land last rather than the
+    one that ended the request.
+    """
+    import logging
+
+    settled = []
+    reached = {}
+
+    class _SlowOnTwo:
+        cap_usd = 4.0
+
+        async def settle(self, provider, reserved, actual):
+            if provider in ("anthropic", "third"):
+                reached[provider] = asyncio.Event()
+                reached[provider].set()
+                await asyncio.sleep(10)  # cancelled here, twice over
+            settled.append(provider)
+
+        async def record_unreserved(self, *a, **k):
+            pass
+
+    monkeypatch.setattr(main_module, "provider_budget", _SlowOnTwo())
+
+    async def cancel_twice(task):
+        while "anthropic" not in reached:
+            await asyncio.sleep(0)
+        task.cancel()
+        while "third" not in reached:
+            await asyncio.sleep(0)
+        task.cancel()
+
+    with caplog.at_level(logging.ERROR):
+        task = asyncio.create_task(
+            main_module._settle_providers(
+                {"anthropic": 0.5, "openai": 0.5, "third": 0.5, "fourth": 0.5},
+                "openai",
+                0.25,
+                "req-twice",
+            )
+        )
+        canceller = asyncio.create_task(cancel_twice(task))
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await canceller
+
+    assert settled == ["openai", "fourth"], (
+        f"two cancellations stranded the tail of the chain: {settled} refunded"
+    )
+    assert caplog.text.count("interrupted while settling") == 2
