@@ -2,6 +2,53 @@
 
 ## Unreleased
 
+**The per-key budget now holds under concurrency**
+- `MONTHLY_BUDGET_USD_PER_KEY` was checked before a request and recorded after,
+  with nothing claimed in between, so concurrent requests from one key all read
+  the same pre-call total and were all admitted. The overshoot was bounded by
+  the rate-limit burst rather than the cap. `BudgetTracker` now reserves and
+  settles the way `ProviderBudget` already did, both ledgers claiming in
+  `_reserve_chain` and releasing in `_settle_chain`
+  ([decision 015](docs/decisions/015-both-spend-ledgers-reserve.md)).
+- The per-key reservation is the *sum* of the chain's provider reservations,
+  not the largest: fallback can bill more than one hop.
+- A failed over-cap refund propagated its Redis error instead of the budget
+  exception, so a caller who was merely out of budget was told the gateway was
+  broken. Both ledgers now refuse either way and log the stranded claim.
+- A Redis failure partway along a chain escaped with the earlier hop's
+  reservation still claimed and nothing downstream to refund it — lifetime
+  headroom gone for a request that was never served. One unwind now covers the
+  whole of `_reserve_chain`, and it catches `CancelledError`, which is not an
+  `Exception` and so slipped past the old handler on every client disconnect.
+- Bookkeeping finishes before a cancellation propagates. The refund loop used
+  to stop dead on one, stranding every provider after it, and the key ledger
+  was skipped entirely — leaving one ledger refunded and the other still
+  holding a claim for a request that was over.
+- `gateway_budget_reservation_leaked_usd_total` and `BudgetReservationLeaked`.
+  A reservation that cannot be handed back makes the ceiling permanently
+  smaller, and it fails in the safe direction — spend looks normal while
+  headroom erodes — which is exactly what would stop anyone noticing.
+
+**Guards**
+- `tests/test_ledger_conservation.py` asserts the property the money-path bugs
+  have all violated: whatever a request claims, it either spends or hands back.
+  Both ledgers, every outcome, all three endpoints.
+- The client API's rate-limit ordering is a decision rather than a habit
+  ([016](docs/decisions/016-no-pre-auth-rate-limit-on-the-client-api.md)), and
+  both surfaces' orderings are now pinned by tests.
+- The circuit breaker takes an injectable clock, and `/readyz`'s concurrency
+  test asserts its checks overlap instead of timing them. Both were racing the
+  wall clock with margins a loaded machine defeats — one of them reproducibly
+  (#17).
+
+**Dependencies**
+- Runtime floors raised: `redis>=8.1.0`, `uvicorn>=0.52.4`,
+  `opentelemetry-instrumentation-fastapi>=0.65b0`. Dev floors: `ruff>=0.16.5`,
+  `pytest-cov>=7.1.0`. Workflow actions bumped to current majors.
+- The Docker base stays on Python 3.12. Moving it alone would have left CI
+  testing one interpreter while the image shipped another; the version is
+  written down in seven places and they move together.
+
 **Cost control — from a security review**
 - OpenAI is now sent the output cap the budget reserved against. It was called
   with no `max_tokens` at all while the reservation assumed 2048, so the
