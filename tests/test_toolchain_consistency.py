@@ -7,10 +7,18 @@ and leave six behind — and the failure is quiet: CI keeps testing the old
 version while the image ships the new one, or ruff keeps applying the old
 version's upgrade rules.
 
-This is not hypothetical. There is an open Dependabot PR right now proposing
-to change exactly one of these seven (the Dockerfile, 3.12 -> 3.14). Merging
-it as-is would mean the image runs an interpreter the suite has never been
-executed against.
+This is not hypothetical. Dependabot proposed exactly that in #2 — the
+Dockerfile alone, 3.12 -> 3.14 — and merging it would have meant the image
+running an interpreter the suite has never been executed against. That PR was
+closed on these grounds rather than merged; this guard is what makes the same
+mistake fail the build next time instead of relying on someone noticing.
+
+**Bumping the Python version** is therefore a deliberate change, not a
+dependency update. All seven sites move in one commit, together with the
+Dockerfile's digest pin (the tag and digest name the same image and are
+updated as a pair), and the suite has to actually run on the new interpreter
+first — CI is what proves that, since a bump is only real once both CI jobs
+have executed against it.
 """
 
 import pathlib
