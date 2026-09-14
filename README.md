@@ -287,7 +287,7 @@ Cost split by provider and model, breaker state per provider, request counts by 
 
 ![Prometheus showing cost per provider, circuit state, and request counts](docs/images/prometheus-metrics.jpg)
 
-- **Load testing** — `scripts/load_test.js` is a [k6](https://k6.io) script that drives sustained concurrent traffic at `/v1/chat` (ramping past the default rate limit on purpose) so you can watch the fallback chain, circuit breaker, and rate limiter behave under pressure live in the Grafana dashboard above: `GATEWAY_URL=http://localhost:8000 CLIENT_KEY=<your key> k6 run scripts/load_test.js`. Real results from a run against a live OpenAI key: [`docs/load-test-results.md`](docs/load-test-results.md) — 3067 requests, 0 failures, p95 ~1.1s on served requests. Measured at `db8af9e` and not re-run since; seven changes to the request path have landed behind it, all listed in that file. A floor for the routing path, not a current benchmark.
+- **Load testing** — `scripts/load_test.js` is a [k6](https://k6.io) script that drives sustained concurrent traffic at `/v1/chat` (ramping past the default rate limit on purpose) so you can watch the fallback chain, circuit breaker, and rate limiter behave under pressure live in the Grafana dashboard above: `GATEWAY_URL=http://localhost:8000 CLIENT_KEY=<your key> k6 run scripts/load_test.js`. Real results against live provider keys: [`docs/load-test-results.md`](docs/load-test-results.md) — re-run at `f88f658`, 1700 requests, 0 failures, 1657 of them refused by the rate limiter before any outbound call, total cost $0.00027. Served latency is ~3x the previous run's; the file says plainly which confounders that figure carries. The 2026-08-10 numbers are kept beside it as the before-picture.
 
 ## 🚀 getting started
 

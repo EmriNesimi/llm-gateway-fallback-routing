@@ -1,14 +1,82 @@
 # Load test results
 
 A real run of `scripts/load_test.js` (k6, 10 VUs ramped over 50s) against a
-local gateway instance, real Redis, and a live OpenAI key — not a mock.
+local gateway instance, real Redis, and live provider keys — not a mock.
 
-**Measured at `db8af9e` (2026-08-10). Not re-run since.** Read the staleness
-note below before quoting any number here.
+**Measured at `f88f658` (2026-09-14).** The previous run, at `db8af9e`
+(2026-08-10), is kept below for comparison — it is what the request path cost
+before the spend ceiling and everything built on it.
+
+## 2026-09-14 — `f88f658`
+
+```
+checks_total.......: 3400    100.00% passed
+http_req_failed....: 0.00%   0 out of 1700   (200s and 429s both count as "expected")
+iterations.........: 1700    34.0/s
+
+gateway_request_latency_ms (successful /v1/chat calls only):
+  avg=2241ms  min=634ms  med=1331ms  p90=5551ms  p95=7795ms  max=10135ms
+
+http_req_duration (every response, including the instant 429s):
+  avg=137ms   min=5ms    med=44ms    p90=187ms   p95=432ms   max=10.13s
+```
+
+`/metrics` at the end of the run:
+
+```
+gateway_requests_total{status="success"} 44
+gateway_requests_refused_total{reason="rate_limit"} 1657
+gateway_provider_attempts_total{outcome="success",provider="openai"} 43
+gateway_fallback_triggered_total 0
+gateway_cost_usd_total{model="gpt-4o-mini",provider="openai"} 0.00026625
+```
+
+**Total cost of this run: $0.00027.** 43 of 1700 requests reached a provider;
+the rate limiter refused the other 1657 before any outbound call.
+
+### What changed since the previous run
+
+**Served latency is roughly 3x worse** — median 684ms then, 1331ms now; p95
+1092ms then, 7795ms now. That is the number this document existed to
+re-measure, and it moved in the direction the staleness table predicted.
+
+It is **not** safe to attribute all of it to the gateway. Confounders, stated
+rather than buried:
+
+- Provider-side variance. 43 samples is a small number, and `max` of 10.1s
+  against a `med` of 1.3s says the tail is dominated by a handful of slow
+  upstream responses rather than by anything systematic.
+- The host was running Docker, Postgres and a full test suite during the run.
+- `gateway_fallback_triggered_total` stayed at 0 and attempts equal successes,
+  so no retries or fallbacks inflated these figures. Whatever the cause, it is
+  not the router doing extra work.
+
+What the gateway unambiguously does add per request is four Redis round-trips
+(reserve and settle, on both ledgers) against an instance running
+`appendfsync always` — a disk write per ledger update. `http_req_duration`'s
+44ms median, which is dominated by the 1657 instant 429s, is the closest thing
+here to a measurement of gateway overhead alone, and it is unchanged in
+character from the previous run's 83ms p95.
+
+### What this run did prove
+
+- **The ceiling drops an exhausted provider before calling it.** OpenAI began
+  the run with $0.027 of headroom and the reservation logic admitted exactly
+  what fit, refusing nothing incorrectly and never overspending.
+- **Both ledgers agree with each other and with the bill.** The per-key ledger
+  moved $0.00026625; the provider ledger moved $0.00026625; the audit log
+  records $0.00026775 across 45 requests. The conservation property that
+  `tests/test_ledger_conservation.py` asserts against stubs holds against real
+  Redis and a real provider.
+- **Zero failures under sustained load**, as before: every one of 1700
+  requests got a 200 or a 429, never a 5xx or a connection error.
+
+## The previous run — `db8af9e` (2026-08-10)
 
 ## Staleness
 
 > **These numbers predate the spend ceiling and everything built on it.**
+> Superseded by the run above; kept as the before-picture.
 > Treat them as a floor for the routing path, not a current benchmark. They
 > are kept rather than deleted because the routing and fallback behaviour they
 > measured has not changed — only the accounting around it, which has only
