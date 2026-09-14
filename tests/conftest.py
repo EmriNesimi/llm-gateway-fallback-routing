@@ -69,10 +69,23 @@ from app.ratelimit import dependency as ratelimit_dependency  # noqa: E402
 from app.ratelimit.token_bucket import _LUA_TOKEN_BUCKET  # noqa: E402
 
 
-@pytest_asyncio.fixture
+@pytest_asyncio.fixture(autouse=True)
 async def isolated_db(monkeypatch):
     """A fresh in-memory DB per test, swapped in for the real engine/session
-    factory wherever the app looks them up."""
+    factory wherever the app looks them up.
+
+    autouse, for exactly the reason isolated_redis below is: a test that
+    forgets to ask for it does not fail loudly, it quietly writes to whatever
+    database the environment points at. Only 21 of 58 test files asked for it,
+    and the audit log in a real gateway.db ended up holding 146 rows worth
+    $5.92 of anthropic spend that no provider was ever paid — a stub router
+    streaming into the production audit table.
+
+    That is worse than a mess. SECURITY.md calls the audit log the record of
+    what was spent and by whom, and reconciling a ledger against it is the
+    procedure the runbook gives for deciding whether spend is real. A record
+    that quietly mixes in test traffic cannot answer that question.
+    """
     engine = create_async_engine(
         "sqlite+aiosqlite://",
         poolclass=StaticPool,
