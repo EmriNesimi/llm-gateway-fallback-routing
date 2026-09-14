@@ -26,11 +26,28 @@ from app.budget.provider_budget import ProviderBudget
 from app.main import app
 from app.providers.base import StreamChunk
 
+# A scratch database, never the one the gateway uses. This test writes real
+# ledger keys to a real Redis, and it used to do that on whichever database
+# REDIS_URL pointed at — which for anyone running the compose stack is the
+# production one. It deleted `provider_budget:anthropic` to get a clean start,
+# so every `make test` run silently destroyed the lifetime spend ledger: the
+# single number this project exists to hold, with no second copy anywhere.
+#
+# Observed, not theorised. The ledger read $0.0067 against an audit log
+# recording $5.84 of real anthropic spend — the difference being every run
+# since the last one.
+_SCRATCH_DB = 15
+
 
 def _redis_url() -> str:
     import os
+    import re
 
-    return os.environ.get("REDIS_URL", "redis://:localdevpassword@localhost:6379/0")
+    url = os.environ.get("REDIS_URL", "redis://:localdevpassword@localhost:6379/0")
+    # Swap the database index rather than the host, so this still follows
+    # REDIS_URL to wherever CI's Redis lives while staying off its data.
+    url, _ = re.subn(r"/\d+$", f"/{_SCRATCH_DB}", url)
+    return url if url.endswith(f"/{_SCRATCH_DB}") else f"{url}/{_SCRATCH_DB}"
 
 
 class _EndlessRouter:
@@ -53,6 +70,14 @@ async def test_a_real_client_disconnect_still_settles_the_ledger(monkeypatch, is
     except Exception:  # noqa: BLE001
         pytest.skip("no reachable Redis; this test needs real I/O to be meaningful")
     key = "provider_budget:anthropic"
+    # Safe now only because _SCRATCH_DB keeps this off the gateway's database.
+    # Guard it anyway: a future edit to _redis_url that quietly lands this back
+    # on db 0 would wipe the lifetime ledger again, and the symptom — a ledger
+    # reading near zero — looks like "nothing has been spent yet".
+    assert client.connection_pool.connection_kwargs.get("db") == _SCRATCH_DB, (
+        "this test writes real ledger keys and must never run against the"
+        f" gateway's Redis database (expected db {_SCRATCH_DB})"
+    )
     await client.delete(key)
     budget = ProviderBudget(redis=client, cap_usd=4.0)
     monkeypatch.setattr(main_module, "provider_budget", budget)
