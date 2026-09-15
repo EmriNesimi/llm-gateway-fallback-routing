@@ -1,4 +1,4 @@
-.PHONY: install check lint typecheck audit test run migrate migrate-check up down demo ledger
+.PHONY: install check lint typecheck audit test run migrate migrate-check up down demo ledger reconcile
 
 install:
 	pip install -r requirements-dev.txt
@@ -61,6 +61,13 @@ ledger:
 	snap = asyncio.run(b.snapshot(bp())); \
 	cap = b.cap_usd; \
 	[print(f'{p:<12} spent \$${s:>8.4f}  of \$${cap:.2f}   remaining \$${max(0.0, cap-s):>8.4f}') for p, s in snap.items()]"
+
+# Cross-check the ledger against the audit log. The runbook tells the reader
+# to do this before trusting a ProviderBudgetExhausted page or resetting the
+# ledger, and until now that meant ad-hoc SQL against one store and redis-cli
+# against the other. Exits 1 on a gap, so it can gate a deploy.
+reconcile:
+	python -m scripts.reconcile
 
 migrate:
 	alembic upgrade head
