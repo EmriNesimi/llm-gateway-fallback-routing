@@ -87,7 +87,7 @@ flowchart LR
 
 ## 🚧 build log
 
-Phase 5 complete ✅ — the gateway is now something an existing application can actually be pointed at: a drop-in OpenAI-compatible endpoint, real multi-chain routing, sampling controls that reach the provider, and the observability to see what any of it is doing. Spend is now bounded by a hard per-provider ceiling rather than a cap that resets and multiplies. 520 tests, 99% line-and-branch coverage against a 99% floor enforced in CI.
+Phase 5 complete ✅, and **verified against real infrastructure on 2026-09-15** — real Redis, real Postgres migrations, both live providers, a k6 load test, and the published `v0.5.0` image pulled from GHCR and serving traffic. The gateway is now something an existing application can actually be pointed at: a drop-in OpenAI-compatible endpoint, real multi-chain routing, sampling controls that reach the provider, and the observability to see what any of it is doing. Spend is now bounded by a hard per-provider ceiling rather than a cap that resets and multiplies. 520 tests, 99% line-and-branch coverage against a 99% floor enforced in CI.
 
 - [x] Project scaffold, config, security foundations
 - [x] Provider adapters (OpenAI / Anthropic / Ollama) + fallback chain
@@ -115,7 +115,7 @@ Phase 5 complete ✅ — the gateway is now something an existing application ca
 - [x] Test suite isolated from the developer's `.env` (it was reading real keys and a live OTLP endpoint)
 - [x] Guards against silent rot: unpriced routable models, dashboard panels querying metrics that don't exist, config settings escaping test isolation
 - [x] Coverage floor enforced in CI (93%), auth and provider streaming paths brought to full coverage
-- [x] Release workflow building and pushing a multi-arch image to GHCR on a `v*` tag
+- [x] Release workflow building and pushing a multi-arch image to GHCR on a `v*` tag — **verified end to end on `v0.5.0`**: the run went green on `checkout@v7`, `setup-qemu@v4`, `setup-buildx@v4`, `login@v4`, `metadata@v6` and `build-push-action@v7` (all bumped that week, none exercised before), the published image was pulled fresh, ran native arm64, passed `/readyz` against the compose Redis, reported `0.5.0` from `/openapi.json`, and served a real `gpt-4o-mini` request that moved the spend ledger by exactly $0.0000024. `:latest` resolves to the same digest as `:0.5.0`. The ledger also survived a Docker Desktop restart in between, which is decision 013 holding in practice rather than in a test.
 - [x] Provider keys that are present but obviously fake (the `.env.example` placeholder) detected at startup and treated as unset, instead of 401ing every request while the router silently falls past that provider
 - [x] `temperature` / `top_p` / `max_tokens` / `stop` forwarded to every provider in its own dialect, including the Claude models that reject two of them outright
 - [x] Hard lifetime spend ceiling per provider, request size bounded, and streamed spend recorded even when the client disconnects mid-stream
