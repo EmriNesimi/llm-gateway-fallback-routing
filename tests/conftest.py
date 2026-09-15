@@ -61,6 +61,7 @@ import pytest_asyncio  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
+import app.main as main_module  # noqa: E402
 from app.budget import dependency as budget_dependency  # noqa: E402
 from app.db import audit as db_audit  # noqa: E402
 from app.db import session as db_session  # noqa: E402
@@ -100,6 +101,20 @@ async def isolated_db(monkeypatch):
     monkeypatch.setattr(db_session, "async_session", factory)
     # app/db/audit.py imported `async_session` by name, so it needs its own patch.
     monkeypatch.setattr(db_audit, "async_session", factory)
+    # So did app/main.py, for /readyz's database check and the shutdown
+    # dispose. Missed until tests/test_db_isolation_reaches_every_import.py
+    # was written — and it only showed once app.main had been imported before
+    # the fixture, which in a full run it always is. That file derives this
+    # list from the source, so the next by-name import fails a test instead
+    # of quietly reaching the real database.
+    monkeypatch.setattr(main_module, "async_session", factory)
+    # NOT main_module.engine. app.main holds that for one thing — the
+    # shutdown dispose() in lifespan — and every TestClient(app) exit runs it.
+    # Patching it in would dispose the fixture's StaticPool, whose single
+    # connection *is* the in-memory database, so every table vanished under
+    # any test that opened a client and then queried. The real engine is
+    # never touched through main.engine except to be closed, and closing an
+    # idle pool is harmless.
 
     yield factory
 
