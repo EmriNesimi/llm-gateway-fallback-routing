@@ -1,5 +1,41 @@
 # Changelog
 
+## Unreleased
+
+**The two spend records, and a way to compare them**
+- `make reconcile` compares the ledger to the audit log per provider and says
+  which way any gap runs. Ledger high is stranded reservations; ledger low is
+  a ceiling bigger than the spend says, the direction this control must never
+  fail in. Exits 1 on a gap, so it can gate a deploy. Written after the check
+  it automates found $3.97 of phantom OpenAI spend and $5.92 of fake anthropic
+  spend, by hand, once.
+- [Decision 017](docs/decisions/017-two-spend-records-neither-is-the-truth.md):
+  neither store is the truth. Agreement is the evidence; the provider's bill
+  arbitrates because it is the only record the gateway cannot have written.
+- [Decision 004](docs/decisions/004-best-effort-bookkeeping-vs-fail-closed-enforcement.md)
+  updated with what "best-effort" did in practice once reservations existed.
+- The runbook routes every budget page through `make reconcile` before any
+  other action.
+
+**Test isolation, closed properly**
+- A guard now derives every `from app.db.session import async_session` from
+  the source and checks `isolated_db` reaches it. It found one it did not:
+  `app/main.py`, so any test hitting `/readyz` queried the real `gateway.db`.
+  Same hole that put 146 fake rows in the audit log, one module over.
+- The guard imports at collection time. Imported inside the fixture it binds
+  the already-patched name and passes vacuously — which it did, on first run.
+
+**Verified against real infrastructure**
+- The `v0.5.0` release ran green on six freshly-bumped action majors; the
+  published image was pulled, ran native arm64, passed `/readyz`, and served a
+  real request that moved the ledger by $0.0000024. The ledger survived a
+  Docker Desktop restart in between — decision 013 holding in practice.
+- Real-Redis integration tests were silently skipping; they run now.
+  Migrations applied clean to a real Postgres 18.
+- The test suite was deleting the production spend ledger and writing fake
+  spend into the production audit log on every run. Both fixed in 0.5.0;
+  noted here because the numbers in any earlier reconciliation were affected.
+
 ## 0.5.0
 
 **The per-key budget now holds under concurrency**
