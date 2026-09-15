@@ -172,8 +172,11 @@ a monthly cap that will roll over.
 dropped from every chain before it can be called. Requests fall through to the
 next provider; if none is left, callers get a `402`.
 
-**Check:** that the spend is real before raising the cap. Cross-check
-`gateway_cost_usd_total` against the provider's own billing page. The ledger is
+**Check:** that the spend is real before raising the cap. `make reconcile`
+compares the ledger to the audit log per provider and says which way any gap
+runs. A ledger reading **high** against the audit log is stranded
+reservations, not spend — this page has fired on $3.97 of exactly that, with
+$0.0003 actually spent. Then the provider's own billing page: the ledger is
 the gateway's belief about spend, not the provider's invoice, and the two
 diverging is itself worth understanding.
 
@@ -194,9 +197,10 @@ is wrong is the ledger, not the request.
 **Check:** which ledger, from the `ledger` label.
 
 - `provider` — the lifetime ceiling now sits lower than the money actually
-  spent, and it will not correct itself. `make ledger` shows the inflated
-  figure. Cross-check `gateway_cost_usd_total` and the provider's own billing
-  page to establish the true number before deciding anything.
+  spent, and it will not correct itself. `make reconcile` shows the gap and
+  the audit-log figure to correct to. Cross-check the provider's own billing
+  page as well before deciding anything — the audit log is the gateway's
+  record, and it has held test traffic before.
 - `key` — one caller's monthly share is short. It rights itself when the
   period rolls over, so it is usually not worth touching.
 
@@ -217,6 +221,12 @@ they say what not to do.
 **Read it:** `make ledger` prints spend and remaining headroom per provider,
 through the same settings the gateway uses — so it reports what the gateway
 would enforce, not what some other Redis happens to hold.
+
+**Check it:** `make reconcile` compares it to the audit log. The two are
+written independently — reserve/settle in Redis, `record_audit_log` in the
+database — so agreement is evidence and disagreement is the diagnostic. Run
+it before believing either number, and before any reset. It exits 1 on a gap,
+so it can also run on a schedule.
 
 **Raise the ceiling:** change `PROVIDER_LIFETIME_BUDGET_USD` and restart. The
 ledger is untouched; only the limit it is compared against moves. This is the
@@ -275,7 +285,7 @@ outcomes need five different answers and only one of them is your problem.
 | `401` | the key is not recognised | check it against `GATEWAY_API_KEYS`, or `/admin/keys` if it was issued through the admin API. A revoked key looks identical to a wrong one, by design |
 | `429` | rate limited | `Retry-After` says how long. If it is constant, raise `RATE_LIMIT_CAPACITY` / `RATE_LIMIT_REFILL_PER_SEC` — not the budget |
 | `402`, `"monthly budget exceeded for this API key"` | that caller has spent their own share | raise `MONTHLY_BUDGET_USD_PER_KEY`, or wait for the period to roll. The operator's balance is untouched |
-| `402`, `"provider budget exhausted"` | the operator's lifetime ceiling is gone | `make ledger` to see the real numbers, then decide: raise `PROVIDER_LIFETIME_BUDGET_USD` or stop. Waiting will not help — this ledger never resets |
+| `402`, `"provider budget exhausted"` | the operator's lifetime ceiling is gone | `make reconcile` first — a ledger that reads high against the audit log is stranded reservations, and the fix is a correction, not a bigger cap. If it agrees, decide: raise `PROVIDER_LIFETIME_BUDGET_USD` or stop. Waiting will not help — this ledger never resets |
 | `503`, `"no pricing configured"` | a routable model has no price, so its cost cannot be bounded | add the `_PRICING` entry and deploy. Nothing the caller does will fix it |
 
 The two `402`s are worth separating carefully: the message is the only thing
