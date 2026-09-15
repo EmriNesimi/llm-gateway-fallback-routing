@@ -25,11 +25,12 @@ money to produce, over a failure in something that's purely bookkeeping.
   the global exception handler, not silently allowed through). Better to
   block traffic than let budget/rate-limit enforcement pass through
   unverified.
-- **Post-hoc bookkeeping is best-effort.** `record_audit_log` and
-  `BudgetTracker.record_spend` each catch their own failures internally, log
-  loudly (with the request ID), and return normally. The caller already has
-  their response; nothing about the bookkeeping path should be able to take
-  it away from them.
+- **Post-hoc bookkeeping is best-effort.** `record_audit_log`,
+  `BudgetTracker.settle` and `ProviderBudget.settle` (the latter two via
+  `_settle_chain`) each catch their own failures internally, log loudly with
+  the request ID, and return normally. The caller already has their
+  response; nothing about the bookkeeping path should be able to take it
+  away from them.
 
 ## Why
 
@@ -57,3 +58,29 @@ bill) already paid for.
   outage window — this is a known, accepted gap, not an oversight; the
   alternative (discarding successful, paid-for responses) is strictly
   worse.
+
+## What this looked like in practice (added 2026-09-15)
+
+Since reserve-then-settle arrived (decisions 011 and 015), "best-effort"
+on the settle side has a sharper edge than under-counting. A settle that
+fails leaves the *reservation* standing, which is an over-count in the safe
+direction — but it is permanent, it is invisible from the outside, and it
+compounds. Enough of them and the ceiling refuses a provider that has spent
+almost nothing, which is exactly what happened: $3.97 claimed against OpenAI
+with $0.0003 actually spent.
+
+Two things follow that this record did not originally say:
+
+- The two stores drifting apart is the *expected* result of this decision,
+  not a defect in it, so there has to be a way to see the drift.
+  `make reconcile` is that, and decision 017 says how to read it.
+- "Fails loudly" is not enough when the failure's effect is to make a number
+  smaller. Nobody reads a log line looking for something that did not
+  happen. `gateway_budget_reservation_leaked_usd_total` and the
+  `BudgetReservationLeaked` alert exist because the safe direction is the
+  quiet one.
+
+The decision itself stands. A paid-for response is still never discarded
+over bookkeeping. What changed is that the bookkeeping's failures now have
+to be visible, because "we might under-count" turned out to also mean "we
+might refuse a provider for money never spent".
