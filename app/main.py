@@ -94,7 +94,7 @@ app = FastAPI(
     description="Resilient LLM gateway with provider fallback, rate limiting, and observability.",
     # Keep in step with the git tag — this is what /openapi.json advertises,
     # and a client pinning against it deserves the two to agree.
-    version="0.4.0",
+    version="0.5.0",
     lifespan=lifespan,
 )
 

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
 **The per-key budget now holds under concurrency**
 - `MONTHLY_BUDGET_USD_PER_KEY` was checked before a request and recorded after,
