@@ -42,3 +42,4 @@ dump.rdb
 
 # Serena MCP tooling state — local, not project config
 .serena/
+audit-purges/

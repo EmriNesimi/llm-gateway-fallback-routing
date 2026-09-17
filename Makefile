@@ -1,4 +1,4 @@
-.PHONY: install check lint typecheck audit test run migrate migrate-check up down demo ledger reconcile
+.PHONY: install check lint typecheck audit test run migrate migrate-check up down demo ledger reconcile purge-audit
 
 install:
 	pip install -r requirements-dev.txt
@@ -68,6 +68,15 @@ ledger:
 # against the other. Exits 1 on a gap, so it can gate a deploy.
 reconcile:
 	python -m scripts.reconcile
+
+# Remove audit rows carrying one exact request_id, exporting a JSON copy of
+# each first. Dry run unless APPLY=1. Exists for the case that happened: the
+# suite wrote 150 rows of stub traffic into the production audit log, and
+# reconcile could not go green until they were gone.
+#   make purge-audit ID=client-hung-up
+#   make purge-audit ID=client-hung-up APPLY=1
+purge-audit:
+	python -m scripts.purge_audit_rows "$(ID)" $(if $(APPLY),--apply,)
 
 migrate:
 	alembic upgrade head
