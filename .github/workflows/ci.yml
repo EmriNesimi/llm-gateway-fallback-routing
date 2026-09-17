@@ -117,6 +117,19 @@ jobs:
       - name: Run tests with coverage
         run: pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=99
 
+      # The operator scripts, run for real against this job's empty Redis and
+      # a fresh SQLite. This is NOT a reconciliation — two empty stores agree
+      # trivially, and treating that as a pass would be a check that cannot
+      # fail. It is an import-and-run smoke test: the scripts reach the
+      # stores through the same settings the app does, and a rename in
+      # app/db/session.py or app/budget/dependency.py breaks them quietly
+      # otherwise, to be found the day someone needs them. The real
+      # reconcile runs where the real data is; see docs/runbook.md.
+      - name: Operator scripts still run
+        run: |
+          python -m scripts.reconcile
+          python -m scripts.purge_audit_rows ci-smoke-no-such-id
+
   postgres-migrations:
     runs-on: ubuntu-latest
     # Ceiling, not a target — this job runs in about 50 seconds. Without one,

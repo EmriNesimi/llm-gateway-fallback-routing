@@ -225,8 +225,38 @@ would enforce, not what some other Redis happens to hold.
 **Check it:** `make reconcile` compares it to the audit log. The two are
 written independently — reserve/settle in Redis, `record_audit_log` in the
 database — so agreement is evidence and disagreement is the diagnostic. Run
-it before believing either number, and before any reset. It exits 1 on a gap,
-so it can also run on a schedule.
+it before believing either number, and before any reset.
+
+**Run it on a schedule.** CI cannot: its Redis is empty and its database is
+fresh, so two empty stores agree trivially, and a check that cannot fail is
+worse than none (CI does run the script, but only to prove it still imports).
+The reconcile that means something runs against the live stores. It exits 1
+on a gap, so the whole job is:
+
+```
+cd /path/to/llm-gateway-fallback-routing && make reconcile || <page someone>
+```
+
+Daily is enough. Drift accumulates over requests, not time, and this project
+does not see enough traffic for a day's worth to matter — what the schedule
+buys is that a gap gets noticed inside a day rather than on the day the
+ceiling refuses a provider that has spent nothing.
+
+**Correct it:** when reconcile says LEDGER HIGH and the provider's billing
+page agrees the spend is not real, set the Redis key to the audit-log figure.
+Record the old value first; there is no undo.
+
+```
+redis-cli -a "$REDIS_PASSWORD" GET provider_budget:<provider>   # keep this
+redis-cli -a "$REDIS_PASSWORD" SET provider_budget:<provider> <audit figure>
+make reconcile                                                  # should now agree
+```
+
+When it says LEDGER LOW, do not correct upward without understanding why —
+that direction means spend bypassed the ceiling or the ledger was reset, and
+either is a bug to find before it is a number to fix. When the audit log is
+the one that is wrong (it has held test traffic before), `make purge-audit`
+removes rows by exact request_id with a JSON copy kept.
 
 **Raise the ceiling:** change `PROVIDER_LIFETIME_BUDGET_USD` and restart. The
 ledger is untouched; only the limit it is compared against moves. This is the
