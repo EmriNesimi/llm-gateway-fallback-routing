@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+**Both spend records agree with each other and with the bill**
+- `make purge-audit` removes audit rows by exact `request_id`, dry run unless
+  `APPLY=1`, with a JSON copy of every removed row written and read back
+  before the `DELETE`. No date range on purpose — that is how a real request
+  gets swept up with fake ones. Exact matching earned its keep on first use:
+  the 150 rows of stub traffic carried two different hardcoded IDs, and a
+  substring match would have taken all 150 without saying there were two.
+- With those gone, `make reconcile` exposed what they had hidden: the
+  anthropic ledger was `$0.00665` high with stranded reservations. Corrected
+  to the audit-log figure, which the provider dashboard confirms. First time
+  both stores have agreed with each other and with the bill.
+- The budget gauge now publishes on every write. It refreshed only on reads,
+  and the request path only reads when refusing — so after each *served*
+  request the dashboard still showed the pre-request headroom, and after an
+  operator correction it showed the old figure until the next refusal.
+  `ProviderBudgetLow` and `ProviderBudgetExhausted` read that gauge.
+- CI runs both operator scripts against its empty stores to prove they still
+  import. Explicitly not a reconciliation: two empty stores agree trivially,
+  and a check that cannot fail is worse than none. The runbook says where the
+  real one runs, and gives the correction procedure for each direction of gap.
+- README's spend-ceilings section no longer claims the per-key cap is checked
+  rather than reserved, and now says how to check the ledger.
+
 **The two spend records, and a way to compare them**
 - `make reconcile` compares the ledger to the audit log per provider and says
   which way any gap runs. Ledger high is stranded reservations; ledger low is
