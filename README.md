@@ -414,14 +414,16 @@ Two controls with similar names and different jobs. Both are on by default.
 | Protects | each caller's fair share | the operator's actual balance |
 
 The per-key cap can't bound what you spend: it multiplies by the number of
-client keys, it resets monthly, and it was checked rather than reserved — so
-with a burst allowance of 20, twenty concurrent requests all observed the same
-pre-call total and all went through.
+client keys and it resets monthly. It bounds one caller's *share*, which is a
+different question.
 
-The lifetime ceiling is enforced differently. The request's worst-case cost is
-added atomically **before** the provider is called and the surplus refunded
-after, so concurrent requests see each other's reservations immediately —
-twenty simultaneous requests at `$1` against a `$4` ceiling admit exactly four.
+Both are enforced the same way. The request's worst-case cost is added
+atomically **before** the provider is called and the surplus refunded after,
+so concurrent requests see each other's reservations immediately — twenty
+simultaneous requests at `$1` against a `$4` ceiling admit exactly four. The
+per-key cap used to be checked rather than reserved, which let a burst of 20
+all read the same pre-call total and all go through; it reserves now
+([decision 015](docs/decisions/015-both-spend-ledgers-reserve.md)).
 Over the ceiling, the reservation is handed back and the request refused with
 a `402`; the provider is never called, so nothing is spent. An unreachable
 Redis refuses too: being unable to prove there's budget left isn't the same as
@@ -456,6 +458,31 @@ Two things this rests on, both of which had to be fixed first:
   stream paths now charge an estimate on `GeneratorExit`.
 
 Reasoning in [decision 011](docs/decisions/011-hard-provider-spend-ceiling.md).
+
+### the ledger is not the truth, and here is how you check
+
+Spend is written down twice, independently: the ledger in Redis that the
+ceiling enforces against, and the audit log in the database with a row per
+request. Neither reads the other, and they can drift — a settle that fails
+leaves its reservation standing, which over-counts permanently and quietly in
+the *safe* direction, which is exactly what makes it easy to never notice.
+This project has watched a `$4` ceiling get within `$0.03` of refusing a
+provider that had spent `$0.0003`.
+
+```
+make reconcile
+```
+
+compares the two per provider and says which way any gap runs. Ledger high is
+stranded reservations and the fix is a correction. Ledger low means the
+ceiling is bigger than the spend says — the direction this control must never
+fail in — and it means something bypassed it or reset it. Agreement between
+the two is the evidence; the provider's own bill arbitrates, because it is
+the only record the gateway cannot have written. Run it on a schedule against
+the live stores; CI runs it only to prove it still imports, because two empty
+stores agree trivially. `gateway_budget_reservation_leaked_usd_total` counts
+the leaks as they happen, and `BudgetReservationLeaked` alerts on any.
+See [decision 017](docs/decisions/017-two-spend-records-neither-is-the-truth.md).
 
 ## 🔒 security
 
