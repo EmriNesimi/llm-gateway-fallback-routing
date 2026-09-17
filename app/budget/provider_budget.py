@@ -125,6 +125,7 @@ class ProviderBudget:
         key = self._key(provider)
         total = float(await self._redis.incrbyfloat(key, worst_case_usd))
         if total <= self._cap_usd:
+            self._publish(provider, total)
             return
 
         # Derived from the total this call already read, rather than a third
@@ -185,7 +186,14 @@ class ProviderBudget:
             return
         delta = actual_usd - reserved_usd
         if delta:
-            await self._redis.incrbyfloat(self._key(provider), delta)
+            total = float(await self._redis.incrbyfloat(self._key(provider), delta))
+            # Every write publishes. The gauge used to refresh only on reads,
+            # and the request path only reads when refusing — so after each
+            # served request the dashboard still showed the pre-request
+            # headroom, and after an operator corrected the ledger it showed
+            # the old number until the next refusal. INCRBYFLOAT hands back
+            # the new total for free; there is no reason to discard it.
+            self._publish(provider, total)
 
     async def record_unreserved(self, provider: str, actual_usd: float) -> None:
         """Charge spend that never had a reservation.
@@ -196,7 +204,8 @@ class ProviderBudget:
         """
         if provider in FREE_PROVIDERS or actual_usd <= 0:
             return
-        await self._redis.incrbyfloat(self._key(provider), actual_usd)
+        total = float(await self._redis.incrbyfloat(self._key(provider), actual_usd))
+        self._publish(provider, total)
 
     async def snapshot(self, providers: tuple[str, ...]) -> dict:
         """Current spend per provider, for operators and for tests.

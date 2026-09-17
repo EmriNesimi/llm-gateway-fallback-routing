@@ -341,3 +341,59 @@ async def test_the_refusal_reports_the_spend_it_actually_observed(budget):
 
     assert exc_info.value.spent == pytest.approx(3.0)
     assert exc_info.value.cap == pytest.approx(4.0)
+
+
+@pytest.mark.asyncio
+async def test_the_gauge_follows_every_write_not_just_reads():
+    """The gauge used to refresh only on spent(), which the request path calls
+    only when refusing. So after every *served* request the dashboard still
+    showed the pre-request headroom, and after an operator corrected the
+    ledger in Redis it showed the old number until the next refusal — which,
+    the correction having just made room, might be a long way off.
+
+    INCRBYFLOAT returns the post-increment total on every write path. It was
+    being thrown away.
+    """
+    from prometheus_client import REGISTRY
+
+    redis = fakeredis.aioredis.FakeRedis()
+    budget = ProviderBudget(redis=redis, cap_usd=4.0)
+
+    def spent_gauge():
+        v = REGISTRY.get_sample_value(
+            "gateway_provider_budget_spent_usd", {"provider": "gauge-follows"}
+        )
+        return 0.0 if v is None else v
+
+    await budget.reserve("gauge-follows", 1.0)
+    assert spent_gauge() == pytest.approx(1.0), "reserve did not publish"
+
+    await budget.settle("gauge-follows", 1.0, 0.25)
+    assert spent_gauge() == pytest.approx(0.25), "settle did not publish"
+
+    await budget.record_unreserved("gauge-follows", 0.5)
+    assert spent_gauge() == pytest.approx(0.75), "record_unreserved did not publish"
+
+
+@pytest.mark.asyncio
+async def test_an_external_correction_reaches_the_gauge_on_the_next_read():
+    """The runbook's correction procedure is `SET` in redis-cli, which this
+    process never sees. The next read has to pick it up — and `make
+    reconcile`, which the procedure ends with, reads. So the sequence the
+    runbook prescribes leaves the dashboard honest without a restart."""
+    from prometheus_client import REGISTRY
+
+    redis = fakeredis.aioredis.FakeRedis()
+    budget = ProviderBudget(redis=redis, cap_usd=4.0)
+
+    await budget.record_unreserved("corrected", 3.97)  # the phantom figure
+    assert REGISTRY.get_sample_value(
+        "gateway_provider_budget_remaining_usd", {"provider": "corrected"}
+    ) == pytest.approx(0.03)
+
+    await redis.set("provider_budget:corrected", 0.0003)  # operator, out of band
+    await budget.snapshot(("corrected",))  # what `make reconcile` does
+
+    assert REGISTRY.get_sample_value(
+        "gateway_provider_budget_remaining_usd", {"provider": "corrected"}
+    ) == pytest.approx(3.9997)
