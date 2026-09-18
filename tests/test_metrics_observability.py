@@ -37,6 +37,21 @@ def _sample(name, **labels):
     return 0.0 if value is None else value
 
 
+def _base_metric(name: str) -> str:
+    """Strip the suffix Prometheus derives from a histogram or counter.
+
+    `gateway_request_latency_seconds_bucket` is exposed; what the code
+    registers is `gateway_request_latency_seconds`. Three tests compare a
+    dashboard's or alert's references against the registry, and all three
+    need this — it was three copies, each a loop that reassigned its own
+    variable.
+    """
+    for suffix in ("_bucket", "_count", "_sum", "_total"):
+        if name.endswith(suffix):
+            return name[: -len(suffix)]
+    return name
+
+
 # --------------------------------------------------------------------------
 # Circuit breaker state
 # --------------------------------------------------------------------------
@@ -225,13 +240,7 @@ def test_dashboard_only_queries_metrics_that_exist():
     for panel in dashboard["panels"]:
         for target in panel.get("targets", []):
             for name in re.findall(r"\bgateway_[a-z_]+", target["expr"]):
-                # Strip the suffixes Prometheus derives from histograms and
-                # counters; the base metric is what's registered.
-                for suffix in ("_bucket", "_count", "_sum", "_total"):
-                    if name.endswith(suffix):
-                        name = name[: -len(suffix)]
-                        break
-                referenced.add(name)
+                referenced.add(_base_metric(name))
 
     missing = sorted(referenced - exposed)
     assert not missing, (
@@ -255,11 +264,7 @@ def test_alert_rules_only_reference_metrics_that_exist():
 
     referenced = set()
     for name in re.findall(r"\bgateway_[a-z_]+", rules):
-        for suffix in ("_bucket", "_count", "_sum", "_total"):
-            if name.endswith(suffix):
-                name = name[: -len(suffix)]
-                break
-        referenced.add(name)
+        referenced.add(_base_metric(name))
 
     missing = sorted(referenced - exposed)
     assert not missing, (
@@ -390,15 +395,9 @@ def test_every_metric_is_graphed_or_alerted():
         + pathlib.Path("deploy/prometheus/alerts.yml").read_text()
     )
 
-    def base(name: str) -> str:
-        for suffix in ("_bucket", "_count", "_sum", "_total"):
-            if name.endswith(suffix):
-                return name[: -len(suffix)]
-        return name
+    watched = {_base_metric(n) for n in re.findall(r"gateway_[a-z_]+", watched_text)}
 
-    watched = {base(n) for n in re.findall(r"gateway_[a-z_]+", watched_text)}
-
-    orphans = sorted(m for m in declared if base(m) not in watched)
+    orphans = sorted(m for m in declared if _base_metric(m) not in watched)
     assert not orphans, (
         f"{orphans} are exported but appear in no dashboard panel and no alert"
         " rule — nobody would ever see them"
