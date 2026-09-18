@@ -38,3 +38,8 @@ docker-compose.yml
 # screenshots alone are ~176K of build context uploaded to the daemon on
 # every build for nothing.
 docs/
+
+# Purge exports hold copies of removed audit rows — hashed keys, request
+# IDs, per-request cost. Gitignored already; this keeps a build run after a
+# purge from copying them into the image.
+audit-purges/
