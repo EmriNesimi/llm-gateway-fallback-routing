@@ -50,7 +50,7 @@ class BudgetTracker:
         return f"budget:{hash_key(api_key)}:{period}"
 
     async def spent_usd(self, api_key: str) -> float:
-        # Deliberately NOT swallowed like record_spend below: this backs the
+        # Deliberately NOT swallowed like settle below: this backs the
         # pre-flight budget check in app/budget/dependency.py, which must
         # fail closed on a Redis outage (block the request) rather than
         # silently let spend enforcement pass through unverified.
