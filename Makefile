@@ -1,4 +1,4 @@
-.PHONY: help install check lint typecheck audit test run migrate migrate-check up down demo ledger reconcile purge-audit
+.PHONY: help install check lint typecheck shellcheck audit test run migrate migrate-check up down demo ledger reconcile purge-audit
 
 # Default target. A `## text` on the same line as a target is its help line.
 help:
@@ -23,6 +23,12 @@ lint:  ## ruff
 
 typecheck:  ## mypy
 	mypy
+
+# The same image and version CI uses, so a pass here is a pass there. Needs
+# Docker, which is why it is not in `check`: that target is the one that
+# must work with nothing but the venv.
+shellcheck:  ## lint shell scripts with CI's exact shellcheck (needs Docker)
+	git ls-files -z '*.sh' | xargs -0 docker run --rm -v "$$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:v0.11.0
 
 audit:  ## pip-audit for known-vulnerable dependencies
 	pip-audit -r requirements.txt -r requirements-dev.txt
