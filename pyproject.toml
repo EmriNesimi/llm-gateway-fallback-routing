@@ -57,7 +57,11 @@ select = ["E", "F", "I", "UP", "B", "S"]
 # - PT006: parametrize names as a tuple, not a comma string. A typo in
 #   "mode,endpoint" is a wrong parameter name at collection time; a typo in
 #   ("mode", "endpoint") is a SyntaxError.
-extend-select = ["PT018", "ASYNC110", "PLW1510", "PT006"]
+# - PLC0415: an import inside a function, in app/ only. The one it found was
+#   dodging a circular import that did not exist. In tests a local import is
+#   often deliberate (importing inside the test that exercises it), so the
+#   rule is scoped to the application via per-file-ignores below.
+extend-select = ["PT018", "ASYNC110", "PLW1510", "PT006", "PLC0415"]
 
 [tool.ruff.lint.per-file-ignores]
 # B008 flags function calls in argument defaults, which is exactly how FastAPI
@@ -67,7 +71,7 @@ extend-select = ["PT018", "ASYNC110", "PLW1510", "PT006"]
 # S101 is `assert`, which is what a test is made of. Only S101 is waived —
 # the rest of the security ruleset still applies to test code, which handles
 # the same secrets the app does.
-"tests/*.py" = ["S101"]
+"tests/*.py" = ["S101", "PLC0415"]
 
 [tool.mypy]
 python_version = "3.12"

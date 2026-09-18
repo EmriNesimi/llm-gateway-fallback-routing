@@ -10,6 +10,12 @@ costs $0.00 and escapes budget enforcement entirely. tests/test_pricing.py
 fails the build if that ever drifts.
 """
 
+# Not circular: provider_budget imports only app.observability.metrics, and
+# this module imports nothing else from app. It was imported inside
+# billable_providers() as if it were, which is the kind of thing that stays
+# forever because nobody wants to find out.
+from app.budget.provider_budget import FREE_PROVIDERS
+
 FALLBACK_CHAINS: dict[str, list[tuple[str, str]]] = {
     # The entry point for callers that don't pick a tier. Same shape it's
     # always had: cheap hosted primary, cheap hosted backup, local last resort.
@@ -51,8 +57,6 @@ def billable_providers() -> tuple[str, ...]:
     "here is what you have spent" message — the one place an operator looks
     when the gateway says it is out of budget.
     """
-    from app.budget.provider_budget import FREE_PROVIDERS
-
     return tuple(
         sorted(
             {
