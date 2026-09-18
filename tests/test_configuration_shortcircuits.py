@@ -145,7 +145,7 @@ async def test_a_failing_redis_close_still_disposes_the_database_pool(monkeypatc
         async def dispose(self):
             disposed.append(True)
 
-    monkeypatch.setattr(main_module, "get_redis", lambda: _BrokenRedis())
+    monkeypatch.setattr(main_module, "get_redis", _BrokenRedis)
     monkeypatch.setattr(main_module, "engine", _Engine())
     monkeypatch.setattr(main_module, "init_db", _noop)
 
@@ -165,7 +165,7 @@ async def test_shutdown_never_raises(monkeypatch):
         async def dispose(self):
             raise OSError("this one is broken too")
 
-    monkeypatch.setattr(main_module, "get_redis", lambda: _BrokenRedis())
+    monkeypatch.setattr(main_module, "get_redis", _BrokenRedis)
     monkeypatch.setattr(main_module, "engine", _Engine())
     monkeypatch.setattr(main_module, "init_db", _noop)
 

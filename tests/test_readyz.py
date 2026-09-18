@@ -82,7 +82,7 @@ def test_readyz_reports_ok_when_both_dependencies_answer(isolated_db, monkeypatc
             # The lifespan shutdown closes the client it was handed.
             pass
 
-    monkeypatch.setattr(main_module, "get_redis", lambda: _LiveRedis())
+    monkeypatch.setattr(main_module, "get_redis", _LiveRedis)
 
     with TestClient(app) as client:
         r = client.get("/readyz")
@@ -112,7 +112,7 @@ def test_readyz_reports_unavailable_when_the_database_is_unreachable(
     def _dead_session():
         raise OSError("could not connect to database")
 
-    monkeypatch.setattr(main_module, "get_redis", lambda: _LiveRedis())
+    monkeypatch.setattr(main_module, "get_redis", _LiveRedis)
     monkeypatch.setattr(main_module, "async_session", _dead_session)
 
     with TestClient(app) as client:

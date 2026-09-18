@@ -47,7 +47,7 @@ class _BrokenPipeline:
 async def test_settle_swallows_redis_failures_after_a_paid_response(monkeypatch):
     redis = fakeredis.aioredis.FakeRedis()
     tracker = BudgetTracker(redis=redis, monthly_cap_usd=1.0)
-    monkeypatch.setattr(redis, "pipeline", lambda: _BrokenPipeline())
+    monkeypatch.setattr(redis, "pipeline", _BrokenPipeline)
 
     # Must not raise — a Redis outage here shouldn't discard a response the
     # provider has already returned (and already been paid for).
@@ -145,7 +145,7 @@ async def test_settle_swallows_redis_failures(monkeypatch):
     already answered and billed."""
     redis = fakeredis.aioredis.FakeRedis()
     tracker = BudgetTracker(redis=redis, monthly_cap_usd=1.0)
-    monkeypatch.setattr(redis, "pipeline", lambda: _BrokenPipeline())
+    monkeypatch.setattr(redis, "pipeline", _BrokenPipeline)
 
     await tracker.settle("key1", reserved_usd=0.4, actual_usd=0.1)
 
@@ -156,7 +156,7 @@ async def test_reserve_does_not_swallow_redis_failures(monkeypatch):
     unable to prove there is budget left must refuse, not admit."""
     redis = fakeredis.aioredis.FakeRedis()
     tracker = BudgetTracker(redis=redis, monthly_cap_usd=1.0)
-    monkeypatch.setattr(redis, "pipeline", lambda: _BrokenPipeline())
+    monkeypatch.setattr(redis, "pipeline", _BrokenPipeline)
 
     with pytest.raises(ConnectionError):
         await tracker.reserve("key1", 0.1)
