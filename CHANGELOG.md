@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**Small things**
+- `make help` is the default target; a `##` on each target line is its help.
+- `scripts/__init__.py` says why the scripts run as modules (run as files,
+  `app` is not on the path) and what belongs in that directory.
+- `audit-purges/` is dockerignored as well as gitignored, so a build after a
+  purge does not copy exported audit rows into the image.
+- Runbook says reconcile runs from a checkout, since `scripts/` is not in the
+  image and `docker exec` would find nothing.
+
 **Both spend records agree with each other and with the bill**
 - `make purge-audit` removes audit rows by exact `request_id`, dry run unless
   `APPLY=1`, with a JSON copy of every removed row written and read back
