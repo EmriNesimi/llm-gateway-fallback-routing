@@ -100,7 +100,7 @@ def test_readme_alert_count_matches_the_rules_file():
     reading something malformed.
     """
     rules = (ROOT / "deploy" / "prometheus" / "alerts.yml").read_text()
-    actual = len(re.findall(r"^\s*- alert:", rules, re.M))
+    actual = len(re.findall(r"^\s*- alert:", rules, re.MULTILINE))
     assert actual, "no alert rules found — the guard would pass vacuously"
 
     match = re.search(r"(\d+) rules in `deploy/prometheus/alerts.yml`", README.read_text())
@@ -122,7 +122,7 @@ def test_readme_only_references_make_targets_that_exist():
     .PHONY, since a target can work without being listed there.
     """
     makefile = (ROOT / "Makefile").read_text()
-    defined = set(re.findall(r"^([a-zA-Z][\w-]*):", makefile, re.M))
+    defined = set(re.findall(r"^([a-zA-Z][\w-]*):", makefile, re.MULTILINE))
     assert defined, "no targets found in the Makefile — the guard would pass vacuously"
 
     referenced = set(re.findall(r"\bmake ([a-z][a-z-]*)", README.read_text()))

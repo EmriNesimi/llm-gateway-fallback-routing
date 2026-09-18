@@ -18,7 +18,7 @@ COMPOSE = (pathlib.Path(__file__).resolve().parent.parent / "docker-compose.yml"
 
 
 def _images() -> list[str]:
-    return re.findall(r"^\s*image:\s*(\S+)\s*$", COMPOSE, re.M)
+    return re.findall(r"^\s*image:\s*(\S+)\s*$", COMPOSE, re.MULTILINE)
 
 
 def test_every_image_is_pinned_to_a_version():

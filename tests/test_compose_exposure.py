@@ -49,7 +49,7 @@ def test_every_published_port_binds_loopback():
 
 def _gateway_service() -> str:
     """The gateway service block, up to the next top-level service."""
-    match = re.search(r"^  gateway:\n(.*?)(?=^  \w+:)", COMPOSE, re.M | re.S)
+    match = re.search(r"^  gateway:\n(.*?)(?=^  \w+:)", COMPOSE, re.MULTILINE | re.DOTALL)
     assert match, "no gateway service found in docker-compose.yml"
     return match.group(1)
 

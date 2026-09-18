@@ -69,7 +69,7 @@ def test_the_documented_statuses_match_the_openapi_ones():
     assert declared, "no refusal statuses declared — the guard would pass vacuously"
 
     # The policy table's first column, e.g. "| `402` | budget exhausted ..."
-    documented = {int(c) for c in re.findall(r"^\|\s*`(\d{3})`\s*\|", POLICY, re.M)}
+    documented = {int(c) for c in re.findall(r"^\|\s*`(\d{3})`\s*\|", POLICY, re.MULTILINE)}
     assert documented, "docs/api-versioning.md no longer lists statuses in a table"
 
     assert declared == documented, (

@@ -37,7 +37,7 @@ def _declared_versions() -> dict[str, str]:
 
     sites[".python-version"] = _read(".python-version").strip()
 
-    m = re.search(r"^FROM python:(\d+\.\d+)-", _read("Dockerfile"), re.M)
+    m = re.search(r"^FROM python:(\d+\.\d+)-", _read("Dockerfile"), re.MULTILINE)
     assert m, "Dockerfile no longer has a recognisable `FROM python:X.Y-...`"
     sites["Dockerfile"] = m.group(1)
 
@@ -93,11 +93,11 @@ def test_served_version_matches_the_changelog():
 
     # Skip an "Unreleased" heading if one is present — the newest *released*
     # version is the one the running app should be claiming.
-    versions = re.findall(r"^##\s+(\d+\.\d+\.\d+)\s*$", changelog, re.M)
+    versions = re.findall(r"^##\s+(\d+\.\d+\.\d+)\s*$", changelog, re.MULTILINE)
     assert versions, "CHANGELOG.md has no `## X.Y.Z` heading to compare against"
     newest = versions[0]
 
-    m = re.search(r'^\s*version="(\d+\.\d+\.\d+)",', _read("app/main.py"), re.M)
+    m = re.search(r'^\s*version="(\d+\.\d+\.\d+)",', _read("app/main.py"), re.MULTILINE)
     assert m, "app/main.py no longer declares a `version=\"X.Y.Z\",` on the FastAPI app"
 
     assert m.group(1) == newest, (

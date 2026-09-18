@@ -440,7 +440,7 @@ def test_no_runbook_link_points_at_a_missing_section():
 
     runbook = pathlib.Path("docs/runbook.md").read_text()
     # GitHub anchors a `## Heading` as #heading, lowercased.
-    anchors = {h.strip().lower() for h in re.findall(r"^## (.+)$", runbook, re.M)}
+    anchors = {h.strip().lower() for h in re.findall(r"^## (.+)$", runbook, re.MULTILINE)}
     assert anchors, "runbook has no sections — the guard would pass vacuously"
 
     broken = []
@@ -466,7 +466,7 @@ def test_the_runbook_has_no_sections_for_alerts_that_no_longer_exist():
     # must not be mistaken for stale ones.
     documented = {
         h.strip()
-        for h in re.findall(r"^## (.+)$", runbook, re.M)
+        for h in re.findall(r"^## (.+)$", runbook, re.MULTILINE)
         if re.fullmatch(r"[A-Z][A-Za-z]+", h.strip())
     }
     alerts = {name for name, _ in _alert_names_and_runbooks()}
@@ -537,12 +537,12 @@ def test_rules_are_evaluated_finer_than_the_shortest_for_clause():
     scrape = pathlib.Path("deploy/prometheus/prometheus.yml").read_text()
     rules = pathlib.Path("deploy/prometheus/alerts.yml").read_text()
 
-    match = re.search(r"^\s*evaluation_interval:\s*(\S+)", scrape, re.M)
+    match = re.search(r"^\s*evaluation_interval:\s*(\S+)", scrape, re.MULTILINE)
     assert match, "prometheus.yml no longer pins evaluation_interval"
     interval = _duration_seconds(match.group(1))
     assert interval > 0
 
-    fors = [_duration_seconds(f) for f in re.findall(r"^\s*for:\s*(\S+)", rules, re.M)]
+    fors = [_duration_seconds(f) for f in re.findall(r"^\s*for:\s*(\S+)", rules, re.MULTILINE)]
     assert fors, "no `for:` clauses found — the guard would pass vacuously"
 
     non_zero = [f for f in fors if f > 0]
@@ -635,7 +635,7 @@ def test_the_latency_alert_threshold_is_inside_the_buckets():
     from app.observability.metrics import REQUEST_LATENCY
 
     rules = pathlib.Path("deploy/prometheus/alerts.yml").read_text()
-    match = re.search(r"histogram_quantile\(\s*\n?\s*0\.95.*?\)\s*>\s*(\d+)", rules, re.S)
+    match = re.search(r"histogram_quantile\(\s*\n?\s*0\.95.*?\)\s*>\s*(\d+)", rules, re.DOTALL)
     assert match, "RequestLatencyDegraded no longer compares a quantile to a number"
 
     threshold = int(match.group(1))

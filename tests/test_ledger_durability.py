@@ -19,7 +19,7 @@ COMPOSE = (pathlib.Path(__file__).resolve().parent.parent / "docker-compose.yml"
 
 def _redis_service() -> str:
     """The redis service block, up to the next top-level service."""
-    match = re.search(r"^  redis:\n(.*?)(?=^  \w+:)", COMPOSE, re.M | re.S)
+    match = re.search(r"^  redis:\n(.*?)(?=^  \w+:)", COMPOSE, re.MULTILINE | re.DOTALL)
     assert match, "no redis service found in docker-compose.yml"
     return match.group(1)
 
@@ -33,7 +33,7 @@ def _redis_flag(service: str, flag: str) -> str | None:
     the block: `"yes"` next to some other flag, `"always"` in a comment. The
     property is adjacency, so that is what is checked.
     """
-    items = re.findall(r'^\s*-\s*"([^"]*)"\s*$', service, re.M)
+    items = re.findall(r'^\s*-\s*"([^"]*)"\s*$', service, re.MULTILINE)
     for i, item in enumerate(items[:-1]):
         if item == flag:
             return items[i + 1]
@@ -59,7 +59,7 @@ def test_redis_has_somewhere_to_write_it():
         "redis has no named volume mounted at /data — the append-only file"
         " would be written to the container layer and lost on removal"
     )
-    assert re.search(r"^volumes:\n(?:.*\n)*?  redis-data:", COMPOSE, re.M), (
+    assert re.search(r"^volumes:\n(?:.*\n)*?  redis-data:", COMPOSE, re.MULTILINE), (
         "redis-data is mounted but never declared under top-level volumes"
     )
 
