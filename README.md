@@ -358,7 +358,7 @@ Spins up the gateway, Redis, Prometheus, and Grafana together. Add `postgres` to
 
 ### 🎬 run the guided demo
 
-With the gateway up and `ADMIN_API_KEY` set, `scripts/demo.sh` walks the whole system end-to-end — issuing a key, routing a real request, tripping the rate limiter, and pulling the audit trail back out:
+With the gateway up and `ADMIN_API_KEY` set, `scripts/demo.sh` walks the whole system end-to-end — issuing a key, routing a real request, tripping the rate limiter, and pulling the audit trail back out. It costs two real requests (steps 3 and 3b); the rate-limit burst goes to the free `local` chain, and the key it mints is revoked on exit:
 
 ```bash
 DEMO_ADMIN_KEY=<your ADMIN_API_KEY> make demo
@@ -367,7 +367,7 @@ DEMO_ADMIN_KEY=<your ADMIN_API_KEY> make demo
 
 ```
 === 2. Issue a fresh client key via the admin API ===
-{ "api_key": "5992baf...", "team": "demo-team" }
+{ "api_key": "5992baf...", "team": "demo-team", "id": 7 }
 
 === 4. Trip the rate limiter (bursting past RATE_LIMIT_CAPACITY) ===
 request 01 -> 200
