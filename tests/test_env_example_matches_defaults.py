@@ -75,7 +75,7 @@ def test_every_documented_key_is_a_real_setting():
     )
 
 
-@pytest.mark.parametrize("key,value", sorted(_example_values().items()))
+@pytest.mark.parametrize(("key", "value"), sorted(_example_values().items()))
 def test_documented_default_matches_the_code(key, value):
     if key in _COMPOSE_ONLY or key in _INTENTIONALLY_DIFFERENT:
         pytest.skip(_INTENTIONALLY_DIFFERENT.get(key, "consumed by docker-compose, not Settings"))

@@ -134,7 +134,7 @@ def test_the_openai_endpoint_reports_mid_stream_failures_too(client, monkeypatch
 
 
 @pytest.mark.parametrize(
-    "path,body",
+    ("path", "body"),
     [
         ("/v1/chat/stream", BODY),
         ("/v1/chat/completions", {**BODY, "stream": True}),

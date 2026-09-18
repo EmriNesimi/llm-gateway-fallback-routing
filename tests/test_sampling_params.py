@@ -219,7 +219,7 @@ def test_anthropic_forwards_sampling_controls_to_models_that_accept_them():
 
 
 @pytest.mark.parametrize(
-    "model,accepts",
+    ("model", "accepts"),
     [
         ("claude-haiku-4-5", True),
         ("claude-sonnet-4-6", True),

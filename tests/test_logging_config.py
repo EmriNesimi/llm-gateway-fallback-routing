@@ -64,7 +64,7 @@ def _restore_root_logger():
 
 
 @pytest.mark.parametrize(
-    "log_format,expected",
+    ("log_format", "expected"),
     [("json", JsonFormatter), ("text", logging.Formatter)],
 )
 def test_configure_logging_installs_the_requested_formatter(

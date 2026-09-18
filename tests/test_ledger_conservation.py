@@ -150,7 +150,7 @@ _EXPECTED_COST = {"ok": 0.006, "abort": 0.0025, "fail": 0.0}
 
 
 @pytest.mark.parametrize(
-    "mode,endpoint",
+    ("mode", "endpoint"),
     [
         ("ok", "/v1/chat"),
         ("fail", "/v1/chat"),

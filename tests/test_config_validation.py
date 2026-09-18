@@ -18,7 +18,7 @@ def _settings(**overrides):
 
 
 @pytest.mark.parametrize(
-    "field,value",
+    ("field", "value"),
     [
         ("rate_limit_capacity", 0),
         ("rate_limit_capacity", -1),

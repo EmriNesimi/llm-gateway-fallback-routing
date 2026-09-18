@@ -32,7 +32,7 @@ def test_x_api_key_wins_over_authorization():
 
 
 @pytest.mark.parametrize(
-    "header,expected",
+    ("header", "expected"),
     [
         ("Bearer abc123", "abc123"),
         ("bearer abc123", "abc123"),  # the scheme is case-insensitive per RFC 7235

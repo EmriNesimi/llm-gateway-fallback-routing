@@ -39,7 +39,7 @@ def _settings(**overrides):
 
 
 @pytest.mark.parametrize(
-    "field,value",
+    ("field", "value"),
     [
         ("anthropic_api_key", EXAMPLE_ANTHROPIC_KEY),
         ("openai_api_key", EXAMPLE_OPENAI_KEY),

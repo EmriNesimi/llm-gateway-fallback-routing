@@ -4,7 +4,7 @@ from app.providers.base import ProviderError, is_retryable_status_code
 
 
 @pytest.mark.parametrize(
-    "status_code,expected",
+    ("status_code", "expected"),
     [
         (400, False),  # bad request
         (401, False),  # auth failure
