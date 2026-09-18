@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+**The demo no longer costs twenty requests or leaks a key**
+- The rate-limit burst goes to the free `local` chain. The limiter runs
+  before routing, so the 429 is identical — but every request under the cap
+  went on to a provider, and on `default` that was up to twenty billed calls
+  to show one refusal.
+- `POST /admin/keys` returns the new key's `id` (additive), and the demo
+  revokes its key on exit. Every earlier run left one behind, each a full
+  monthly budget of exposure.
+- `make shellcheck` runs CI's exact shellcheck image, so the lint step can
+  be checked before pushing.
+- `.env.example` describes the Redis auth failure as it actually appears:
+  `/readyz` 503 and `AuthenticationError`, not the `NOAUTH` it told you to
+  expect.
+
 **Small things**
 - `make help` is the default target; a `##` on each target line is its help.
 - `scripts/__init__.py` says why the scripts run as modules (run as files,
