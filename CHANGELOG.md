@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+**Lint tightened, with the rules that caught something pinned**
+- Composite assertions split; three in the ledger-durability tests were
+  wrong — `"always"` anywhere in the redis block passed a check meant to
+  prove `--appendfsync` was set to it. Now checked by adjacency.
+- A lazy import in `model_map.py` was dodging a circular import that does
+  not exist. Hoisted, with the graph written beside it.
+- `BudgetTracker._apply` split so the swallowed path returns nothing instead
+  of a `0.0` a caller could read as "the ledger holds nothing".
+- `record_spend` removed: nothing called it, and its name is the shape
+  decision 015 exists to retire.
+- Mechanical: `logger.exception()`, tuple parametrize names, class instead
+  of `lambda: Cls()`, spelled-out regex flags, underscore fixtures renamed.
+
 **The demo no longer costs twenty requests or leaks a key**
 - The rate-limit burst goes to the free `local` chain. The limiter runs
   before routing, so the 429 is identical — but every request under the cap
