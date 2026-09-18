@@ -719,14 +719,13 @@ async def test_repeated_cancellations_still_finish_the_chain(monkeypatch, caplog
     import logging
 
     settled = []
-    reached = {}
+    reached = {"anthropic": asyncio.Event(), "third": asyncio.Event()}
 
     class _SlowOnTwo:
         cap_usd = 4.0
 
         async def settle(self, provider, reserved, actual):
-            if provider in ("anthropic", "third"):
-                reached[provider] = asyncio.Event()
+            if provider in reached:
                 reached[provider].set()
                 await asyncio.sleep(10)  # cancelled here, twice over
             settled.append(provider)
@@ -737,11 +736,9 @@ async def test_repeated_cancellations_still_finish_the_chain(monkeypatch, caplog
     monkeypatch.setattr(main_module, "provider_budget", _SlowOnTwo())
 
     async def cancel_twice(task):
-        while "anthropic" not in reached:
-            await asyncio.sleep(0)
+        await reached["anthropic"].wait()
         task.cancel()
-        while "third" not in reached:
-            await asyncio.sleep(0)
+        await reached["third"].wait()
         task.cancel()
 
     with caplog.at_level(logging.ERROR):
