@@ -83,6 +83,8 @@ echo "-> A counter says what has gone; this says what is left, which is the"
 echo "   number worth alerting on. At zero the provider is dropped from the"
 echo "   chain before it can be called, and a 402 follows once every provider"
 echo "   in the chain is out."
+echo "   This gauge is the ledger's view. The audit log has its own — run"
+echo "   \`make reconcile\` to check the two agree before trusting either."
 
 step "6. Review the audit trail for this demo"
 curl -sf "$GATEWAY_URL/admin/audit-log?team=demo-team&limit=10" \
