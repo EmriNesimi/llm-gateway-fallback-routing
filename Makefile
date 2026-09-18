@@ -1,6 +1,10 @@
-.PHONY: install check lint typecheck audit test run migrate migrate-check up down demo ledger reconcile purge-audit
+.PHONY: help install check lint typecheck audit test run migrate migrate-check up down demo ledger reconcile purge-audit
 
-install:
+# Default target. A `## text` on the same line as a target is its help line.
+help:
+	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | sed -E 's/^([a-z-]+):.*## /  \1\t/' | column -t -s $$'\t'
+
+install:  ## install runtime and dev dependencies
 	pip install -r requirements-dev.txt
 
 # Every check CI runs that doesn't need Docker, in one command. CI has
@@ -11,16 +15,16 @@ install:
 # validation, the image build — are deliberately left out: they'd make this
 # target fail whenever Docker happens not to be running, which is the fastest
 # way to get people to stop running it.
-check: lint typecheck audit migrate-check test
+check: lint typecheck audit migrate-check test  ## everything CI runs that needs no Docker: lint, types, audit, migrations, tests
 	@echo "All checks passed."
 
-lint:
+lint:  ## ruff
 	ruff check .
 
-typecheck:
+typecheck:  ## mypy
 	mypy
 
-audit:
+audit:  ## pip-audit for known-vulnerable dependencies
 	pip-audit -r requirements.txt -r requirements-dev.txt
 
 # --cov-branch counts each if/else edge, not just whether the line ran. A
@@ -35,16 +39,16 @@ audit:
 #
 # 99 still allows for the Redis integration tests skipping locally, which is
 # the only legitimate reason the number moves between environments.
-test:
+test:  ## pytest with the 99% branch-coverage floor
 	pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=99
 
-run:
+run:  ## uvicorn with reload
 	uvicorn app.main:app --reload
 
 # Same check CI runs: fails if app/db/models.py has drifted from the committed
 # migrations. Worth having locally, since otherwise drift is only ever caught
 # after pushing.
-migrate-check:
+migrate-check:  ## fail if models have drifted from the migrations
 	alembic check
 
 # Read the lifetime spend ledger. The runbook tells whoever is on the end of
@@ -54,7 +58,7 @@ migrate-check:
 #
 # Reads the same settings the gateway uses, so it reports what the gateway
 # would enforce rather than what a different Redis happens to hold.
-ledger:
+ledger:  ## print lifetime spend and headroom per provider
 	@python -c "import asyncio, sys; \
 	from app.budget.dependency import provider_budget as b; \
 	from app.routing.model_map import billable_providers as bp; \
@@ -66,7 +70,7 @@ ledger:
 # to do this before trusting a ProviderBudgetExhausted page or resetting the
 # ledger, and until now that meant ad-hoc SQL against one store and redis-cli
 # against the other. Exits 1 on a gap, so it can gate a deploy.
-reconcile:
+reconcile:  ## check the ledger against the audit log; exits 1 on a gap
 	python -m scripts.reconcile
 
 # Remove audit rows carrying one exact request_id, exporting a JSON copy of
@@ -75,17 +79,17 @@ reconcile:
 # reconcile could not go green until they were gone.
 #   make purge-audit ID=client-hung-up
 #   make purge-audit ID=client-hung-up APPLY=1
-purge-audit:
+purge-audit:  ## remove audit rows by exact ID=...; dry run unless APPLY=1
 	python -m scripts.purge_audit_rows "$(ID)" $(if $(APPLY),--apply,)
 
-migrate:
+migrate:  ## alembic upgrade head
 	alembic upgrade head
 
-up:
+up:  ## docker compose up --build
 	docker compose up --build
 
-down:
+down:  ## docker compose down
 	docker compose down
 
-demo:
+demo:  ## the guided demo script
 	./scripts/demo.sh
