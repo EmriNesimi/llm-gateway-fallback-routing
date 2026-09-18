@@ -66,6 +66,12 @@ async def _audit_totals() -> dict[str, tuple[int, float]]:
 
 
 async def reconcile(tolerance_usd: float) -> int:
+    # The gateway creates its SQLite tables at startup; a script has no
+    # startup. Without this the first run against a fresh database — which is
+    # every CI run — dies on `no such table: audit_log`. It did, on four
+    # pushes, while passing locally against a database that already had them.
+    # For Postgres init_db is a no-op and migrations are expected, as in the app.
+    await db_session.init_db()
     providers = billable_providers()
     ledger = await provider_budget.snapshot(providers)
     audit = await _audit_totals()

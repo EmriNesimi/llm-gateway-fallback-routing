@@ -44,6 +44,7 @@ def _serialise(row: AuditLogEntry) -> dict:
 
 
 async def purge(request_id: str, apply: bool, export_dir: pathlib.Path) -> int:
+    await db_session.init_db()  # see reconcile.py: no startup, no tables otherwise
     async with db_session.async_session() as session:
         rows = list(
             (await session.execute(
