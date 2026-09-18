@@ -46,6 +46,15 @@ extend-exclude = ["migrations/versions"]
 # the shapes it flags — a hardcoded secret, a shell=True, a bare `except` on a
 # crypto path — are the ones that cost something.
 select = ["E", "F", "I", "UP", "B", "S"]
+# Individually rather than as rulesets, each because it caught something:
+# - PT018: `assert a and b` cannot say which half failed. Three of the six
+#   it found were also wrong — "always" anywhere in the redis block passed a
+#   check meant to prove the flag was set to it.
+# - ASYNC110: a while-loop around sleep(0) where an Event was already
+#   created and never awaited.
+# - PLW1510: subprocess.run with the return code silently discarded. The two
+#   it found did check by hand, but nothing stopped the next one from not.
+extend-select = ["PT018", "ASYNC110", "PLW1510"]
 
 [tool.ruff.lint.per-file-ignores]
 # B008 flags function calls in argument defaults, which is exactly how FastAPI
