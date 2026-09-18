@@ -53,9 +53,9 @@ async def test_budget_tracker_against_real_redis(real_redis):
 
     try:
         assert await tracker.has_budget(api_key) is True
-        await tracker.record_spend(api_key, 0.6)
+        await tracker.settle(api_key, reserved_usd=0.0, actual_usd=0.6)
         assert await tracker.spent_usd(api_key) == pytest.approx(0.6)
-        await tracker.record_spend(api_key, 0.5)
+        await tracker.settle(api_key, reserved_usd=0.0, actual_usd=0.5)
         assert await tracker.has_budget(api_key) is False
     finally:
         await real_redis.delete(tracker._key(api_key))

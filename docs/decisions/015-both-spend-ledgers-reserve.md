@@ -40,7 +40,10 @@ Concretely:
 
 - `BudgetTracker` gains `reserve()` / `settle()` mirroring `ProviderBudget`,
   built on the same `INCRBYFLOAT`-and-hand-back pattern. `record_spend()`
-  survives as `settle(reserved=0)`.
+  survived briefly as a wrapper over `settle(reserved=0)` and was then
+  removed: nothing in the application called it, and an entry point named
+  "record spend with no reservation" is the exact shape this decision exists
+  to retire.
 - Both reservations are taken in `_reserve_chain`, the one point that knows the
   resolved chain, and both are released in `_settle_chain`, the one exit that
   every success and every failure path reaches.
