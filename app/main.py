@@ -644,13 +644,12 @@ async def _settle_providers(
                 provider, reserved, actual_usd if provider == served_provider else 0.0
             )
         except Exception:  # noqa: BLE001 - see docstring: must not fail a served request
-            logger.error(
+            logger.exception(
                 "[request_id=%s] failed to settle $%.6f reserved against %s; the"
                 " reservation stays claimed at its worst-case value",
                 request_id,
                 reserved,
                 provider,
-                exc_info=True,
             )
         except (asyncio.CancelledError, GeneratorExit) as exc:
             # Neither is an Exception, so the clause above walks straight past
@@ -663,13 +662,12 @@ async def _settle_providers(
             # a KeyboardInterrupt or SystemExit behind however many Redis
             # round-trips are left — the operator asked for the process to
             # stop, and refunding a reservation is not worth overriding that.
-            logger.error(
+            logger.exception(
                 "[request_id=%s] interrupted while settling $%.6f against %s;"
                 " refunding the rest of the chain before propagating",
                 request_id,
                 reserved,
                 provider,
-                exc_info=True,
             )
             # First one wins. `or` would read the same today but asks the
             # exception whether it is truthy, which is not the question.
@@ -685,13 +683,12 @@ async def _settle_providers(
         try:
             await provider_budget.record_unreserved(served_provider, actual_usd)
         except Exception:  # noqa: BLE001 - same reasoning as the loop above
-            logger.error(
+            logger.exception(
                 "[request_id=%s] failed to record $%.6f of unreserved spend"
                 " against %s — this request's cost is missing from the ledger",
                 request_id,
                 actual_usd,
                 served_provider,
-                exc_info=True,
             )
 
     if cancellation is not None:
@@ -928,10 +925,9 @@ async def _event_stream(
             # more than the bookkeeping here — losing the frame would truncate
             # the stream, which is the whole failure this handler exists to
             # prevent.
-            logger.error(
+            logger.exception(
                 "[request_id=%s] could not settle after a mid-stream failure",
                 request_id,
-                exc_info=True,
             )
         yield _stream_error_frame(request_id)
         return
@@ -989,10 +985,9 @@ async def _event_stream(
                     input_tokens, streamed_chars, reservations, request_id, start,
                 )
             except Exception:  # noqa: BLE001 - same reasoning as above
-                logger.error(
+                logger.exception(
                     "[request_id=%s] could not settle after a mid-stream failure",
                     request_id,
-                    exc_info=True,
                 )
         REQUEST_COUNT.labels(status="error").inc()
         yield _stream_error_frame(request_id)
@@ -1145,10 +1140,9 @@ async def _openai_event_stream(
                 input_tokens, streamed_chars, reservations, request_id, start,
             )
         except Exception:  # noqa: BLE001
-            logger.error(
+            logger.exception(
                 "[request_id=%s] could not settle after a mid-stream failure",
                 request_id,
-                exc_info=True,
             )
         yield _stream_error_frame(request_id)
         return
@@ -1212,10 +1206,9 @@ async def _openai_event_stream(
                     input_tokens, streamed_chars, reservations, request_id, start,
                 )
             except Exception:  # noqa: BLE001
-                logger.error(
+                logger.exception(
                     "[request_id=%s] could not settle after a mid-stream failure",
                     request_id,
-                    exc_info=True,
                 )
         REQUEST_COUNT.labels(status="error").inc()
         yield _stream_error_frame(request_id)

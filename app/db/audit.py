@@ -52,10 +52,9 @@ async def record_audit_log(
             )
             await session.commit()
     except Exception:  # noqa: BLE001 - any DB failure here must not break the caller
-        logger.error(
+        logger.exception(
             "[request_id=%s] failed to write audit log entry (outcome=%s, team lookup"
             " may also have failed) — the underlying request was not affected",
             request_id,
             outcome,
-            exc_info=True,
         )

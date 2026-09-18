@@ -96,12 +96,11 @@ class BudgetTracker:
             # actually a working one saying no. The leak is in the safe
             # direction — it refuses more, never less — so it is logged loudly
             # rather than allowed to change the answer.
-            logger.error(
+            logger.exception(
                 "failed to hand back a $%.6f reservation refused at the monthly"
                 " cap; it stays claimed against this key until the period rolls"
                 " over",
                 worst_case_usd,
-                exc_info=True,
             )
             # Not labelled by key: that label would be unbounded, and which
             # caller leaked matters far less than that the gateway is leaking.
@@ -177,10 +176,9 @@ class BudgetTracker:
         try:
             await self._apply(api_key, delta_usd)
         except Exception:  # noqa: BLE001 - see docstring
-            logger.error(
+            logger.exception(
                 "[request_id=%s] failed to record $%.6f against this key for a"
                 " request that already succeeded",
                 request_id or "unknown",
                 delta_usd,
-                exc_info=True,
             )

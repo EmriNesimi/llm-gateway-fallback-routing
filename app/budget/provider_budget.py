@@ -147,12 +147,11 @@ class ProviderBudget:
             # through would report a broken gateway for a working one saying
             # no. The leak refuses more, never less, which is the direction
             # this control is supposed to fail in.
-            logger.error(
+            logger.exception(
                 "failed to hand back a $%.6f reservation refused at %s's"
                 " lifetime cap; it stays claimed against the ceiling",
                 worst_case_usd,
                 provider,
-                exc_info=True,
             )
             BUDGET_RESERVATION_LEAKED.labels(ledger="provider").inc(worst_case_usd)
             # Publish the stranded total, not the pre-claim one. The refund did
