@@ -14,7 +14,7 @@ class _FakeRouter:
 
 
 @pytest.fixture
-def _streaming_client(monkeypatch):
+def streaming_client(monkeypatch):
     """A configured key and a stub router. Without the key the endpoint fails
     closed with a 503 and the test would be asserting headers on a refusal."""
     monkeypatch.setattr(settings, "gateway_api_keys", "test-client-key")
@@ -33,7 +33,7 @@ def test_security_headers_present_on_response():
 
 
 def test_security_headers_present_on_a_streaming_response(
-    _streaming_client, isolated_db, isolated_redis
+    streaming_client, isolated_db, isolated_redis
 ):
     """Streaming responses are built by the endpoint rather than by FastAPI,
     and travel a different path through BaseHTTPMiddleware than a plain JSON
@@ -41,7 +41,7 @@ def test_security_headers_present_on_a_streaming_response(
     exactly that reason (see the comment in chat_stream), so it is worth
     confirming the middleware-applied ones survive the same trip.
     """
-    r = _streaming_client.post(
+    r = streaming_client.post(
             "/v1/chat/stream",
             headers={"X-API-Key": "test-client-key"},
             json={"model": "default", "messages": [{"role": "user", "content": "hi"}]},

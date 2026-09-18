@@ -67,9 +67,8 @@ def _restore_root_logger():
     ("log_format", "expected"),
     [("json", JsonFormatter), ("text", logging.Formatter)],
 )
-def test_configure_logging_installs_the_requested_formatter(
-    monkeypatch, _restore_root_logger, log_format, expected
-):
+@pytest.mark.usefixtures("_restore_root_logger")
+def test_configure_logging_installs_the_requested_formatter(monkeypatch, log_format, expected):
     monkeypatch.setattr(logging_config.settings, "log_format", log_format)
 
     configure_logging()

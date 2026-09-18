@@ -14,7 +14,7 @@ class _AlwaysFailsRouter:
 
 
 @pytest.fixture
-def _client(monkeypatch):
+def client(monkeypatch):
     app.dependency_overrides[enforce_budget] = lambda: "test-key"
     # A request that passes schema validation must not actually reach a real
     # provider in this test — only that it gets past validation to the
@@ -33,52 +33,52 @@ def _client(monkeypatch):
         app.dependency_overrides.pop(enforce_budget, None)
 
 
-def test_empty_messages_list_is_rejected(_client):
-    r = _client.post("/v1/chat", json={"model": "default", "messages": []})
+def test_empty_messages_list_is_rejected(client):
+    r = client.post("/v1/chat", json={"model": "default", "messages": []})
     assert r.status_code == 422
 
 
-def test_invalid_role_is_rejected(_client):
-    r = _client.post(
+def test_invalid_role_is_rejected(client):
+    r = client.post(
         "/v1/chat",
         json={"model": "default", "messages": [{"role": "bogus", "content": "hi"}]},
     )
     assert r.status_code == 422
 
 
-def test_empty_message_content_is_rejected(_client):
-    r = _client.post(
+def test_empty_message_content_is_rejected(client):
+    r = client.post(
         "/v1/chat",
         json={"model": "default", "messages": [{"role": "user", "content": ""}]},
     )
     assert r.status_code == 422
 
 
-def test_empty_model_is_rejected(_client):
-    r = _client.post(
+def test_empty_model_is_rejected(client):
+    r = client.post(
         "/v1/chat",
         json={"model": "", "messages": [{"role": "user", "content": "hi"}]},
     )
     assert r.status_code == 422
 
 
-def test_oversized_model_is_rejected(_client):
+def test_oversized_model_is_rejected(client):
     # Regression test: AuditLogEntry.requested_model is a String(255)
     # column. SQLite doesn't enforce VARCHAR length, so this would silently
     # succeed without the max_length validation, only failing on Postgres.
-    r = _client.post(
+    r = client.post(
         "/v1/chat",
         json={"model": "x" * 256, "messages": [{"role": "user", "content": "hi"}]},
     )
     assert r.status_code == 422
 
 
-def test_valid_roles_are_accepted_by_validation(_client):
+def test_valid_roles_are_accepted_by_validation(client):
     # Not asserting a 200 here — no real provider is reachable in this test
     # environment — just that these roles pass schema validation and the
     # request gets as far as the router (a 502/503 from there, not a 422).
     for role in ("system", "user", "assistant"):
-        r = _client.post(
+        r = client.post(
             "/v1/chat",
             json={"model": "default", "messages": [{"role": role, "content": "hi"}]},
         )
@@ -106,24 +106,24 @@ def _two_messages_over_the_total():
 
 
 @pytest.mark.parametrize("endpoint", ["/v1/chat", "/v1/chat/completions"])
-def test_messages_that_are_individually_legal_can_still_be_too_much(_client, endpoint):
+def test_messages_that_are_individually_legal_can_still_be_too_much(client, endpoint):
     messages = _two_messages_over_the_total()
     assert all(len(m["content"]) < MAX_CONTENT_CHARS for m in messages)
     assert sum(len(m["content"]) for m in messages) > MAX_TOTAL_CONTENT_CHARS
 
-    r = _client.post(endpoint, json={"model": "default", "messages": messages})
+    r = client.post(endpoint, json={"model": "default", "messages": messages})
 
     assert r.status_code == 422
     assert "total message content" in r.text
 
 
 @pytest.mark.parametrize("endpoint", ["/v1/chat", "/v1/chat/completions"])
-def test_a_request_exactly_at_the_total_limit_is_accepted(_client, endpoint):
+def test_a_request_exactly_at_the_total_limit_is_accepted(client, endpoint):
     """The boundary itself must pass, or the limit is off by one and the
     error message lies about where the line is."""
     messages = [{"role": "user", "content": "x" * MAX_TOTAL_CONTENT_CHARS}]
 
-    r = _client.post(endpoint, json={"model": "default", "messages": messages})
+    r = client.post(endpoint, json={"model": "default", "messages": messages})
 
     # Past validation: the stub router refuses, which is a 502 rather than 422.
     assert r.status_code != 422

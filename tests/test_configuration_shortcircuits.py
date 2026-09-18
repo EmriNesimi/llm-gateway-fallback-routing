@@ -18,7 +18,7 @@ import app.observability.tracing as tracing_module
 
 
 @pytest.fixture
-def _tracing_sandbox(monkeypatch):
+def tracing_sandbox(monkeypatch):
     """Keeps the global tracer provider untouched. Really calling
     set_tracer_provider would install this test's provider for the rest of the
     session, and OpenTelemetry only honours the first one."""
@@ -53,8 +53,8 @@ def _tracing_sandbox(monkeypatch):
     return installed, exporters
 
 
-def test_tracing_is_configured_when_an_endpoint_is_set(_tracing_sandbox, monkeypatch):
-    installed, exporters = _tracing_sandbox
+def test_tracing_is_configured_when_an_endpoint_is_set(tracing_sandbox, monkeypatch):
+    installed, exporters = tracing_sandbox
     monkeypatch.setattr(
         tracing_module.settings, "otel_exporter_otlp_endpoint", "http://collector:4317"
     )
@@ -66,11 +66,11 @@ def test_tracing_is_configured_when_an_endpoint_is_set(_tracing_sandbox, monkeyp
     assert tracing_module._configured is True
 
 
-def test_configuring_tracing_twice_is_a_no_op(_tracing_sandbox, monkeypatch):
+def test_configuring_tracing_twice_is_a_no_op(tracing_sandbox, monkeypatch):
     """docker-compose and the app both call this, and OpenTelemetry silently
     ignores a second provider — so a double call would leave spans going to
     the first one while the code believes otherwise."""
-    installed, _ = _tracing_sandbox
+    installed, _ = tracing_sandbox
     monkeypatch.setattr(
         tracing_module.settings, "otel_exporter_otlp_endpoint", "http://collector:4317"
     )
@@ -81,8 +81,8 @@ def test_configuring_tracing_twice_is_a_no_op(_tracing_sandbox, monkeypatch):
     assert len(installed) == 1
 
 
-def test_no_endpoint_means_tracing_is_simply_off(_tracing_sandbox, monkeypatch):
-    installed, _ = _tracing_sandbox
+def test_no_endpoint_means_tracing_is_simply_off(tracing_sandbox, monkeypatch):
+    installed, _ = tracing_sandbox
     monkeypatch.setattr(tracing_module.settings, "otel_exporter_otlp_endpoint", None)
 
     tracing_module.configure_tracing()
