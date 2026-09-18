@@ -343,7 +343,7 @@ make migrate-check
 make test
 ```
 
-(equivalent to `ruff check .`, `mypy`, `pip-audit -r requirements.txt -r requirements-dev.txt`, and `pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=99`; `make migrate-check` runs CI's `alembic check` for model/migration drift — see the `Makefile` for the rest: `make run`, `make migrate`, `make up`/`down`, `make demo`, and `make ledger` — which prints spend and remaining headroom per provider through the gateway's own settings, so it reports what would actually be enforced rather than whatever Redis you happen to be pointed at)
+(equivalent to `ruff check .`, `mypy`, `pip-audit -r requirements.txt -r requirements-dev.txt`, and `pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=99`; `make migrate-check` runs CI's `alembic check` for model/migration drift — see the `Makefile` for the rest: `make run`, `make migrate`, `make up`/`down`, `make demo`, `make ledger` — which prints spend and remaining headroom per provider through the gateway's own settings, so it reports what would actually be enforced rather than whatever Redis you happen to be pointed at — `make reconcile`, which checks that ledger against the audit log and exits 1 on a gap, and `make purge-audit ID=<request_id>`, which removes audit rows by exact ID with a JSON copy kept, dry run unless `APPLY=1`)
 
 Same commands CI runs on every push/PR to `main` — CI also runs a real Redis service container, so the rate limiter's Lua script is tested against genuine Redis, not just `fakeredis`'s emulation of it.
 
