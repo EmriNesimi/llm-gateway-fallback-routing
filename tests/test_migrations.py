@@ -22,12 +22,16 @@ def test_migrations_match_current_models():
         env = os.environ.copy()
         env["DATABASE_URL"] = f"sqlite+aiosqlite:///{db_path}"
 
+        # check=False on purpose, here and below: the return code is asserted
+        # by hand so the failure message carries alembic's own output. With
+        # check=True the CalledProcessError would say only "exit status 1".
         upgrade = subprocess.run(
             [sys.executable, "-m", "alembic", "upgrade", "head"],
             cwd=REPO_ROOT,
             env=env,
             capture_output=True,
             text=True,
+            check=False,
         )
         assert upgrade.returncode == 0, upgrade.stdout + upgrade.stderr
 
@@ -37,6 +41,7 @@ def test_migrations_match_current_models():
             env=env,
             capture_output=True,
             text=True,
+            check=False,
         )
         assert check.returncode == 0, (
             "models have changed without a matching migration:\n"
