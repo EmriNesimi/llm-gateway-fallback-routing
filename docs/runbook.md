@@ -237,6 +237,13 @@ on a gap, so the whole job is:
 cd /path/to/llm-gateway-fallback-routing && make reconcile || <page someone>
 ```
 
+From a checkout, not from inside the container: `scripts/` is deliberately
+left out of the image (it is operator tooling, not something the gateway
+runs), so `docker exec` will not find it. Point the checkout's `REDIS_URL`
+and `DATABASE_URL` at the same stores the container uses — the compose
+stack binds both to loopback, so from the host that is
+`redis://:<password>@localhost:6379/0` and the Postgres URL in `.env`.
+
 Daily is enough. Drift accumulates over requests, not time, and this project
 does not see enough traffic for a day's worth to matter — what the schedule
 buys is that a gap gets noticed inside a day rather than on the day the
