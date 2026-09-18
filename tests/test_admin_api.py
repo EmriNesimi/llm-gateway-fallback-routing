@@ -133,3 +133,15 @@ def test_list_keys_offset_paginates_past_limit(isolated_db):
     assert len(page1) == 2
     assert len(page2) == 1
     assert {k["id"] for k in page1}.isdisjoint({k["id"] for k in page2})
+
+
+def test_issuing_a_key_returns_its_id_so_it_can_be_revoked(isolated_db):
+    """The caller that just minted a key is exactly who needs to revoke it,
+    and without the id that meant listing every key and matching on team."""
+    admin = {"X-Admin-Key": "test-admin-secret"}
+    with TestClient(app) as client:
+        created = client.post("/admin/keys", json={"team": "t"}, headers=admin).json()
+        assert isinstance(created["id"], int)
+
+        assert client.delete(f"/admin/keys/{created['id']}", headers=admin).status_code == 200
+        assert client.get(f"/admin/keys/{created['id']}", headers=admin).json()["revoked"] is True

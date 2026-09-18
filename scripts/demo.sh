@@ -26,7 +26,11 @@ create_response=$(curl -sf -X POST "$GATEWAY_URL/admin/keys" \
   -d '{"team": "demo-team"}')
 echo "$create_response" | jqp
 CLIENT_KEY=$(echo "$create_response" | json_field api_key)
+CLIENT_KEY_ID=$(echo "$create_response" | json_field id)
 echo "-> Using this freshly issued key (team: demo-team) for the rest of the demo."
+# Revoked on the way out, however the script exits. Every earlier run left
+# a live key behind, each one a full monthly budget's worth of exposure.
+trap 'curl -sf -X DELETE "$GATEWAY_URL/admin/keys/$CLIENT_KEY_ID" -H "X-Admin-Key: $ADMIN_KEY" >/dev/null && echo "-> Demo key $CLIENT_KEY_ID revoked."' EXIT
 
 step "3. A normal chat request (routed through the fallback chain)"
 # Not using curl -f here on purpose: a failure response (e.g. no provider

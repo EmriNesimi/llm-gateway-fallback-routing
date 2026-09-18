@@ -57,7 +57,7 @@ async def create_key(
         )
     )
     await session.commit()
-    return CreateKeyResponse(api_key=raw_key, team=request.team)
+    return CreateKeyResponse(api_key=raw_key, team=request.team, id=record.id)
 
 
 @router.get("/keys", response_model=list[ApiKeyOut])

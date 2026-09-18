@@ -28,6 +28,10 @@ class CreateKeyRequest(BaseModel):
 class CreateKeyResponse(BaseModel):
     api_key: str
     team: str
+    # The row id, so the caller that just minted this key can revoke it
+    # without listing every key and matching on team. Additive: existing
+    # clients ignore fields they do not know.
+    id: int
 
 
 class ApiKeyOut(BaseModel):
