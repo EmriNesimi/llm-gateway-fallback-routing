@@ -54,10 +54,15 @@ echo "-> \`model\` selects a chain, not a specific model, so a chain can be"
 echo "   re-pointed at a newer model without any client changing."
 
 step "4. Trip the rate limiter (bursting past RATE_LIMIT_CAPACITY)"
+# The `local` chain, not `default`. The limiter runs before routing, so the
+# 429 is identical either way — but every request *under* the cap goes on to
+# a provider, and on `default` that was up to 20 billed calls to demonstrate
+# one refusal. `local` is Ollama only: free if it is running, a 502 if not,
+# and either way the 429 still arrives on schedule.
 for i in $(seq 1 25); do
   code=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$GATEWAY_URL/v1/chat" \
     -H "X-API-Key: $CLIENT_KEY" -H "Content-Type: application/json" \
-    -d '{"model": "default", "messages": [{"role": "user", "content": "hi"}]}')
+    -d '{"model": "local", "messages": [{"role": "user", "content": "hi"}]}')
   printf 'request %02d -> %s\n' "$i" "$code"
   if [ "$code" = "429" ]; then
     echo "-> Rate limit engaged (429) after $i requests."
