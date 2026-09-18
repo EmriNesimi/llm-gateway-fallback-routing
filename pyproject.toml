@@ -61,7 +61,7 @@ select = ["E", "F", "I", "UP", "B", "S"]
 #   dodging a circular import that did not exist. In tests a local import is
 #   often deliberate (importing inside the test that exercises it), so the
 #   rule is scoped to the application via per-file-ignores below.
-extend-select = ["PT018", "ASYNC110", "PLW1510", "PT006", "PLC0415"]
+extend-select = ["PT018", "ASYNC110", "PLW1510", "PT006", "PLC0415", "G201"]
 
 [tool.ruff.lint.per-file-ignores]
 # B008 flags function calls in argument defaults, which is exactly how FastAPI
