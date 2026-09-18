@@ -77,13 +77,13 @@ class BudgetTracker:
         if worst_case_usd <= 0:
             return
 
-        total = await self._apply(api_key, worst_case_usd, swallow=False)
+        total = await self._apply(api_key, worst_case_usd)
         if total <= self._monthly_cap_usd:
             return
 
         spent = total - worst_case_usd
         try:
-            await self._apply(api_key, -worst_case_usd, swallow=False)
+            await self._apply(api_key, -worst_case_usd)
         except Exception:  # noqa: BLE001 - the refusal below stands either way
             # The increment landed and the hand-back did not, so the claim is
             # stranded: this caller's month is permanently smaller by a request
@@ -136,7 +136,7 @@ class BudgetTracker:
         """
         delta = actual_usd - reserved_usd
         if delta:
-            await self._apply(api_key, delta, swallow=True, request_id=request_id)
+            await self._apply_best_effort(api_key, delta, request_id=request_id)
 
     async def record_spend(
         self, api_key: str, amount_usd: float, request_id: str = ""
@@ -146,32 +146,45 @@ class BudgetTracker:
             api_key, reserved_usd=0.0, actual_usd=amount_usd, request_id=request_id
         )
 
-    async def _apply(
-        self, api_key: str, delta_usd: float, *, swallow: bool, request_id: str = ""
-    ) -> float:
-        """Move the ledger by `delta_usd` and return the new total.
+    async def _apply(self, api_key: str, delta_usd: float) -> float:
+        """Move the ledger by `delta_usd` and return the new total. Raises.
 
         The expire travels with every increment because INCRBYFLOAT on a
         missing key creates it with no TTL — losing that would quietly turn
         the monthly budget into a lifetime one.
 
-        `swallow` is the decision-004 split. Settling runs *after* a provider
-        has already returned a (paid-for) response, so a Redis blip must not
-        turn that into a 500 for the caller: it would discard output that has
-        already been billed. Losing one request's worth of spend tracking to a
-        transient outage is an acceptable trade; discarding a successful
-        response the user already paid for is not. Reserving runs before the
-        call and has no such response to protect, so it propagates.
+        This is the reserve side of decision 004: it runs before any provider
+        is called, so a Redis failure must refuse the request, and the only
+        way to refuse from here is to raise.
         """
         key = self._key(api_key)
+        pipe = self._redis.pipeline()
+        pipe.incrbyfloat(key, delta_usd)
+        pipe.expire(key, _SECONDS_PER_MONTH)
+        result = await pipe.execute()
+        return float(result[0])
+
+    async def _apply_best_effort(
+        self, api_key: str, delta_usd: float, *, request_id: str = ""
+    ) -> None:
+        """`_apply`, for the settle side of decision 004: swallow and log.
+
+        Settling runs *after* a provider has already returned a (paid-for)
+        response, so a Redis blip must not turn that into a 500 for the
+        caller — it would discard output that has already been billed.
+        Losing one request's worth of spend tracking to a transient outage
+        is an acceptable trade; discarding a successful response the user
+        already paid for is not.
+
+        Returns nothing, on purpose. The previous single function returned
+        0.0 on this path, which is a number a caller could read as "the
+        ledger now holds nothing" — the one misreading that would admit a
+        request past a cap it has already hit. Two functions with two return
+        types cannot be confused that way.
+        """
         try:
-            pipe = self._redis.pipeline()
-            pipe.incrbyfloat(key, delta_usd)
-            pipe.expire(key, _SECONDS_PER_MONTH)
-            result = await pipe.execute()
+            await self._apply(api_key, delta_usd)
         except Exception:  # noqa: BLE001 - see docstring
-            if not swallow:
-                raise
             logger.error(
                 "[request_id=%s] failed to record $%.6f against this key for a"
                 " request that already succeeded",
@@ -179,5 +192,3 @@ class BudgetTracker:
                 delta_usd,
                 exc_info=True,
             )
-            return 0.0
-        return float(result[0])
