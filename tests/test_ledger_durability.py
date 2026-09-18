@@ -24,10 +24,26 @@ def _redis_service() -> str:
     return match.group(1)
 
 
+def _redis_flag(service: str, flag: str) -> str | None:
+    """The value redis-server is started with for `flag`, or None if unset.
+
+    Reads the list-form command — one `- "..."` item per line — and returns
+    the item after the flag. A plain `flag in service and value in service`
+    was the previous check, and it passes when the value appears anywhere in
+    the block: `"yes"` next to some other flag, `"always"` in a comment. The
+    property is adjacency, so that is what is checked.
+    """
+    items = re.findall(r'^\s*-\s*"([^"]*)"\s*$', service, re.M)
+    for i, item in enumerate(items[:-1]):
+        if item == flag:
+            return items[i + 1]
+    return None
+
+
 def test_redis_writes_its_data_to_disk():
     service = _redis_service()
 
-    assert "--appendonly" in service and '"yes"' in service, (
+    assert _redis_flag(service, "--appendonly") == "yes", (
         "redis is not started with --appendonly yes, so the spend ledger only"
         " exists in memory and a restart resets the lifetime ceiling"
     )
@@ -55,7 +71,7 @@ def test_redis_is_told_never_to_evict():
     no way to tell a disposable rate-limit bucket from the spend ledger."""
     service = _redis_service()
 
-    assert "--maxmemory-policy" in service and '"noeviction"' in service, (
+    assert _redis_flag(service, "--maxmemory-policy") == "noeviction", (
         "redis does not pin maxmemory-policy, so a future memory limit could"
         " silently evict the spend ledger and hand back the whole budget"
     )
@@ -67,7 +83,7 @@ def test_redis_fsyncs_every_write():
     returns understating spend — and the shortfall becomes headroom."""
     service = _redis_service()
 
-    assert "--appendfsync" in service and '"always"' in service, (
+    assert _redis_flag(service, "--appendfsync") == "always", (
         "redis is not set to appendfsync always, so a crash can lose spend"
         " that has already been incurred"
     )

@@ -188,9 +188,8 @@ def test_every_outcome_leaves_both_ledgers_consistent(client, monkeypatch, mode,
     )
 
     if mode == "fail":
-        assert anthropic == pytest.approx(0.0) and openai == pytest.approx(0.0), (
-            "a request that served nothing still charged for something"
-        )
+        assert anthropic == pytest.approx(0.0), "a failed request still charged anthropic"
+        assert openai == pytest.approx(0.0), "a failed request still charged openai"
 
 
 def test_mixed_traffic_does_not_drift(client, monkeypatch):

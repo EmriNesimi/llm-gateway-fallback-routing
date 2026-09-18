@@ -232,5 +232,6 @@ async def test_every_breaker_open_fails_without_calling_anyone(caplog):
         with pytest.raises(AllProvidersFailedError):
             await router.chat([ChatMessage(role="user", content="hi")])
 
-    assert a.calls == 0 and b.calls == 0
+    assert a.calls == 0
+    assert b.calls == 0
     assert "nothing was attempted" in caplog.text

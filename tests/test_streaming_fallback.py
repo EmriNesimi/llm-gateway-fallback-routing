@@ -182,7 +182,8 @@ async def test_streaming_every_breaker_open_attempts_nothing(caplog):
         with pytest.raises(AllProvidersFailedError):
             [c async for c in router.chat_stream([])]
 
-    assert a.calls == 0 and b.calls == 0
+    assert a.calls == 0
+    assert b.calls == 0
     assert "nothing was attempted" in caplog.text
 
 
