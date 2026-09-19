@@ -28,7 +28,7 @@ def _indexed() -> dict[str, str]:
     """Every row of the index table, mapping number -> linked filename."""
     rows = {}
     for number, target in re.findall(
-        r"^\|\s*(\d{3})\s*\|[^|]*\|\s*\[[^\]]*\]\(([^)]+)\)", INDEX.read_text(), re.MULTILINE
+        r"^\|\s*(\d{3})\s*\|[^|]*\|\s*\[[^\]]*\]\(([^)]+)\)", INDEX.read_text(), re.MULTILINE,
     ):
         rows[number] = target
     return rows

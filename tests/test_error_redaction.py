@@ -82,7 +82,7 @@ def test_stream_error_event_carries_no_upstream_detail(client):
 
 def test_openai_stream_error_carries_no_upstream_detail(client):
     r = client.post(
-        "/v1/chat/completions", json={**BODY, "stream": True}, headers=HEADERS
+        "/v1/chat/completions", json={**BODY, "stream": True}, headers=HEADERS,
     )
 
     for secret in SECRETS:
@@ -105,7 +105,7 @@ def test_readyz_reports_which_dependency_failed_but_not_why(isolated_db, monkeyp
     spend counters.
     """
     monkeypatch.setattr(
-        main_module, "get_redis", lambda: Redis.from_url("redis://localhost:1")
+        main_module, "get_redis", lambda: Redis.from_url("redis://localhost:1"),
     )
 
     with TestClient(app) as c:

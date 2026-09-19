@@ -13,7 +13,7 @@ def _admin_key(monkeypatch):
 def test_create_list_and_revoke_key(isolated_db):
     with TestClient(app) as client:
         r = client.post(
-            "/admin/keys", json={"team": "acme"}, headers={"X-Admin-Key": "test-admin-secret"}
+            "/admin/keys", json={"team": "acme"}, headers={"X-Admin-Key": "test-admin-secret"},
         )
         assert r.status_code == 200
         body = r.json()
@@ -60,7 +60,7 @@ def test_revoke_unknown_key_returns_404(isolated_db):
 def test_get_single_key(isolated_db):
     with TestClient(app) as client:
         r = client.post(
-            "/admin/keys", json={"team": "acme"}, headers={"X-Admin-Key": "test-admin-secret"}
+            "/admin/keys", json={"team": "acme"}, headers={"X-Admin-Key": "test-admin-secret"},
         )
         key_id = client.get("/admin/keys", headers={"X-Admin-Key": "test-admin-secret"}).json()[
             0
@@ -81,7 +81,7 @@ def test_get_unknown_key_returns_404(isolated_db):
 def test_create_key_rejects_empty_or_whitespace_team(isolated_db, team):
     with TestClient(app) as client:
         r = client.post(
-            "/admin/keys", json={"team": team}, headers={"X-Admin-Key": "test-admin-secret"}
+            "/admin/keys", json={"team": team}, headers={"X-Admin-Key": "test-admin-secret"},
         )
     assert r.status_code == 422
 

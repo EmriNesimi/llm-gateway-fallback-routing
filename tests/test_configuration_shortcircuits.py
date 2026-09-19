@@ -29,7 +29,7 @@ def tracing_sandbox(monkeypatch):
     monkeypatch.setattr(tracing_module, "_configured", False)
     monkeypatch.setattr(tracing_module.trace, "set_tracer_provider", installed.append)
     monkeypatch.setattr(
-        tracing_module, "OTLPSpanExporter", lambda **kw: exporters.append(kw) or object()
+        tracing_module, "OTLPSpanExporter", lambda **kw: exporters.append(kw) or object(),
     )
     # The real TracerProvider keeps the processor and calls shutdown() on it
     # at interpreter exit, so the stub has to satisfy that much of the
@@ -57,7 +57,7 @@ def tracing_sandbox(monkeypatch):
 def test_tracing_is_configured_when_an_endpoint_is_set(tracing_sandbox, monkeypatch):
     installed, exporters = tracing_sandbox
     monkeypatch.setattr(
-        tracing_module.settings, "otel_exporter_otlp_endpoint", "http://collector:4317"
+        tracing_module.settings, "otel_exporter_otlp_endpoint", "http://collector:4317",
     )
 
     tracing_module.configure_tracing()
@@ -74,7 +74,7 @@ def test_configuring_tracing_twice_is_a_no_op(tracing_sandbox, monkeypatch):
     """
     installed, _ = tracing_sandbox
     monkeypatch.setattr(
-        tracing_module.settings, "otel_exporter_otlp_endpoint", "http://collector:4317"
+        tracing_module.settings, "otel_exporter_otlp_endpoint", "http://collector:4317",
     )
 
     tracing_module.configure_tracing()
@@ -110,7 +110,7 @@ async def test_init_db_does_not_create_tables_on_postgres(monkeypatch, caplog):
             raise AssertionError("create_all must not run against a non-SQLite database")
 
     monkeypatch.setattr(
-        session_module.settings, "database_url", "postgresql+asyncpg://u:p@db:5432/gateway"
+        session_module.settings, "database_url", "postgresql+asyncpg://u:p@db:5432/gateway",
     )
     monkeypatch.setattr(session_module, "engine", _ExplodingEngine())
 

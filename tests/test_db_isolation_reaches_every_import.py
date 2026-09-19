@@ -22,7 +22,7 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 _BY_NAME = re.compile(
-    r"^from app\.db\.session import (?P<names>[^\n#]+)", re.MULTILINE
+    r"^from app\.db\.session import (?P<names>[^\n#]+)", re.MULTILINE,
 )
 
 
@@ -68,7 +68,7 @@ async def test_isolated_db_patches_every_by_name_importer(isolated_db):
     unpatched = []
     for module_path, names in importers.items():
         module = importlib.import_module(
-            module_path[:-3].replace("/", ".")
+            module_path[:-3].replace("/", "."),
         )
         for name in names:
             held = getattr(module, name, None)

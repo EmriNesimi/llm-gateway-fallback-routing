@@ -93,7 +93,7 @@ async def test_env_configured_key_is_accepted(monkeypatch, isolated_db):
 
 @pytest.mark.asyncio
 async def test_wrong_key_is_rejected_with_401_when_keys_are_configured(
-    monkeypatch, isolated_db
+    monkeypatch, isolated_db,
 ):
     monkeypatch.setattr(settings, "gateway_api_keys", "env-key")
 
@@ -181,7 +181,7 @@ async def test_bearer_form_authenticates_the_same_as_the_header_form(monkeypatch
     async with isolated_db() as session:
         assert (
             await require_api_key(
-                authorization="Bearer env-key", x_api_key=None, session=session
+                authorization="Bearer env-key", x_api_key=None, session=session,
             )
             == "env-key"
         )

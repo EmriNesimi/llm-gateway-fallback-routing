@@ -116,7 +116,7 @@ def test_repeated_requests_accumulate_on_the_key_ledger(client, monkeypatch):
 
 def test_the_key_cap_refuses_with_402_once_reached(client, monkeypatch):
     monkeypatch.setattr(
-        main_module, "build_router", lambda m: ("smart", Router(out_tokens=100_000))
+        main_module, "build_router", lambda m: ("smart", Router(out_tokens=100_000)),
     )
 
     statuses = [
@@ -152,7 +152,7 @@ def test_a_refusal_does_not_consume_the_headroom_it_was_denied(client, monkeypat
     caller could never recover even after the month rolled over.
     """
     monkeypatch.setattr(
-        main_module, "build_router", lambda m: ("smart", Router(out_tokens=100_000))
+        main_module, "build_router", lambda m: ("smart", Router(out_tokens=100_000)),
     )
 
     while client.post("/v1/chat", json=BODY, headers=HEADERS).status_code != 402:
@@ -183,7 +183,7 @@ def test_concurrent_requests_from_one_key_cannot_all_be_admitted(client, monkeyp
     async def attempt():
         try:
             reservations, _ = await main_module._reserve_chain(
-                "smart", messages, None, "req-concurrent", "test-client-key"
+                "smart", messages, None, "req-concurrent", "test-client-key",
             )
         except Exception as exc:  # HTTPException(402) or KeyBudgetExhausted
             if isinstance(exc, KeyBudgetExhausted) or getattr(exc, "status_code", None) == 402:
@@ -205,7 +205,7 @@ def test_concurrent_requests_from_one_key_cannot_all_be_admitted(client, monkeyp
 
 
 def test_a_redis_failure_at_key_reserve_releases_the_provider_reservations(
-    client, monkeypatch
+    client, monkeypatch,
 ):
     """The provider reservations are claimed before the per-key one. If the
     key reserve then dies, they have to go back — otherwise a request that was
@@ -232,7 +232,7 @@ def test_a_redis_failure_at_key_reserve_releases_the_provider_reservations(
 
 
 def test_a_redis_failure_mid_chain_does_not_strand_the_first_reservation(
-    client, monkeypatch
+    client, monkeypatch,
 ):
     """The provider loop reserves one hop at a time. If a later hop's reserve
     dies on something other than "out of budget" — a Redis blip between two

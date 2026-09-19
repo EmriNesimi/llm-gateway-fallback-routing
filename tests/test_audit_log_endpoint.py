@@ -77,10 +77,10 @@ async def test_audit_log_endpoint_offset_paginates_past_limit(isolated_db):
     headers = {"X-Admin-Key": "test-admin-secret"}
     with TestClient(app) as client:
         page1 = client.get(
-            "/admin/audit-log", params={"limit": 2, "offset": 0}, headers=headers
+            "/admin/audit-log", params={"limit": 2, "offset": 0}, headers=headers,
         ).json()
         page2 = client.get(
-            "/admin/audit-log", params={"limit": 2, "offset": 2}, headers=headers
+            "/admin/audit-log", params={"limit": 2, "offset": 2}, headers=headers,
         ).json()
 
     assert len(page1) == 2

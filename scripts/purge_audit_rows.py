@@ -48,8 +48,8 @@ async def purge(request_id: str, apply: bool, export_dir: pathlib.Path) -> int:
     async with db_session.async_session() as session:
         rows = list(
             (await session.execute(
-                select(AuditLogEntry).where(AuditLogEntry.request_id == request_id)
-            )).scalars()
+                select(AuditLogEntry).where(AuditLogEntry.request_id == request_id),
+            )).scalars(),
         )
         if not rows:
             print(f"no audit rows carry request_id={request_id!r}; nothing to do")
@@ -61,7 +61,7 @@ async def purge(request_id: str, apply: bool, export_dir: pathlib.Path) -> int:
             by_provider[r.provider] = by_provider.get(r.provider, 0) + 1
         print(
             f"{len(rows)} rows carry request_id={request_id!r}, totalling ${total:.6f}"
-            f" across {by_provider}"
+            f" across {by_provider}",
         )
 
         if not apply:

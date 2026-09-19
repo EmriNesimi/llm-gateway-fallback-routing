@@ -27,7 +27,7 @@ def test_no_origins_configured_installs_no_middleware(monkeypatch):
 
 def test_configured_origins_are_installed_verbatim(monkeypatch):
     monkeypatch.setattr(
-        main_module.settings, "cors_allowed_origins", "https://a.example, https://b.example"
+        main_module.settings, "cors_allowed_origins", "https://a.example, https://b.example",
     )
     fresh = FastAPI()
 

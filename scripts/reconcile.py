@@ -60,7 +60,7 @@ async def _audit_totals() -> dict[str, tuple[int, float]]:
                 func.coalesce(func.sum(AuditLogEntry.cost_usd), 0.0),
             )
             .where(AuditLogEntry.provider != "")
-            .group_by(AuditLogEntry.provider)
+            .group_by(AuditLogEntry.provider),
         )
         return {provider: (count, float(total)) for provider, count, total in rows}
 
@@ -78,7 +78,7 @@ async def reconcile(tolerance_usd: float) -> int:
 
     print(
         f"{'provider':<12} {'ledger':>12} {'audit log':>12} {'requests':>9}"
-        f"  {'gap':>12}  verdict"
+        f"  {'gap':>12}  verdict",
     )
     worst = 0.0
     for provider in providers:

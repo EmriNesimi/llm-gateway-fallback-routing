@@ -97,7 +97,7 @@ async def test_audit_log_filters_by_request_id(client, isolated_db):
                     requested_model="default",
                     provider="openai",
                     outcome="success",
-                )
+                ),
             )
         await session.commit()
 
@@ -118,7 +118,7 @@ async def test_audit_log_team_and_request_id_filters_combine(client, isolated_db
                 requested_model="default",
                 provider="openai",
                 outcome="success",
-            )
+            ),
         )
         await session.commit()
 

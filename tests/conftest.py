@@ -49,7 +49,7 @@ CLEARED_ENV_VARS = frozenset(
         "REDIS_SOCKET_TIMEOUT_SECONDS",
         "PROVIDER_LIFETIME_BUDGET_USD",
         "STRICT_MODEL_ROUTING",
-    }
+    },
 )
 
 for _name in CLEARED_ENV_VARS:
@@ -138,7 +138,7 @@ async def isolated_redis(monkeypatch):
     # The limiter's Lua script is bound to whichever client it was registered
     # against, so it must be re-registered on the fake client too.
     monkeypatch.setattr(
-        ratelimit_dependency._limiter, "_script", fake.register_script(_LUA_TOKEN_BUCKET)
+        ratelimit_dependency._limiter, "_script", fake.register_script(_LUA_TOKEN_BUCKET),
     )
     monkeypatch.setattr(budget_dependency.tracker, "_redis", fake)
     # The lifetime provider ledger is a separate client; without this it

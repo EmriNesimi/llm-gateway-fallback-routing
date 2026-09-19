@@ -205,7 +205,7 @@ def test_mixed_traffic_does_not_drift(client, monkeypatch):
         mode = ["ok", "fail", "abort", "ok"][i % 4]
         endpoint = ["/v1/chat", "/v1/chat/stream", "/v1/chat/completions"][i % 3]
         monkeypatch.setattr(
-            main_module, "build_router", lambda m, _m=mode: ("smart", Router(_m))
+            main_module, "build_router", lambda m, _m=mode: ("smart", Router(_m)),
         )
         _drive(client, endpoint)
         # "abort" only means anything to chat_stream; the non-streaming
@@ -264,7 +264,7 @@ async def test_a_cancelled_provider_settle_still_settles_the_key_ledger(monkeypa
 
     with pytest.raises(asyncio.CancelledError):
         await main_module._settle_chain(
-            "cancelled-key", {"anthropic": 0.5}, "anthropic", 0.2, "req-cancel"
+            "cancelled-key", {"anthropic": 0.5}, "anthropic", 0.2, "req-cancel",
         )
 
     assert await tracker.spent_usd("cancelled-key") == pytest.approx(0.2), (

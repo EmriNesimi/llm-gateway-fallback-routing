@@ -16,7 +16,7 @@ class FakeProvider(BaseProvider):
         if self.calls <= self._fail_times:
             raise ProviderError(f"{self.name} transient failure #{self.calls}")
         return ChatResponse(
-            content="ok", provider=self.name, model=model, input_tokens=1, output_tokens=1
+            content="ok", provider=self.name, model=model, input_tokens=1, output_tokens=1,
         )
 
     async def chat_stream(self, model, messages, params=None):
@@ -186,7 +186,7 @@ async def test_a_provider_out_of_budget_is_never_called():
     )
 
     result = await router.chat(
-        [ChatMessage(role="user", content="hi")], skip_providers={"broke"}
+        [ChatMessage(role="user", content="hi")], skip_providers={"broke"},
     )
 
     assert broke.calls == 0

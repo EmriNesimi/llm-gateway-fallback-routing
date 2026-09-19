@@ -20,7 +20,7 @@ def client(monkeypatch):
     # provider in this test — only that it gets past validation to the
     # router at all (a 502 from there, not the network).
     monkeypatch.setattr(
-        main_module, "build_router", lambda model: ("default", _AlwaysFailsRouter())
+        main_module, "build_router", lambda model: ("default", _AlwaysFailsRouter()),
     )
     try:
         with TestClient(app, raise_server_exceptions=False) as client:
