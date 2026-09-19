@@ -181,7 +181,7 @@ async def _check_redis() -> str:
         # the exception text handed hostnames, ports, driver versions and
         # failure modes to anyone who asked — reconnaissance for attacking the
         # very backends that hold the spend counters.
-        logger.error("readiness check failed for redis: %s", exc, exc_info=exc)
+        logger.exception("readiness check failed for redis: %s", exc)
         return "error"
 
 
@@ -191,7 +191,7 @@ async def _check_database() -> str:
             await session.execute(text("SELECT 1"))
         return "ok"
     except Exception as exc:  # noqa: BLE001
-        logger.error("readiness check failed for database: %s", exc, exc_info=exc)
+        logger.exception("readiness check failed for database: %s", exc)
         return "error"
 
 
