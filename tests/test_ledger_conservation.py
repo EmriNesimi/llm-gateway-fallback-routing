@@ -252,7 +252,7 @@ async def test_a_cancelled_provider_settle_still_settles_the_key_ledger(monkeypa
         cap_usd = 4.0
 
         async def settle(self, *a, **k):
-            raise asyncio.CancelledError()
+            raise asyncio.CancelledError
 
         async def record_unreserved(self, *a, **k):
             pass
