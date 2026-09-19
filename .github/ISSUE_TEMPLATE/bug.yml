@@ -1,0 +1,48 @@
+name: Bug
+description: Something the gateway did that it should not have
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What the gateway did, and what it should have done instead.
+    validations:
+      required: true
+
+  - type: input
+    id: request_id
+    attributes:
+      label: Request ID
+      description: >-
+        The X-Request-ID header on the response, or the request_id in the
+        error body. It ties the request to its audit row, its log lines and
+        its trace. Without it, reconstructing what happened means matching
+        on timestamps.
+      placeholder: 7c94276dc21a4e43b12fedf30022e2d0
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: How to reproduce
+      description: >-
+        For a test failure, the exact test name and the full output, captured
+        before re-running. Issue #17 was one red test that nobody wrote down,
+        and nine reruns later it could not be told apart from one that never
+        happened.
+      render: shell
+
+  - type: checkboxes
+    id: money
+    attributes:
+      label: Does this involve spend?
+      options:
+        - label: The ledger, the audit log, a 402, or a provider being skipped as out of budget
+        - label: I ran `make reconcile` and can paste what it said
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: From `/openapi.json` `info.version`, or the image tag.
+      placeholder: 0.5.0
