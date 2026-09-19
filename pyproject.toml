@@ -61,7 +61,13 @@ select = ["E", "F", "I", "UP", "B", "S"]
 #   dodging a circular import that did not exist. In tests a local import is
 #   often deliberate (importing inside the test that exercises it), so the
 #   rule is scoped to the application via per-file-ignores below.
-extend-select = ["PT018", "ASYNC110", "PLW1510", "PT006", "PLC0415", "G201"]
+# The second row is formatting, applied repo-wide in one pass and pinned so
+# it holds. None of it changes behaviour; it is here because a diff that has
+# to fix formatting alongside a real change is a harder diff to review.
+extend-select = [
+    "PT018", "ASYNC110", "PLW1510", "PT006", "PLC0415", "G201",
+    "D209", "D403", "D202", "COM812", "SIM300", "Q003", "PLR0402", "RSE102",
+]
 
 [tool.ruff.lint.per-file-ignores]
 # B008 flags function calls in argument defaults, which is exactly how FastAPI
