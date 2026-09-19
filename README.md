@@ -321,6 +321,8 @@ Testing this in VS Code specifically (Test Explorer setup, a debug config with b
 
 ### running lint & tests locally
 
+Contributing? [`CONTRIBUTING.md`](CONTRIBUTING.md) is short and says where the rules live — the decisions, the guards, and which paths cost money if you get them wrong.
+
 ```bash
 make check     # lint, typecheck, audit, migration drift, tests + coverage floor
 ```
