@@ -47,7 +47,7 @@ class ProviderBudgetExhausted(Exception):
 
     def __init__(self, provider: str, spent: float, cap: float):
         super().__init__(
-            f"{provider} has spent ${spent:.4f} of its ${cap:.2f} lifetime budget"
+            f"{provider} has spent ${spent:.4f} of its ${cap:.2f} lifetime budget",
         )
         self.provider = provider
         self.spent = spent
@@ -88,7 +88,7 @@ class ProviderBudget:
             return
         PROVIDER_BUDGET_SPENT.labels(provider=provider).set(total)
         PROVIDER_BUDGET_REMAINING.labels(provider=provider).set(
-            max(0.0, self._cap_usd - total)
+            max(0.0, self._cap_usd - total),
         )
 
     async def remaining(self, provider: str) -> float:

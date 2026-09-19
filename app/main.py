@@ -156,7 +156,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> Respo
     )
     return Response(
         content=json.dumps(
-            {"error": "internal server error", "request_id": request_id}
+            {"error": "internal server error", "request_id": request_id},
         ),
         status_code=500,
         media_type="application/json",
@@ -254,7 +254,7 @@ async def metrics(
 
     if expected and not (presented and hmac.compare_digest(presented, expected)):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid metrics token"
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid metrics token",
         )
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
@@ -283,7 +283,7 @@ async def list_models(_: str = Depends(require_api_key)) -> dict[str, Any]:
 
 
 def _route(
-    requested_model: str, request_id: str, *, strict: bool | None = None
+    requested_model: str, request_id: str, *, strict: bool | None = None,
 ) -> tuple[str, FallbackRouter]:
     """Pick the chain for a requested model, and decide what to do when there
     isn't one.
@@ -319,7 +319,7 @@ def _route(
 
 
 def _record_usage(
-    provider: str, model: str, input_tokens: int, output_tokens: int, cost_usd: float
+    provider: str, model: str, input_tokens: int, output_tokens: int, cost_usd: float,
 ) -> None:
     """Publish spend and token counts to Prometheus.
 
@@ -439,7 +439,7 @@ async def _reserve_chain(
                 sorted(unpriced) or "none",
             )
             REQUESTS_REFUSED.labels(
-                reason="provider_budget_exhausted" if exhausted else "no_pricing_configured"
+                reason="provider_budget_exhausted" if exhausted else "no_pricing_configured",
             ).inc()
             # 402 when money is why, 503 when it is a missing pricing entry —
             # the first is the caller's problem to wait out, the second is an
@@ -604,7 +604,7 @@ async def _settle_chain(
         # toward leaving the worst case claimed if Redis is down (refusing
         # future requests) rather than dropping the charge (allowing them).
         await budget_tracker.settle(
-            api_key, sum(reservations.values()), actual_usd, request_id=request_id
+            api_key, sum(reservations.values()), actual_usd, request_id=request_id,
         )
 
 
@@ -647,7 +647,7 @@ async def _settle_providers(
     for provider, reserved in reservations.items():
         try:
             await provider_budget.settle(
-                provider, reserved, actual_usd if provider == served_provider else 0.0
+                provider, reserved, actual_usd if provider == served_provider else 0.0,
             )
         except Exception:  # noqa: BLE001 - see docstring: must not fail a served request
             logger.exception(
@@ -721,7 +721,7 @@ async def _serve_chat(
     start = time.perf_counter()
     try:
         result = await router.chat(
-            messages, request_id=request_id, params=params, skip_providers=skip_providers
+            messages, request_id=request_id, params=params, skip_providers=skip_providers,
         )
     except AllProvidersFailedError as exc:
         # Nothing was served, so every reservation comes straight back.
@@ -762,7 +762,7 @@ async def _serve_chat(
     )
     await _settle_chain(api_key, reservations or {}, result.provider, cost, request_id)
     _record_usage(
-        result.provider, result.model, result.input_tokens, result.output_tokens, cost
+        result.provider, result.model, result.input_tokens, result.output_tokens, cost,
     )
     await record_audit_log(
         api_key,
@@ -789,7 +789,7 @@ _CHAT_RESPONSES: dict[int | str, dict] = {
         "description": (
             "Budget exhausted — the caller's monthly cap, or the provider"
             " lifetime ceiling. Retrying does not help until a cap moves."
-        )
+        ),
     },
     404: {"description": "Unroutable model, when STRICT_MODEL_ROUTING is on"},
     429: {"description": "Rate limited. Retry-After says how long."},
@@ -798,7 +798,7 @@ _CHAT_RESPONSES: dict[int | str, dict] = {
         "description": (
             "No pricing configured for a routable model, so cost cannot be"
             " bounded. Needs an operator, not a retry."
-        )
+        ),
     },
 }
 
@@ -815,7 +815,7 @@ async def chat(
     response.headers["X-Gateway-Chain"] = chain_name
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
     reservations, skip = await _reserve_chain(
-        chain_name, messages, None, request_id, api_key
+        chain_name, messages, None, request_id, api_key,
     )
 
     result = await _serve_chat(
@@ -851,7 +851,7 @@ async def _event_stream(
 
     try:
         async for chunk in router.chat_stream(
-            messages, request_id=request_id, skip_providers=skip_providers
+            messages, request_id=request_id, skip_providers=skip_providers,
         ):
             if chunk.done:
                 final_provider = chunk.provider
@@ -919,7 +919,7 @@ async def _event_stream(
         UNHANDLED_EXCEPTIONS.inc()
         REQUEST_COUNT.labels(status="error").inc()
         logger.error(
-            "[request_id=%s] unhandled exception mid-stream", request_id, exc_info=exc
+            "[request_id=%s] unhandled exception mid-stream", request_id, exc_info=exc,
         )
         try:
             await _settle_stream_on_abort(
@@ -963,7 +963,7 @@ async def _event_stream(
             _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
 
         await _settle_chain(
-            api_key, reservations or {}, final_provider, cost, request_id
+            api_key, reservations or {}, final_provider, cost, request_id,
         )
         settled = True
 
@@ -1006,13 +1006,13 @@ async def _event_stream(
 
 @app.post("/v1/chat/stream", responses=_CHAT_RESPONSES)
 async def chat_stream(
-    request: ChatRequest, http_request: Request, api_key: str = Depends(enforce_budget)
+    request: ChatRequest, http_request: Request, api_key: str = Depends(enforce_budget),
 ) -> StreamingResponse:
     request_id = http_request.state.request_id
     chain_name, router = _route(request.model, request_id)
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
     reservations, skip = await _reserve_chain(
-        chain_name, messages, None, request_id, api_key
+        chain_name, messages, None, request_id, api_key,
     )
     response = StreamingResponse(
         _event_stream(
@@ -1131,7 +1131,7 @@ async def _openai_event_stream(
         yield (
             "data: "
             + json.dumps(
-                {"error": {"message": "all providers failed", "request_id": request_id}}
+                {"error": {"message": "all providers failed", "request_id": request_id}},
             )
             + "\n\n"
         )
@@ -1140,7 +1140,7 @@ async def _openai_event_stream(
         UNHANDLED_EXCEPTIONS.inc()
         REQUEST_COUNT.labels(status="error").inc()
         logger.error(
-            "[request_id=%s] unhandled exception mid-stream", request_id, exc_info=exc
+            "[request_id=%s] unhandled exception mid-stream", request_id, exc_info=exc,
         )
         try:
             await _settle_stream_on_abort(
@@ -1183,7 +1183,7 @@ async def _openai_event_stream(
             _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
 
         await _settle_chain(
-            api_key, reservations or {}, final_provider, cost, request_id
+            api_key, reservations or {}, final_provider, cost, request_id,
         )
         settled = True
 
@@ -1261,7 +1261,7 @@ async def chat_completions(
         )
 
     reservations, skip = await _reserve_chain(
-        chain_name, messages, params, request_id, api_key
+        chain_name, messages, params, request_id, api_key,
     )
 
     if request.stream:
@@ -1283,7 +1283,7 @@ async def chat_completions(
         stream_response.headers["X-Gateway-Chain"] = chain_name
         stream_response.headers["X-RateLimit-Limit"] = str(http_request.state.rate_limit_limit)
         stream_response.headers["X-RateLimit-Remaining"] = str(
-            http_request.state.rate_limit_remaining
+            http_request.state.rate_limit_remaining,
         )
         stream_response.headers["X-Budget-Remaining-USD"] = (
             f"{http_request.state.budget_remaining_usd:.4f}"
@@ -1308,7 +1308,7 @@ async def chat_completions(
         choices=[
             ChatCompletionChoice(
                 message=ChatCompletionMessage(content=result.content),
-            )
+            ),
         ],
         usage=ChatCompletionUsage(
             prompt_tokens=result.input_tokens,

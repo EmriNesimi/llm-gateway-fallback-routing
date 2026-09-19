@@ -121,7 +121,7 @@ class AnthropicProvider(BaseProvider):
             kwargs["system"] = system
         try:
             response = await self._client.messages.create(
-                model=model, messages=conversation, **kwargs
+                model=model, messages=conversation, **kwargs,
             )
         except AnthropicError as exc:
             raise _provider_error("anthropic request failed", exc) from exc
@@ -148,7 +148,7 @@ class AnthropicProvider(BaseProvider):
             kwargs["system"] = system
         try:
             async with self._client.messages.stream(
-                model=model, messages=conversation, **kwargs
+                model=model, messages=conversation, **kwargs,
             ) as stream:
                 async for text in stream.text_stream:
                     yield StreamChunk(content=text)

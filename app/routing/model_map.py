@@ -64,8 +64,8 @@ def billable_providers() -> tuple[str, ...]:
                 for chain in FALLBACK_CHAINS.values()
                 for provider, _ in chain
                 if provider not in FREE_PROVIDERS
-            }
-        )
+            },
+        ),
     )
 
 

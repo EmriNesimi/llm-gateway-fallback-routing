@@ -30,7 +30,7 @@ async def record_audit_log(
 
         async with async_session() as session:
             result = await session.execute(
-                select(ApiKeyRecord).where(ApiKeyRecord.key_hash == key_hash)
+                select(ApiKeyRecord).where(ApiKeyRecord.key_hash == key_hash),
             )
             record = result.scalar_one_or_none()
             # Keys configured via the legacy GATEWAY_API_KEYS env var have no DB
@@ -49,7 +49,7 @@ async def record_audit_log(
                     output_tokens=output_tokens,
                     cost_usd=cost_usd,
                     latency_ms=latency_ms,
-                )
+                ),
             )
             await session.commit()
     except Exception:  # noqa: BLE001 - any DB failure here must not break the caller

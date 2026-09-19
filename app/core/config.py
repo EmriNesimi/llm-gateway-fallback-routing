@@ -180,7 +180,7 @@ class Settings(BaseSettings):
         if not value.startswith(_SUPPORTED_DATABASE_SCHEMES):
             raise ValueError(
                 f"DATABASE_URL must start with one of {_SUPPORTED_DATABASE_SCHEMES} "
-                f"(the async drivers this app is actually wired for), got: {value!r}"
+                f"(the async drivers this app is actually wired for), got: {value!r}",
             )
         return value
 
@@ -194,17 +194,17 @@ class Settings(BaseSettings):
         if self.gateway_secret_key == _INSECURE_SECRET_DEFAULT:
             logger.warning(
                 "GATEWAY_SECRET_KEY is the insecure built-in default; set a long "
-                "random value in .env before running anywhere but local dev."
+                "random value in .env before running anywhere but local dev.",
             )
         if not self.allowed_api_keys():
             logger.warning(
                 "GATEWAY_API_KEYS is empty; authenticated endpoints will refuse "
-                "requests. Set at least one client key in .env to enable /v1/chat."
+                "requests. Set at least one client key in .env to enable /v1/chat.",
             )
         if not self.admin_api_key:
             logger.warning(
                 "ADMIN_API_KEY is not set; the admin API (key issuance/revocation) "
-                "will refuse all requests rather than being left open."
+                "will refuse all requests rather than being left open.",
             )
         if not self.openai_api_key and not self.anthropic_api_key:
             # Not necessarily broken (Ollama alone is a valid setup) but
@@ -214,7 +214,7 @@ class Settings(BaseSettings):
             # failing would be the first sign anything's wrong.
             logger.warning(
                 "Neither OPENAI_API_KEY nor ANTHROPIC_API_KEY is set; only Ollama "
-                "(if reachable at OLLAMA_BASE_URL) will be able to serve requests."
+                "(if reachable at OLLAMA_BASE_URL) will be able to serve requests.",
             )
 
 

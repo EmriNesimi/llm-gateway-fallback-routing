@@ -7,6 +7,6 @@ from app.core.config import settings
 
 def hash_key(raw_key: str) -> str:
     return hmac.new(
-        settings.gateway_secret_key.encode(), raw_key.encode(), hashlib.sha256
+        settings.gateway_secret_key.encode(), raw_key.encode(), hashlib.sha256,
     ).hexdigest()
 

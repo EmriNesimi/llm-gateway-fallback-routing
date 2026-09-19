@@ -100,7 +100,7 @@ class FallbackRouter:
             publish_circuit_state(provider.name, breaker)
             if not allowed:
                 logger.warning(
-                    "[request_id=%s] provider %s circuit open, skipping", request_id, provider.name
+                    "[request_id=%s] provider %s circuit open, skipping", request_id, provider.name,
                 )
                 errors.append(f"{provider.name}: circuit open")
                 continue
@@ -118,10 +118,10 @@ class FallbackRouter:
                     attempt_started = time.perf_counter()
                     try:
                         result = await provider.chat(
-                            model=model, messages=messages, params=params
+                            model=model, messages=messages, params=params,
                         )
                         PROVIDER_LATENCY.labels(provider=provider.name).observe(
-                            time.perf_counter() - attempt_started
+                            time.perf_counter() - attempt_started,
                         )
                         # Bill/log against the model we actually requested (e.g.
                         # "gpt-4o-mini"), not whatever dated snapshot the provider
@@ -143,7 +143,7 @@ class FallbackRouter:
                         # a provider that fails slowly is a different problem
                         # from one that fails fast.
                         PROVIDER_LATENCY.labels(provider=provider.name).observe(
-                            time.perf_counter() - attempt_started
+                            time.perf_counter() - attempt_started,
                         )
                         last_error = exc
                         span.set_attribute("gateway.error", str(exc))
@@ -191,7 +191,7 @@ class FallbackRouter:
             )
 
         raise AllProvidersFailedError(
-            f"all providers in fallback chain failed: {'; '.join(errors)}"
+            f"all providers in fallback chain failed: {'; '.join(errors)}",
         )
 
     async def chat_stream(
@@ -230,7 +230,7 @@ class FallbackRouter:
             publish_circuit_state(provider.name, breaker)
             if not allowed:
                 logger.warning(
-                    "[request_id=%s] provider %s circuit open, skipping", request_id, provider.name
+                    "[request_id=%s] provider %s circuit open, skipping", request_id, provider.name,
                 )
                 errors.append(f"{provider.name}: circuit open")
                 continue
@@ -250,7 +250,7 @@ class FallbackRouter:
                     span.set_attribute("gateway.request_id", request_id)
 
                     generator = provider.chat_stream(
-                        model=model, messages=messages, params=params
+                        model=model, messages=messages, params=params,
                     )
                     try:
                         first_chunk = await generator.__anext__()
@@ -312,7 +312,7 @@ class FallbackRouter:
                             exc,
                         )
                         raise AllProvidersFailedError(
-                            f"{provider.name} failed mid-stream: {exc}"
+                            f"{provider.name} failed mid-stream: {exc}",
                         ) from exc
                     return
 
@@ -341,5 +341,5 @@ class FallbackRouter:
             )
 
         raise AllProvidersFailedError(
-            f"all providers in fallback chain failed: {'; '.join(errors)}"
+            f"all providers in fallback chain failed: {'; '.join(errors)}",
         )

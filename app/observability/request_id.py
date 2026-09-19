@@ -23,7 +23,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self, request: Request, call_next: RequestResponseEndpoint,
     ) -> Response:
         incoming = request.headers.get("X-Request-ID")
         if incoming and len(incoming) <= _MAX_REQUEST_ID_LENGTH:

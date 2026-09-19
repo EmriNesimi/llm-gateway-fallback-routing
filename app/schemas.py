@@ -57,7 +57,7 @@ class ChatRequest(BaseModel):
         if total > MAX_TOTAL_CONTENT_CHARS:
             raise ValueError(
                 f"total message content is {total} characters, over the"
-                f" {MAX_TOTAL_CONTENT_CHARS} limit"
+                f" {MAX_TOTAL_CONTENT_CHARS} limit",
             )
         return self
 
@@ -85,7 +85,7 @@ class ChatResponseOut(BaseModel):
 # reasoning as decision 009: a caller shouldn't have to guess that the
 # temperature they set never reached a provider.
 FORWARDED_COMPLETION_FIELDS = frozenset(
-    {"model", "messages", "stream", "temperature", "top_p", "max_tokens", "stop"}
+    {"model", "messages", "stream", "temperature", "top_p", "max_tokens", "stop"},
 )
 
 
@@ -122,7 +122,7 @@ class ChatCompletionRequest(BaseModel):
         if total > MAX_TOTAL_CONTENT_CHARS:
             raise ValueError(
                 f"total message content is {total} characters, over the"
-                f" {MAX_TOTAL_CONTENT_CHARS} limit"
+                f" {MAX_TOTAL_CONTENT_CHARS} limit",
             )
         return self
 

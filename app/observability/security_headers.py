@@ -10,7 +10,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
+        self, request: Request, call_next: RequestResponseEndpoint,
     ) -> Response:
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"

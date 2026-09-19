@@ -101,7 +101,7 @@ class OllamaProvider(BaseProvider):
         try:
             async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
                 async with client.stream(
-                    "POST", f"{self._base_url}/api/chat", json=payload
+                    "POST", f"{self._base_url}/api/chat", json=payload,
                 ) as response:
                     response.raise_for_status()
                     async for line in response.aiter_lines():

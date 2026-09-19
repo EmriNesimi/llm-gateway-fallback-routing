@@ -19,7 +19,7 @@ class ApiKeyRecord(Base):
     key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     team: Mapped[str] = mapped_column(String(255))
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC)
+        DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC),
     )
     revoked: Mapped[bool] = mapped_column(Boolean, default=False)
 
@@ -43,7 +43,7 @@ class AdminAuditEntry(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC)
+        DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC),
     )
     # The same correlation ID as the request audit log, so an admin action and
     # the traffic around it line up on one timeline.
@@ -63,7 +63,7 @@ class AuditLogEntry(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC)
+        DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC),
     )
     # Correlation ID from the X-Request-ID header/middleware — lets a support
     # request ("call XYZ failed") be matched to this exact row and its traces.

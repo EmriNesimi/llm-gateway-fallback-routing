@@ -54,7 +54,7 @@ async def create_key(
             key_id=record.id,
             team=request.team,
             admin_key_hash=hash_key(admin_key),
-        )
+        ),
     )
     await session.commit()
     return CreateKeyResponse(api_key=raw_key, team=request.team, id=record.id)
@@ -62,7 +62,7 @@ async def create_key(
 
 @router.get("/keys", response_model=list[ApiKeyOut])
 async def list_keys(
-    limit: int = 100, offset: int = 0, session: AsyncSession = Depends(get_session)
+    limit: int = 100, offset: int = 0, session: AsyncSession = Depends(get_session),
 ) -> list[ApiKeyRecord]:
     limit = max(1, min(limit, 1000))
     offset = max(0, offset)
@@ -98,7 +98,7 @@ async def revoke_key(
             key_id=key_id,
             team=record.team,
             admin_key_hash=hash_key(admin_key),
-        )
+        ),
     )
     await session.commit()
     return {"id": key_id, "revoked": True}

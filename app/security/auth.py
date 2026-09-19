@@ -32,7 +32,7 @@ async def _is_valid_db_key(presented: str, session: AsyncSession) -> bool:
         select(ApiKeyRecord).where(
             ApiKeyRecord.key_hash == hash_key(presented),
             ApiKeyRecord.revoked.is_(False),
-        )
+        ),
     )
     return result.scalar_one_or_none() is not None
 

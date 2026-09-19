@@ -21,7 +21,7 @@ class UnpricedModelError(Exception):
     def __init__(self, provider: str, model: str):
         super().__init__(
             f"no pricing entry for {provider}:{model} — cannot bound the cost of"
-            " this request, so it cannot be allowed to run"
+            " this request, so it cannot be allowed to run",
         )
         self.provider = provider
         self.model = model
@@ -54,7 +54,7 @@ _CHARS_PER_TOKEN = 3
 
 
 def worst_case_cost_usd(
-    provider: str, model: str, input_chars: int, max_output_tokens: int
+    provider: str, model: str, input_chars: int, max_output_tokens: int,
 ) -> float:
     """The most a single request to this model could possibly cost.
 
@@ -89,7 +89,7 @@ def worst_case_cost_usd(
 
 
 def estimate_cost_usd(
-    provider: str, model: str, input_tokens: int, output_tokens: int
+    provider: str, model: str, input_tokens: int, output_tokens: int,
 ) -> float:
     key = f"{provider}:{model}"
     pricing = _PRICING.get(key)

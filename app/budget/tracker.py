@@ -156,7 +156,7 @@ class BudgetTracker:
         return float(result[0])
 
     async def _apply_best_effort(
-        self, api_key: str, delta_usd: float, *, request_id: str = ""
+        self, api_key: str, delta_usd: float, *, request_id: str = "",
     ) -> None:
         """`_apply`, for the settle side of decision 004: swallow and log.
 

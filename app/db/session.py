@@ -10,7 +10,7 @@ logger = logging.getLogger("gateway.db")
 
 
 def build_connect_args(
-    database_url: str, connect_timeout_seconds: float, command_timeout_seconds: float
+    database_url: str, connect_timeout_seconds: float, command_timeout_seconds: float,
 ) -> dict[str, float]:
     """asyncpg-specific connect/command timeouts — meaningless to (and
     rejected by) aiosqlite, so only returned for a Postgres DATABASE_URL. See
