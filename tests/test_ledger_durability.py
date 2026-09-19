@@ -50,7 +50,7 @@ def test_redis_writes_its_data_to_disk():
 
 
 def test_redis_has_somewhere_to_write_it():
-    """appendonly without a volume is worse than useless: it writes to the
+    """Appendonly without a volume is worse than useless: it writes to the
     container's own filesystem, which is discarded with the container. It
     would look configured and behave exactly as before.
     """
@@ -66,7 +66,7 @@ def test_redis_has_somewhere_to_write_it():
 
 
 def test_redis_is_told_never_to_evict():
-    """noeviction is the default only while maxmemory is unset. Adding a
+    """Noeviction is the default only while maxmemory is unset. Adding a
     memory limit is an ordinary thing to do to something that looks like a
     cache, and from that moment the policy decides which keys survive — with
     no way to tell a disposable rate-limit bucket from the spend ledger.

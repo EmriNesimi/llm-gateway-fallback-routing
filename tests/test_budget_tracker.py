@@ -131,7 +131,7 @@ async def test_settle_without_a_reservation_charges_the_full_cost():
 
 @pytest.mark.asyncio
 async def test_reserve_keeps_the_monthly_expiry():
-    """incrbyfloat on a missing key creates it without a TTL. Losing the
+    """Incrbyfloat on a missing key creates it without a TTL. Losing the
     expiry would turn the monthly budget into a lifetime one.
     """
     redis = fakeredis.aioredis.FakeRedis()
@@ -145,7 +145,7 @@ async def test_reserve_keeps_the_monthly_expiry():
 
 @pytest.mark.asyncio
 async def test_settle_swallows_redis_failures(monkeypatch):
-    """settle runs after a provider has
+    """Settle runs after a provider has
     already answered and billed.
     """
     redis = fakeredis.aioredis.FakeRedis()

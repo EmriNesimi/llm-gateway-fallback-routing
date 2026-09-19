@@ -181,7 +181,7 @@ def test_unknown_model_is_rejected_even_in_lenient_mode(client, monkeypatch):
 
 
 def test_unsupported_parameters_are_accepted_but_reported(client, caplog):
-    """temperature and top_p used to be listed here. They're forwarded now, so
+    """Temperature and top_p used to be listed here. They're forwarded now, so
     what's left is the genuinely OpenAI-specific set the provider adapters
     have no equivalent for.
     """

@@ -120,7 +120,7 @@ def test_half_open_failure_reopens_circuit(breaker, clock):
 
 
 def test_half_open_admits_exactly_one_trial(breaker, clock):
-    """decision 010 rests on this: half-open lets ONE request probe a
+    """Decision 010 rests on this: half-open lets ONE request probe a
     recovering provider. Without a claim, every concurrent request in the
     cooldown window sees HALF_OPEN and is admitted — the thundering herd the
     state exists to prevent, pointed at a provider that is probably still
