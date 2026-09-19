@@ -42,7 +42,8 @@ async def test_spend_stops_at_the_cap(budget):
 @pytest.mark.asyncio
 async def test_a_refused_request_does_not_consume_budget(budget):
     """The reservation has to come back on refusal, or repeatedly hitting an
-    exhausted provider would inflate recorded spend past the cap."""
+    exhausted provider would inflate recorded spend past the cap.
+    """
     await budget.reserve("openai", 4.0)
     await budget.settle("openai", 4.0, 4.0)
 
@@ -57,7 +58,8 @@ async def test_a_refused_request_does_not_consume_budget(budget):
 async def test_concurrent_requests_cannot_all_pass_the_same_check(budget):
     """The reason for reserving rather than checking. Twenty simultaneous
     requests against a $4 cap at $1 each must admit four, not twenty — every
-    one of them observes `spent == 0` if the check happens before the call."""
+    one of them observes `spent == 0` if the check happens before the call.
+    """
 
     async def attempt():
         try:
@@ -75,7 +77,8 @@ async def test_concurrent_requests_cannot_all_pass_the_same_check(budget):
 @pytest.mark.asyncio
 async def test_one_oversized_request_cannot_exceed_the_cap(budget):
     """Reserving the worst case is what stops a single request costing more
-    than the headroom left. A plain `spent < cap` check would admit this."""
+    than the headroom left. A plain `spent < cap` check would admit this.
+    """
     await budget.reserve("anthropic", 3.9)
     await budget.settle("anthropic", 3.9, 3.9)
 
@@ -107,7 +110,8 @@ async def test_settling_a_failed_request_refunds_everything(budget):
 @pytest.mark.asyncio
 async def test_unreserved_spend_can_still_be_charged(budget):
     """The escape hatch for a stream already partly generated when the client
-    hung up — real spend with no live reservation."""
+    hung up — real spend with no live reservation.
+    """
     await budget.record_unreserved("anthropic", 0.25)
 
     assert await budget.spent("anthropic") == pytest.approx(0.25)
@@ -121,7 +125,8 @@ async def test_unreserved_spend_can_still_be_charged(budget):
 @pytest.mark.asyncio
 async def test_the_ledger_is_not_keyed_by_caller(budget):
     """The whole point of this existing alongside the per-key monthly cap:
-    minting more client keys must not raise the operator's ceiling."""
+    minting more client keys must not raise the operator's ceiling.
+    """
     for _ in range(4):
         await budget.reserve("openai", 1.0)
         await budget.settle("openai", 1.0, 1.0)
@@ -144,7 +149,8 @@ async def test_providers_have_independent_ceilings(budget):
 @pytest.mark.asyncio
 async def test_the_ledger_never_expires(budget):
     """A monthly cap of $1 permits $12 a year. When the limit is a prepaid
-    balance rather than a spending rate, resetting defeats the purpose."""
+    balance rather than a spending rate, resetting defeats the purpose.
+    """
     await budget.reserve("openai", 1.0)
     await budget.settle("openai", 1.0, 1.0)
 
@@ -155,7 +161,8 @@ async def test_the_ledger_never_expires(budget):
 @pytest.mark.asyncio
 async def test_local_providers_are_exempt(budget):
     """Ollama bills nothing, so capping it would only break the free fallback
-    that exists for when the paid ones are gone."""
+    that exists for when the paid ones are gone.
+    """
     assert "ollama" in FREE_PROVIDERS
 
     await budget.reserve("ollama", 999.0)
@@ -180,7 +187,8 @@ async def test_exhausted_providers_reports_only_the_spent_ones(budget):
 @pytest.mark.asyncio
 async def test_an_unreachable_redis_refuses_rather_than_allows():
     """Fails closed. Being unable to prove there's budget left is not the same
-    as having budget left, and this is the last line before a real bill."""
+    as having budget left, and this is the last line before a real bill.
+    """
 
     class DeadRedis:
         async def incrbyfloat(self, *a, **k):
@@ -204,7 +212,8 @@ async def test_an_unreachable_redis_refuses_rather_than_allows():
 async def test_the_ledger_is_visible_as_metrics(budget):
     """gateway_cost_usd_total is a counter — it says what has gone, never what
     is left, and "left" is the number worth alerting on. Without a gauge the
-    only warning is a 402 after the money is already spent."""
+    only warning is a 402 after the money is already spent.
+    """
     from prometheus_client import REGISTRY
 
     await budget.reserve("openai", 1.5)
@@ -225,7 +234,8 @@ async def test_the_ledger_is_visible_as_metrics(budget):
 @pytest.mark.asyncio
 async def test_remaining_never_reports_negative(budget):
     """An overshoot shouldn't render as a negative bar on a dashboard; zero
-    headroom is the honest reading."""
+    headroom is the honest reading.
+    """
     await budget.record_unreserved("anthropic", 99.0)
     await budget.spent("anthropic")
 
@@ -245,7 +255,8 @@ async def test_remaining_never_reports_negative(budget):
 async def test_remaining_reports_headroom_for_a_paid_provider(budget):
     """`remaining` is what the gauge and the ProviderBudgetLow alert are built
     on. Only the ollama shortcut was covered, so the arithmetic every alert
-    depends on had never run."""
+    depends on had never run.
+    """
     await budget.reserve("openai", 1.25)
     await budget.settle("openai", 1.25, 1.25)
 
@@ -257,7 +268,8 @@ async def test_settling_a_free_provider_writes_nothing(budget):
     """settle() computes `actual - reserved`, which is normally negative — the
     refund. Applied to ollama, whose reserve() deliberately wrote nothing, it
     would push the ledger below zero and hand out headroom nobody paid for.
-    That is the exact bug that made the whole ceiling inert once before."""
+    That is the exact bug that made the whole ceiling inert once before.
+    """
     await budget.reserve("ollama", 5.0)
     await budget.settle("ollama", 5.0, 0.10)
 
@@ -277,7 +289,8 @@ async def test_free_providers_are_never_charged_unreserved_spend(budget):
 async def test_non_positive_unreserved_spend_is_ignored(budget, amount):
     """A zero-cost settle is the normal case for a request that failed before
     any tokens were generated. Writing it would be harmless; writing a
-    negative one would silently refund budget."""
+    negative one would silently refund budget.
+    """
     await budget.record_unreserved("anthropic", amount)
 
     assert await budget._redis.get(budget._key("anthropic")) is None
@@ -287,7 +300,8 @@ async def test_non_positive_unreserved_spend_is_ignored(budget, amount):
 async def test_free_providers_publish_no_budget_gauges(budget):
     """Ollama has no ceiling, so a headroom gauge for it would read as either
     zero (looks exhausted) or infinite (breaks the graph). Neither should
-    exist."""
+    exist.
+    """
     from prometheus_client import REGISTRY
 
     await budget.spent("ollama")
@@ -332,7 +346,8 @@ async def test_a_failed_refund_still_refuses_rather_than_erroring(monkeypatch, c
 @pytest.mark.asyncio
 async def test_the_refusal_reports_the_spend_it_actually_observed(budget):
     """The figure in the exception is the total before this request's claim,
-    which is what the caller and the log both mean by "already spent"."""
+    which is what the caller and the log both mean by "already spent".
+    """
     await budget.reserve("anthropic", 3.0)
     await budget.settle("anthropic", 3.0, 3.0)
 
@@ -380,7 +395,8 @@ async def test_an_external_correction_reaches_the_gauge_on_the_next_read():
     """The runbook's correction procedure is `SET` in redis-cli, which this
     process never sees. The next read has to pick it up — and `make
     reconcile`, which the procedure ends with, reads. So the sequence the
-    runbook prescribes leaves the dashboard honest without a restart."""
+    runbook prescribes leaves the dashboard honest without a restart.
+    """
     from prometheus_client import REGISTRY
 
     redis = fakeredis.aioredis.FakeRedis()

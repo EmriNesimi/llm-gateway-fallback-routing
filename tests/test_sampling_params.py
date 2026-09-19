@@ -34,7 +34,8 @@ MESSAGES = [ChatMessage(role="user", content="hi")]
 
 def test_unset_controls_are_none_not_defaults():
     """None has to mean "don't send it". Substituting our own default would
-    change behavior for every caller who never asked to change it."""
+    change behavior for every caller who never asked to change it.
+    """
     params = SamplingParams()
 
     assert params.is_empty()
@@ -77,7 +78,8 @@ def test_request_controls_are_carried_across():
 
 def test_a_bare_string_stop_is_normalised_to_a_list():
     """OpenAI accepts either; every provider downstream wants a list. Passing
-    the raw string through would give Ollama a stop sequence per character."""
+    the raw string through would give Ollama a stop sequence per character.
+    """
     assert _request(stop="END").sampling_params().stop == ["END"]
     assert _request(stop=["A", "B"]).sampling_params().stop == ["A", "B"]
 
@@ -96,7 +98,8 @@ def test_a_bare_string_stop_is_normalised_to_a_list():
 def test_out_of_range_values_are_rejected_at_the_boundary(kwargs):
     """Better a 422 naming the field than a provider 400, which the router
     reads as a dead provider — the caller would get an answer from the next
-    provider in the chain instead of being told their value was invalid."""
+    provider in the chain instead of being told their value was invalid.
+    """
     from pydantic import ValidationError
 
     with pytest.raises(ValidationError):
@@ -141,7 +144,8 @@ def test_the_cap_sent_is_the_cap_the_budget_reserved_against():
 
 def test_an_explicit_smaller_cap_is_respected():
     """Callers may ask for less than the ceiling; they may not ask for more —
-    app/schemas.py caps max_tokens at MAX_OUTPUT_TOKENS at the boundary."""
+    app/schemas.py caps max_tokens at MAX_OUTPUT_TOKENS at the boundary.
+    """
     assert openai_kwargs(SamplingParams(max_tokens=64))["max_tokens"] == 64
 
 
@@ -155,7 +159,8 @@ def test_openai_uses_its_own_names():
 
 def test_openai_omits_unset_controls_rather_than_sending_null():
     """Everything except max_tokens, which is always sent — see
-    test_openai_always_sends_an_output_cap for why it is the exception."""
+    test_openai_always_sends_an_output_cap for why it is the exception.
+    """
     assert openai_kwargs(SamplingParams(temperature=0.5)) == {
         "temperature": 0.5,
         "max_tokens": DEFAULT_MAX_OUTPUT_TOKENS,
@@ -164,7 +169,8 @@ def test_openai_omits_unset_controls_rather_than_sending_null():
 
 def test_openai_forwards_a_zero_temperature():
     """0.0 is falsy, so a truthiness check would drop it — while being exactly
-    the value someone sets when they want deterministic output."""
+    the value someone sets when they want deterministic output.
+    """
     assert openai_kwargs(SamplingParams(temperature=0.0))["temperature"] == 0.0
 
 
@@ -192,13 +198,15 @@ def test_ollama_omits_the_options_block_entirely_when_empty():
 
 def test_anthropic_always_sends_a_max_tokens():
     """Anthropic requires it, unlike the other two, so an unset one still
-    needs a number."""
+    needs a number.
+    """
     assert anthropic_kwargs("claude-haiku-4-5", None) == {"max_tokens": DEFAULT_MAX_TOKENS}
 
 
 def test_anthropic_lets_the_caller_raise_the_output_cap():
     """This was hardcoded to 1024, so every Anthropic response was silently
-    truncated there no matter what the caller asked for."""
+    truncated there no matter what the caller asked for.
+    """
     kwargs = anthropic_kwargs("claude-haiku-4-5", SamplingParams(max_tokens=4096))
 
     assert kwargs["max_tokens"] == 4096
@@ -237,7 +245,8 @@ def test_sampling_controls_are_dropped_for_models_that_reject_them(caplog):
     """The failure this prevents is indirect and nasty: sending temperature to
     claude-opus-5 is a 400, a 4xx is classified non-retryable, so the router
     would fall straight through to the next provider. Every "smart" request
-    carrying a temperature would quietly be served by the OpenAI fallback."""
+    carrying a temperature would quietly be served by the OpenAI fallback.
+    """
     with caplog.at_level("WARNING", logger="gateway.provider.anthropic"):
         kwargs = anthropic_kwargs("claude-opus-5", SamplingParams(temperature=0.6))
 
@@ -247,7 +256,8 @@ def test_sampling_controls_are_dropped_for_models_that_reject_them(caplog):
 
 def test_dropping_sampling_controls_still_honours_max_tokens_and_stop():
     """Only temperature and top_p were removed on those models; the other two
-    controls still work and shouldn't be collateral damage."""
+    controls still work and shouldn't be collateral damage.
+    """
     kwargs = anthropic_kwargs(
         "claude-opus-5", SamplingParams(temperature=0.6, max_tokens=99, stop=["Z"])
     )
@@ -323,7 +333,8 @@ async def test_ollama_provider_puts_the_controls_on_the_wire(monkeypatch):
 async def test_router_carries_controls_down_the_fallback_chain():
     """A value that reaches the primary but not its fallback would mean a
     request behaves differently depending on which provider happened to be up
-    — the exact class of surprise this gateway exists to remove."""
+    — the exact class of surprise this gateway exists to remove.
+    """
     from app.providers.base import ChatResponse, ProviderError
     from app.routing.circuit_breaker import CircuitBreaker
     from app.routing.fallback import FallbackRouter

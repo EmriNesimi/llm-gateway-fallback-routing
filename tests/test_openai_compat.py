@@ -170,7 +170,8 @@ def test_stream_carries_the_gateway_chain_header(client):
 
 def test_unknown_model_is_rejected_even_in_lenient_mode(client, monkeypatch):
     """/v1/chat substitutes because /v1 can't break. This endpoint has no
-    existing callers, so it doesn't inherit that debt — see decision 009."""
+    existing callers, so it doesn't inherit that debt — see decision 009.
+    """
     monkeypatch.setattr(settings, "strict_model_routing", False)
 
     r = client.post("/v1/chat/completions", json=_body(model="gpt-4o"))
@@ -182,7 +183,8 @@ def test_unknown_model_is_rejected_even_in_lenient_mode(client, monkeypatch):
 def test_unsupported_parameters_are_accepted_but_reported(client, caplog):
     """temperature and top_p used to be listed here. They're forwarded now, so
     what's left is the genuinely OpenAI-specific set the provider adapters
-    have no equivalent for."""
+    have no equivalent for.
+    """
     with caplog.at_level("WARNING", logger="gateway.main"):
         r = client.post("/v1/chat/completions", json=_body(seed=42, presence_penalty=0.5))
 
@@ -284,7 +286,8 @@ def test_streamed_requests_also_report_ignored_parameters(client):
     """The streaming path sets this header on its own StreamingResponse rather
     than on the shared `response` object, so it is a second implementation of
     the same contract — and it was the untested one. A client that sends
-    `seed` and streams would otherwise get no hint it was dropped."""
+    `seed` and streams would otherwise get no hint it was dropped.
+    """
     r = client.post("/v1/chat/completions", json=_body(stream=True, seed=42, presence_penalty=0.5))
 
     assert r.status_code == 200

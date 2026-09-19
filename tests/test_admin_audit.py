@@ -62,7 +62,8 @@ async def test_revoking_a_key_writes_an_audit_row(client, isolated_db):
 @pytest.mark.asyncio
 async def test_the_row_records_which_admin_credential_acted(client, isolated_db):
     """Enough to tell one admin credential from another — and to spot activity
-    from one that should have been rotated — without storing the secret."""
+    from one that should have been rotated — without storing the secret.
+    """
     client.post("/admin/keys", json={"team": "acme"}, headers=ADMIN)
 
     events = await _events(isolated_db, action="issued")
@@ -85,7 +86,8 @@ async def test_the_raw_admin_key_is_never_stored(client, isolated_db):
 @pytest.mark.asyncio
 async def test_the_row_carries_the_request_id(client, isolated_db):
     """So an admin action lines up on the same timeline as the traffic around
-    it, using the same correlation ID as the request audit log."""
+    it, using the same correlation ID as the request audit log.
+    """
     r = client.post("/admin/keys", json={"team": "acme"}, headers=ADMIN)
 
     events = await _events(isolated_db, action="issued")
@@ -96,7 +98,8 @@ async def test_the_row_carries_the_request_id(client, isolated_db):
 @pytest.mark.asyncio
 async def test_a_failed_revocation_writes_nothing(client, isolated_db):
     """A 404 revoked nothing, so recording one would be a lie in the one place
-    you'd go looking for the truth."""
+    you'd go looking for the truth.
+    """
     assert client.delete("/admin/keys/9999", headers=ADMIN).status_code == 404
 
     assert await _events(isolated_db) == []
@@ -105,7 +108,8 @@ async def test_a_failed_revocation_writes_nothing(client, isolated_db):
 @pytest.mark.asyncio
 async def test_the_key_and_its_audit_row_land_together(client, isolated_db):
     """One transaction. A key that exists with no audit row is precisely the
-    gap this closes, so the two must not be able to diverge."""
+    gap this closes, so the two must not be able to diverge.
+    """
     client.post("/admin/keys", json={"team": "acme"}, headers=ADMIN)
 
     async with isolated_db() as s:

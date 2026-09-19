@@ -30,7 +30,8 @@ def test_json_formatter_includes_the_traceback():
     """An unhandled exception is the log line most worth having, and the
     traceback is the only part of it that says where. Without this the JSON
     formatter would emit the message and silently drop the stack — exactly
-    when structured logging is being relied on to find the cause."""
+    when structured logging is being relied on to find the cause.
+    """
     try:
         raise ValueError("the actual cause")
     except ValueError:
@@ -56,7 +57,8 @@ def test_json_formatter_includes_the_traceback():
 @pytest.fixture
 def _restore_root_logger():
     """configure_logging replaces the root handlers outright, which would
-    otherwise leak into every test that runs after these two."""
+    otherwise leak into every test that runs after these two.
+    """
     root = logging.getLogger()
     handlers, level = root.handlers[:], root.level
     yield

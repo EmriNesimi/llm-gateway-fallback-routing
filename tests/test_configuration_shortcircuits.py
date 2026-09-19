@@ -21,7 +21,8 @@ import app.observability.tracing as tracing_module
 def tracing_sandbox(monkeypatch):
     """Keeps the global tracer provider untouched. Really calling
     set_tracer_provider would install this test's provider for the rest of the
-    session, and OpenTelemetry only honours the first one."""
+    session, and OpenTelemetry only honours the first one.
+    """
     installed = []
     exporters = []
 
@@ -69,7 +70,8 @@ def test_tracing_is_configured_when_an_endpoint_is_set(tracing_sandbox, monkeypa
 def test_configuring_tracing_twice_is_a_no_op(tracing_sandbox, monkeypatch):
     """docker-compose and the app both call this, and OpenTelemetry silently
     ignores a second provider — so a double call would leave spans going to
-    the first one while the code believes otherwise."""
+    the first one while the code believes otherwise.
+    """
     installed, _ = tracing_sandbox
     monkeypatch.setattr(
         tracing_module.settings, "otel_exporter_otlp_endpoint", "http://collector:4317"
@@ -136,7 +138,8 @@ async def _noop():
 async def test_a_failing_redis_close_still_disposes_the_database_pool(monkeypatch):
     """The two cleanups ran back to back, so a Redis close that raised skipped
     engine.dispose() entirely. An already-broken Redis connection during a
-    container stop is the ordinary way to reach shutdown, not an edge case."""
+    container stop is the ordinary way to reach shutdown, not an edge case.
+    """
     import app.main as main_module
 
     disposed = []
@@ -158,7 +161,8 @@ async def test_a_failing_redis_close_still_disposes_the_database_pool(monkeypatc
 @pytest.mark.asyncio
 async def test_shutdown_never_raises(monkeypatch):
     """Nothing here should propagate: the process is going away either way, and
-    an exception out of lifespan turns a clean stop into a noisy one."""
+    an exception out of lifespan turns a clean stop into a noisy one.
+    """
     import app.main as main_module
 
     class _Engine:

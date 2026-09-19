@@ -132,7 +132,8 @@ def test_the_ledger_ends_at_exactly_the_cost_of_one_request(client, monkeypatch)
 def test_repeated_cheap_requests_move_the_ledger_forward(client, monkeypatch):
     """The same bug from the other side: many small requests must accumulate,
     not erode. Each one costing less than its reservation is the normal case,
-    not the exception."""
+    not the exception.
+    """
     monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router(out_tokens=10)))
 
     seen = []
@@ -146,7 +147,8 @@ def test_repeated_cheap_requests_move_the_ledger_forward(client, monkeypatch):
 
 def test_the_ceiling_eventually_refuses_with_402(client, monkeypatch):
     """The whole point: spending has to stop, and stop with a status the
-    caller can act on rather than a generic failure."""
+    caller can act on rather than a generic failure.
+    """
     monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router()))
 
     statuses = [
@@ -166,7 +168,8 @@ def test_an_exhausted_provider_stops_being_served_and_the_chain_moves_on(
     """Exhausting one provider must fail over, not halt: the two balances are
     independent, which is the whole reason the ceiling is per-provider. And
     the exhausted one must be dropped *before* the call — refusing afterwards
-    would already have cost money."""
+    would already have cost money.
+    """
     router = Router()
     monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", router))
 
@@ -200,7 +203,8 @@ def test_a_client_that_disconnects_mid_stream_is_still_charged(client, monkeypat
     """The bug that made every cap unreachable. record_spend sat after the
     streaming loop; a disconnect closes the generator, so nothing after the
     loop ran and tokens the provider had already billed for were recorded as
-    $0.00 — forever, and repeatably."""
+    $0.00 — forever, and repeatably.
+    """
     monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router()))
 
     before = client.portal.call(_spent)
@@ -222,7 +226,8 @@ def test_a_completed_stream_is_charged_too(client, monkeypatch):
 
 def test_a_refused_request_does_not_leak_reservation(client, monkeypatch):
     """A reservation that outlives its request permanently shrinks the
-    ceiling, so repeated refusals must not inflate recorded spend."""
+    ceiling, so repeated refusals must not inflate recorded spend.
+    """
     monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router()))
 
     for _ in range(8):
@@ -284,7 +289,8 @@ def test_an_unpriced_provider_is_stepped_over_not_called(client, monkeypatch):
     """A missing pricing entry makes a provider un-costable, so the ceiling
     cannot apply to it and it must not be called. It is dropped from the chain
     exactly like an exhausted one — the next provider still serves the
-    request, because one missing table row should not be an outage."""
+    request, because one missing table row should not be an outage.
+    """
     from app.budget import pricing
 
     original = pricing._PRICING.copy()
@@ -307,7 +313,8 @@ def test_an_unpriced_provider_is_stepped_over_not_called(client, monkeypatch):
 
 def test_a_chain_with_no_priced_provider_is_refused_as_misconfiguration(client, monkeypatch):
     """503, not 402. Money is not the problem and waiting will not fix it —
-    an operator has to add the pricing entry."""
+    an operator has to add the pricing entry.
+    """
     from app.budget import pricing
 
     monkeypatch.setattr(pricing, "_PRICING", {})
@@ -370,7 +377,8 @@ async def test_hanging_up_mid_stream_charges_for_what_was_generated(monkeypatch)
 async def test_the_estimate_is_biased_high_not_low(monkeypatch):
     """Under-charging here is how a ceiling quietly stops being one, so the
     estimate must not round down to nothing. One character streamed still
-    costs something."""
+    costs something.
+    """
     import time
 
     import fakeredis.aioredis
@@ -407,7 +415,8 @@ def test_a_budget_refusal_is_counted(client, monkeypatch):
     """A refused request never reaches REQUEST_COUNT — it raises out of
     _reserve_chain before the handler records anything. So the dashboards
     showed a healthy, quietly idle gateway at exactly the moment it started
-    turning every request away."""
+    turning every request away.
+    """
     monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router()))
 
     before = _refusals("provider_budget_exhausted")
@@ -423,7 +432,8 @@ def test_a_budget_refusal_is_counted(client, monkeypatch):
 
 def test_a_pricing_refusal_is_counted_under_its_own_reason(client, monkeypatch):
     """Separate label, because the two need different responses: one is
-    waiting for budget, the other is an operator adding a table entry."""
+    waiting for budget, the other is an operator adding a table entry.
+    """
     from app.budget import pricing
 
     monkeypatch.setattr(pricing, "_PRICING", {})
@@ -467,7 +477,8 @@ async def test_a_redis_failure_at_settle_does_not_discard_a_paid_response(monkey
 @pytest.mark.asyncio
 async def test_one_failing_settle_does_not_strand_the_others(monkeypatch):
     """The loop used to abandon the rest of the chain on the first failure,
-    leaving their worst-case reservations claimed forever."""
+    leaving their worst-case reservations claimed forever.
+    """
     settled = []
 
     class _FlakyFirst:

@@ -16,7 +16,8 @@ class _FakeRouter:
 @pytest.fixture
 def streaming_client(monkeypatch):
     """A configured key and a stub router. Without the key the endpoint fails
-    closed with a 503 and the test would be asserting headers on a refusal."""
+    closed with a 503 and the test would be asserting headers on a refusal.
+    """
     monkeypatch.setattr(settings, "gateway_api_keys", "test-client-key")
     monkeypatch.setattr(main_module, "build_router", lambda model: ("default", _FakeRouter()))
     with TestClient(app) as client:

@@ -68,7 +68,8 @@ def test_the_placeholder_is_reported_not_silently_dropped(caplog):
 )
 def test_other_placeholder_shapes_are_caught_too(value):
     """Length alone isn't the signal — a long run of x's is a placeholder no
-    matter how many characters follow it."""
+    matter how many characters follow it.
+    """
     assert _settings(anthropic_api_key=value).anthropic_api_key is None
 
 
@@ -92,7 +93,8 @@ def test_real_looking_keys_are_kept():
 
 def test_a_real_key_containing_an_x_is_not_mistaken_for_a_placeholder():
     """Random key material contains x's. Only a *run* of them is the signal —
-    checking for a bare "x" would disable working providers at random."""
+    checking for a bare "x" would disable working providers at random.
+    """
     key = "sk-ant-api03-" + "xA9x" * 24
 
     assert _settings(anthropic_api_key=key).anthropic_api_key == key
@@ -121,7 +123,8 @@ def test_absent_keys_stay_absent(value):
 def test_a_bad_key_does_not_stop_the_process_booting():
     """Deliberately a warning, not a raise: this gateway is designed to run
     with only some providers configured (decision 006), so one bad key should
-    remove that provider from the chain, not take the whole gateway down."""
+    remove that provider from the chain, not take the whole gateway down.
+    """
     settings = _settings(
         anthropic_api_key=EXAMPLE_ANTHROPIC_KEY, openai_api_key=REAL_LOOKING_OPENAI
     )
@@ -138,7 +141,8 @@ def test_a_bad_key_does_not_stop_the_process_booting():
 def test_a_placeholder_key_yields_a_provider_that_fails_fast(monkeypatch):
     """The whole point. A blanked key routes into the missing-key path, so the
     provider is skipped without a network call — instead of being built,
-    called, and 401'ing on every single request."""
+    called, and 401'ing on every single request.
+    """
     from app.core.config import settings as live_settings
 
     monkeypatch.setattr(dependencies, "_PROVIDER_INSTANCES", {})
@@ -153,7 +157,8 @@ def test_a_placeholder_key_yields_a_provider_that_fails_fast(monkeypatch):
 async def test_that_provider_fails_non_retryably():
     """Non-retryable matters: a retryable failure would burn the retry budget
     and its backoff before falling back, adding latency to every request
-    against a provider that can never succeed."""
+    against a provider that can never succeed.
+    """
     from app.providers.base import ProviderError
 
     provider = UnconfiguredProvider("anthropic")

@@ -111,7 +111,8 @@ async def test_stream_raises_when_all_providers_fail_before_first_chunk():
 
 class _NonRetryableProvider(BaseProvider):
     """Fails before the first chunk with a failure worth no retries — a 4xx
-    shape: bad request, unknown model, invalid key."""
+    shape: bad request, unknown model, invalid key.
+    """
 
     name = "nonretryable"
 
@@ -191,7 +192,8 @@ async def test_streaming_every_breaker_open_attempts_nothing(caplog):
 async def test_a_non_retryable_stream_failure_falls_back_without_retrying():
     """retry_attempts is 2 here. A retryable failure would burn both against
     the same provider first; a non-retryable one must not, because a 4xx fails
-    identically every time and the retries are pure added latency."""
+    identically every time and the retries are pure added latency.
+    """
     doomed = _NonRetryableProvider()
     spare = FakeStreamProvider("spare")
     router = FallbackRouter(
@@ -250,7 +252,8 @@ async def test_a_provider_that_streams_nothing_falls_back():
 @pytest.mark.asyncio
 async def test_every_provider_streaming_nothing_is_an_error_not_an_empty_reply():
     """The end of that logic: if the whole chain produces no chunks, the
-    caller must get a failure rather than a successful blank."""
+    caller must get a failure rather than a successful blank.
+    """
     a, b = _EmptyStreamProvider(), _EmptyStreamProvider()
     router = FallbackRouter(
         chain=[(a, "model-a", _breaker()), (b, "model-b", _breaker())],

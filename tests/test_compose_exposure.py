@@ -58,7 +58,8 @@ def test_the_gateway_container_cannot_escalate_privileges():
     """The image already runs as an unprivileged uid; this is what stops a
     compromise climbing back out of it. Both lines look like boilerplate and
     delete cleanly, and nothing about the running stack would look different
-    afterwards."""
+    afterwards.
+    """
     service = _gateway_service()
 
     assert "no-new-privileges:true" in service, (

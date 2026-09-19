@@ -57,7 +57,8 @@ async def test_settle_swallows_redis_failures_after_a_paid_response(monkeypatch)
 @pytest.mark.asyncio
 async def test_reserve_admits_only_up_to_the_cap_under_concurrency():
     """The race in issue #15. Twenty simultaneous requests from one key used
-    to all read the same pre-call total of $0 and all be admitted."""
+    to all read the same pre-call total of $0 and all be admitted.
+    """
     redis = fakeredis.aioredis.FakeRedis()
     tracker = BudgetTracker(redis=redis, monthly_cap_usd=1.0)
 
@@ -78,7 +79,8 @@ async def test_reserve_admits_only_up_to_the_cap_under_concurrency():
 @pytest.mark.asyncio
 async def test_refused_reservation_is_handed_straight_back():
     """A refusal must not consume the headroom it was denied, or repeated
-    refusals would drain a budget no request ever spent."""
+    refusals would drain a budget no request ever spent.
+    """
     redis = fakeredis.aioredis.FakeRedis()
     tracker = BudgetTracker(redis=redis, monthly_cap_usd=1.0)
 
@@ -117,7 +119,8 @@ async def test_settling_a_failed_request_refunds_the_whole_reservation():
 @pytest.mark.asyncio
 async def test_settle_without_a_reservation_charges_the_full_cost():
     """Free chains and post-abort estimates reach settle having reserved
-    nothing. The cost still has to land on the ledger."""
+    nothing. The cost still has to land on the ledger.
+    """
     redis = fakeredis.aioredis.FakeRedis()
     tracker = BudgetTracker(redis=redis, monthly_cap_usd=1.0)
 
@@ -129,7 +132,8 @@ async def test_settle_without_a_reservation_charges_the_full_cost():
 @pytest.mark.asyncio
 async def test_reserve_keeps_the_monthly_expiry():
     """incrbyfloat on a missing key creates it without a TTL. Losing the
-    expiry would turn the monthly budget into a lifetime one."""
+    expiry would turn the monthly budget into a lifetime one.
+    """
     redis = fakeredis.aioredis.FakeRedis()
     tracker = BudgetTracker(redis=redis, monthly_cap_usd=1.0)
 
@@ -142,7 +146,8 @@ async def test_reserve_keeps_the_monthly_expiry():
 @pytest.mark.asyncio
 async def test_settle_swallows_redis_failures(monkeypatch):
     """settle runs after a provider has
-    already answered and billed."""
+    already answered and billed.
+    """
     redis = fakeredis.aioredis.FakeRedis()
     tracker = BudgetTracker(redis=redis, monthly_cap_usd=1.0)
     monkeypatch.setattr(redis, "pipeline", _BrokenPipeline)
@@ -153,7 +158,8 @@ async def test_settle_swallows_redis_failures(monkeypatch):
 @pytest.mark.asyncio
 async def test_reserve_does_not_swallow_redis_failures(monkeypatch):
     """Unlike settle. Reserve runs *before* the provider call, so being
-    unable to prove there is budget left must refuse, not admit."""
+    unable to prove there is budget left must refuse, not admit.
+    """
     redis = fakeredis.aioredis.FakeRedis()
     tracker = BudgetTracker(redis=redis, monthly_cap_usd=1.0)
     monkeypatch.setattr(redis, "pipeline", _BrokenPipeline)
@@ -165,7 +171,8 @@ async def test_reserve_does_not_swallow_redis_failures(monkeypatch):
 @pytest.mark.asyncio
 async def test_reserving_nothing_touches_nothing():
     """A chain of only free providers reserves $0. That has to be a no-op
-    rather than a round-trip that creates the key."""
+    rather than a round-trip that creates the key.
+    """
     redis = fakeredis.aioredis.FakeRedis()
     tracker = BudgetTracker(redis=redis, monthly_cap_usd=1.0)
 

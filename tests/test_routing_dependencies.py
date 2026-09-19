@@ -47,7 +47,8 @@ def test_anthropic_also_gets_a_real_client_when_configured(monkeypatch):
     construction path that is written out per provider rather than shared.
     A copy-paste slip here — the wrong key, the wrong timeout setting — builds
     a client that fails on every call, and the router treats that as the
-    provider being down and quietly falls through to the next one."""
+    provider being down and quietly falls through to the next one.
+    """
     monkeypatch.setattr(settings, "anthropic_api_key", "sk-ant-test-key")
 
     provider = dependencies._get_provider("anthropic")
@@ -68,7 +69,8 @@ def test_an_unknown_provider_name_fails_loudly():
     """Reached only if app/routing/model_map.py names a provider this factory
     doesn't build. Raising beats returning None, which would surface much
     later as an AttributeError inside the router with nothing pointing back
-    to the typo in the chain definition."""
+    to the typo in the chain definition.
+    """
     with pytest.raises(ValueError, match="unknown provider: gemini"):
         dependencies._get_provider("gemini")
 

@@ -67,7 +67,8 @@ def test_a_500_is_counted():
 
 def test_a_404_is_not_counted_as_a_failure():
     """Only unhandled exceptions. A missing route is a client mistake, and
-    counting it would make the metric fire on ordinary scanning traffic."""
+    counting it would make the metric fire on ordinary scanning traffic.
+    """
     from prometheus_client import REGISTRY
 
     def _count() -> float:

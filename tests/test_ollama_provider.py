@@ -115,7 +115,8 @@ async def test_blank_lines_in_the_stream_are_skipped(monkeypatch):
     """Ollama's NDJSON stream carries empty lines as keep-alives and around
     chunk boundaries. json.loads("") raises, so without the skip a healthy
     stream would surface as a ProviderError and fall back to a paid provider —
-    turning a free local response into a billed one."""
+    turning a free local response into a billed one.
+    """
     provider = OllamaProvider(base_url="http://localhost:11434")
 
     def fake_stream(self, method, url, json):
@@ -164,7 +165,8 @@ def test_every_sampling_field_reaches_ollama():
 def test_unset_sampling_fields_are_omitted_entirely():
     """None means "don't send it", not "send our default" — sending an
     explicit value would override the model's own default for every caller
-    who never asked."""
+    who never asked.
+    """
     assert _sampling_payload(SamplingParams(temperature=0.5)) == {
         "options": {"temperature": 0.5}
     }
@@ -179,7 +181,8 @@ def test_unset_sampling_fields_are_omitted_entirely():
 
 def test_http_status_errors_are_classified_by_status_code():
     """A 400 fails identically on every retry; a 503 might not. Getting this
-    wrong either burns retries for nothing or gives up on a blip."""
+    wrong either burns retries for nothing or gives up on a blip.
+    """
     request = httpx.Request("POST", "http://localhost:11434/api/chat")
 
     bad_request = httpx.HTTPStatusError(
@@ -196,7 +199,8 @@ def test_http_status_errors_are_classified_by_status_code():
 def test_transport_errors_are_retryable():
     """No response means no status to judge by. A connection refused or a
     timeout is the transient case retrying exists for, so it defaults to
-    retryable rather than being treated as a hard failure."""
+    retryable rather than being treated as a hard failure.
+    """
     exc = httpx.ConnectError("connection refused")
 
     assert _provider_error("ollama", exc).retryable is True
@@ -232,7 +236,8 @@ async def test_chat_turns_a_connection_failure_into_a_provider_error(monkeypatch
 async def test_chat_stream_turns_a_connection_failure_into_a_provider_error(monkeypatch):
     """The streaming path has its own try/except and its own message prefix,
     so it needs its own test — a stream that raised httpx straight through
-    would surface as a 500 mid-response rather than a fallback."""
+    would surface as a 500 mid-response rather than a fallback.
+    """
     provider = OllamaProvider(base_url="http://localhost:11434")
 
     def fake_stream(self, method, url, json):

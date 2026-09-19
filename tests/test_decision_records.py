@@ -67,7 +67,8 @@ def test_every_index_row_points_at_a_real_file():
 def test_decision_numbers_are_contiguous():
     """A gap means a record was deleted rather than superseded. Decisions are
     a history — the reasoning that was later overturned is the part worth
-    keeping, so the fix is a new record saying so, not a removed one."""
+    keeping, so the fix is a new record saying so, not a removed one.
+    """
     numbers = sorted(int(n) for n in _record_files())
 
     assert numbers == list(range(1, len(numbers) + 1)), (
@@ -105,7 +106,8 @@ def test_every_cited_decision_exists():
 def test_every_decision_link_resolves_to_a_file():
     """The markdown links are separate from the bare citations above and can
     rot on their own — a renamed record leaves a link that looks live and
-    404s."""
+    404s.
+    """
     numbers = _record_files()
     broken = []
     for path in _citing_files():

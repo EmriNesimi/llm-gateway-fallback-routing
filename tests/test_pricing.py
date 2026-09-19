@@ -89,7 +89,8 @@ def test_an_unpriced_model_cannot_be_reserved_for(caplog):
 def test_ollama_costs_nothing_without_complaint(caplog):
     """Ollama bills nothing, so "no price" is correct rather than missing. It
     must not raise, or the free fallback that exists for when the paid
-    providers are gone would be the first thing to break."""
+    providers are gone would be the first thing to break.
+    """
     with caplog.at_level(logging.WARNING):
         cost = worst_case_cost_usd("ollama", "llama3", 10_000, 2048)
 

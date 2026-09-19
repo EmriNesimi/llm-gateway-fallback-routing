@@ -124,7 +124,8 @@ async def test_streaming_hoists_the_system_prompt_out_of_messages(monkeypatch):
 async def test_streaming_without_a_system_prompt_sends_no_system_key(monkeypatch):
     """Absent rather than empty: an explicit empty system prompt is not the
     same thing as none, and sending one would override the model default for
-    every caller who never asked."""
+    every caller who never asked.
+    """
     provider = AnthropicProvider(api_key="test")
     captured = {}
 
@@ -187,7 +188,8 @@ async def test_only_text_blocks_are_concatenated_into_the_reply(monkeypatch):
 @pytest.mark.asyncio
 async def test_the_model_reported_is_the_one_anthropic_echoed(monkeypatch):
     """Anthropic answers with a dated snapshot id. Reporting the requested
-    name instead would make the audit log claim a model that never ran."""
+    name instead would make the audit log claim a model that never ran.
+    """
     provider = AnthropicProvider(api_key="test")
 
     async def fake_create(**kwargs):

@@ -60,7 +60,8 @@ def test_unknown_model_resolves_to_the_default_chain():
 
 def test_chains_are_distinguishable():
     """A tier that resolves to the same providers as another tier is a name
-    with no routing consequence — the bug this whole step exists to fix."""
+    with no routing consequence — the bug this whole step exists to fix.
+    """
     assert model_map.FALLBACK_CHAINS["smart"] != model_map.FALLBACK_CHAINS["default"]
     assert model_map.FALLBACK_CHAINS["local"] != model_map.FALLBACK_CHAINS["default"]
 
@@ -112,7 +113,8 @@ def test_build_router_reports_default_for_an_unknown_model():
 def test_every_chain_model_is_priced_or_free():
     """Overlaps tests/test_pricing.py deliberately — that one guards the
     invariant in general, this one states it per chain so a failure names the
-    tier an operator would have to stop trusting the budget for."""
+    tier an operator would have to stop trusting the budget for.
+    """
     for name, chain in model_map.FALLBACK_CHAINS.items():
         for provider, model in chain:
             if provider == "ollama":
@@ -216,7 +218,8 @@ def test_strict_mode_rejects_an_unknown_model_on_the_streaming_endpoint(
 
 def test_lenient_mode_is_the_default():
     """The whole reason /v1 doesn't need a version bump: a request that used
-    to return 200 still does, on a stock configuration."""
+    to return 200 still does, on a stock configuration.
+    """
     from app.core.config import Settings
 
     assert Settings(_env_file=None).strict_model_routing is False  # type: ignore[call-arg]
@@ -248,7 +251,8 @@ def test_billable_providers_are_derived_from_the_chains():
     """The spend snapshot in a refusal names these. It used to be the literal
     ("openai", "anthropic"), so a third paid provider would have been missing
     from every "here is what you have spent" message — the one place an
-    operator looks when the gateway says it is out of budget."""
+    operator looks when the gateway says it is out of budget.
+    """
     from app.budget.provider_budget import FREE_PROVIDERS
     from app.routing.model_map import FALLBACK_CHAINS, billable_providers
 

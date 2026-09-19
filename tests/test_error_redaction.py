@@ -64,7 +64,8 @@ def test_502_body_carries_no_upstream_detail(client):
 
 def test_502_still_gives_the_caller_a_request_id(client):
     """Redaction mustn't make failures unsupportable — the ID is what turns
-    an "it broke" report into the exact server-side log line."""
+    an "it broke" report into the exact server-side log line.
+    """
     r = client.post("/v1/chat", json=BODY, headers=HEADERS)
 
     assert r.json()["detail"]["request_id"]
@@ -90,7 +91,8 @@ def test_openai_stream_error_carries_no_upstream_detail(client):
 
 def test_the_detail_is_still_logged(client, caplog):
     """Redacted from the response, not thrown away — an operator still needs
-    to know which provider failed and why."""
+    to know which provider failed and why.
+    """
     with caplog.at_level("ERROR", logger="gateway.main"):
         client.post("/v1/chat", json=BODY, headers=HEADERS)
 
@@ -100,7 +102,8 @@ def test_the_detail_is_still_logged(client, caplog):
 def test_readyz_reports_which_dependency_failed_but_not_why(isolated_db, monkeypatch):
     """Unauthenticated, so the exception text was free reconnaissance: hosts,
     ports, driver versions and failure modes for the backends that hold the
-    spend counters."""
+    spend counters.
+    """
     monkeypatch.setattr(
         main_module, "get_redis", lambda: Redis.from_url("redis://localhost:1")
     )

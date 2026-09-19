@@ -87,7 +87,8 @@ def test_a_served_request_advances_the_key_ledger(client, monkeypatch):
 def test_the_key_ledger_settles_to_exactly_the_cost_of_one_request(client, monkeypatch):
     """Not the reservation, and not double. The reservation is the whole
     chain's worst case; what must remain afterwards is the real cost of the
-    one hop that answered."""
+    one hop that answered.
+    """
     monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router(out_tokens=40)))
 
     assert client.post("/v1/chat", json=BODY, headers=HEADERS).status_code == 200
@@ -100,7 +101,8 @@ def test_the_key_ledger_settles_to_exactly_the_cost_of_one_request(client, monke
 def test_repeated_requests_accumulate_on_the_key_ledger(client, monkeypatch):
     """Each request costing less than its reservation is the normal case. If
     the refund outran the charge the ledger would erode and the cap would
-    never be reached."""
+    never be reached.
+    """
     monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router(out_tokens=10)))
 
     seen = []
@@ -131,7 +133,8 @@ def test_the_key_cap_refuses_with_402_once_reached(client, monkeypatch):
 
 def test_a_refused_request_never_reaches_a_provider(client, monkeypatch):
     """A 402 that still called the provider would have spent the money it was
-    refusing to spend."""
+    refusing to spend.
+    """
     router = Router(out_tokens=100_000)
     monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", router))
 
@@ -146,7 +149,8 @@ def test_a_refused_request_never_reaches_a_provider(client, monkeypatch):
 def test_a_refusal_does_not_consume_the_headroom_it_was_denied(client, monkeypatch):
     """The reservation of a refused request has to be handed straight back.
     Otherwise repeated refusals drain a budget no request ever spent — and the
-    caller could never recover even after the month rolled over."""
+    caller could never recover even after the month rolled over.
+    """
     monkeypatch.setattr(
         main_module, "build_router", lambda m: ("smart", Router(out_tokens=100_000))
     )
@@ -269,7 +273,8 @@ def test_a_provider_listed_twice_in_a_chain_is_fully_refunded(client, monkeypatc
     (provider, model) pairs — nothing stops the same provider appearing twice
     on different models. Both hops reserve against the one Redis key, so a
     dict that remembered only the last cost would refund less than was
-    claimed and strand the difference on the ceiling forever."""
+    claimed and strand the difference on the ceiling forever.
+    """
     from app.routing.model_map import FALLBACK_CHAINS
 
     doubled = [("anthropic", "claude-opus-5"), ("anthropic", "claude-haiku-4-5")]

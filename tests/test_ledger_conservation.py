@@ -49,7 +49,8 @@ SMART_CHAIN = [("anthropic", "claude-opus-5"), ("openai", "gpt-4o")]
 
 class Router:
     """Serves, fails outright, or dies mid-stream — the three shapes a request
-    can end in, all of which have to settle."""
+    can end in, all of which have to settle.
+    """
 
     def __init__(self, mode="ok", out_tokens=40):
         self.mode, self._out = mode, out_tokens
@@ -195,7 +196,8 @@ def test_every_outcome_leaves_both_ledgers_consistent(client, monkeypatch, mode,
 def test_mixed_traffic_does_not_drift(client, monkeypatch):
     """The cumulative version. A per-request error small enough to hide inside
     one request's rounding still compounds over thirty of them, and the ledger
-    that matters here is lifetime — it never resets to wash the drift out."""
+    that matters here is lifetime — it never resets to wash the drift out.
+    """
     before = client.portal.call(_ledgers)
     expected = 0.0
 

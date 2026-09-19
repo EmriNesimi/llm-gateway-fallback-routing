@@ -62,7 +62,8 @@ def _matches(value: str, default, annotation) -> bool:
 
 def test_every_documented_key_is_a_real_setting():
     """Guards the guard: a key renamed in the code but not here would
-    otherwise be silently skipped rather than reported."""
+    otherwise be silently skipped rather than reported.
+    """
     fields = set(Settings.model_fields)
     unknown = sorted(
         key
@@ -133,7 +134,8 @@ def test_compose_variables_are_documented():
 def test_the_compose_only_exclusion_list_is_accurate():
     """_COMPOSE_ONLY above skips the default comparison for compose variables.
     If it drifts from what the compose file actually uses, it either skips a
-    real setting (hiding drift) or names one that no longer exists."""
+    real setting (hiding drift) or names one that no longer exists.
+    """
     assert _COMPOSE_ONLY == _compose_variables() - set(Settings.model_fields), (
         f"_COMPOSE_ONLY is {sorted(_COMPOSE_ONLY)} but the compose file"
         f" substitutes {sorted(_compose_variables())}"

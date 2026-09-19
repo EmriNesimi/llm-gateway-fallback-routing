@@ -76,7 +76,8 @@ def test_success_resets_failure_count_and_closes():
 
 def test_the_default_clock_is_wall_time():
     """The injected clock is a testing seam, not a behaviour change. Nothing
-    else here would notice if the default stopped being the real clock."""
+    else here would notice if the default stopped being the real clock.
+    """
     breaker = CircuitBreaker(failure_threshold=1, cooldown_seconds=COOLDOWN)
     before = time.time()
 
@@ -141,7 +142,8 @@ def test_half_open_admits_exactly_one_trial(breaker, clock):
 
 def test_the_trial_claim_is_held_for_a_full_cooldown(breaker, clock):
     """Not merely "for a moment". The claim expiring early would readmit the
-    herd it exists to hold back, at a provider still assumed broken."""
+    herd it exists to hold back, at a provider still assumed broken.
+    """
     breaker.record_failure()
     clock.advance(COOLDOWN)
     assert breaker.allow_request() is True
@@ -154,7 +156,8 @@ def test_the_trial_claim_is_held_for_a_full_cooldown(breaker, clock):
 def test_a_trial_that_never_reports_back_does_not_wedge_the_breaker(breaker, clock):
     """The claim is timestamped, not a bare flag. If the caller that took the
     trial dies without recording success or failure, the breaker must not stay
-    shut forever — after another cooldown the next request may try."""
+    shut forever — after another cooldown the next request may try.
+    """
     breaker.record_failure()
     clock.advance(COOLDOWN)
 

@@ -52,7 +52,8 @@ def test_redis_writes_its_data_to_disk():
 def test_redis_has_somewhere_to_write_it():
     """appendonly without a volume is worse than useless: it writes to the
     container's own filesystem, which is discarded with the container. It
-    would look configured and behave exactly as before."""
+    would look configured and behave exactly as before.
+    """
     service = _redis_service()
 
     assert re.search(r"volumes:\s*\n\s*-\s*redis-data:/data", service), (
@@ -68,7 +69,8 @@ def test_redis_is_told_never_to_evict():
     """noeviction is the default only while maxmemory is unset. Adding a
     memory limit is an ordinary thing to do to something that looks like a
     cache, and from that moment the policy decides which keys survive — with
-    no way to tell a disposable rate-limit bucket from the spend ledger."""
+    no way to tell a disposable rate-limit bucket from the spend ledger.
+    """
     service = _redis_service()
 
     assert _redis_flag(service, "--maxmemory-policy") == "noeviction", (
@@ -80,7 +82,8 @@ def test_redis_is_told_never_to_evict():
 def test_redis_fsyncs_every_write():
     """The default (everysec) loses up to a second of writes on a host
     failure. Those writes are reservations and settlements, so the ledger
-    returns understating spend — and the shortfall becomes headroom."""
+    returns understating spend — and the shortfall becomes headroom.
+    """
     service = _redis_service()
 
     assert _redis_flag(service, "--appendfsync") == "always", (

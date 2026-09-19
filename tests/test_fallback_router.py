@@ -28,7 +28,8 @@ class DatedSnapshotProvider(BaseProvider):
     """Simulates a provider that echoes back a dated snapshot instead of the
     requested model (e.g. OpenAI returning "gpt-4o-mini-2024-07-18" for a
     "gpt-4o-mini" request) — this broke cost lookups until the router was
-    fixed to bill against the requested model, not the echoed one."""
+    fixed to bill against the requested model, not the echoed one.
+    """
 
     name = "dated"
 
@@ -97,7 +98,8 @@ async def test_raises_when_all_providers_exhausted():
 class NonRetryableProvider(BaseProvider):
     """Simulates a provider rejecting the request outright (e.g. a 400 for
     an invalid model) — every call fails identically, so retrying is pure
-    waste. Tracks call count to prove the router doesn't burn retries here."""
+    waste. Tracks call count to prove the router doesn't burn retries here.
+    """
 
     name = "non_retryable"
 
@@ -173,7 +175,8 @@ async def test_result_model_is_requested_model_not_providers_echo():
 @pytest.mark.asyncio
 async def test_a_provider_out_of_budget_is_never_called():
     """Not "is called and refused" — never called. A half-open trial request
-    is still billable, so the budget check sits ahead of the breaker."""
+    is still billable, so the budget check sits ahead of the breaker.
+    """
     broke = FakeProvider("broke")
     spare = FakeProvider("spare")
     router = FallbackRouter(
@@ -213,7 +216,8 @@ async def test_a_provider_with_an_open_breaker_is_skipped():
 async def test_every_breaker_open_fails_without_calling_anyone(caplog):
     """Distinct from "everything was tried and failed": nothing was attempted
     at all. The log line says so, because the two are indistinguishable from
-    the 502 alone and lead to completely different investigations."""
+    the 502 alone and lead to completely different investigations.
+    """
     import logging
 
     tripped = CircuitBreaker(failure_threshold=1, cooldown_seconds=60)

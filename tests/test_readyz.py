@@ -72,7 +72,8 @@ def test_readyz_reports_ok_when_both_dependencies_answer(isolated_db, monkeypatc
     """The healthy path of the real checks. The concurrency test above
     replaces both of them with stubs, and the failure test only exercises the
     unhappy half — so the code that decides "this instance can serve traffic"
-    was never actually run."""
+    was never actually run.
+    """
 
     class _LiveRedis:
         async def ping(self):

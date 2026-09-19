@@ -82,7 +82,8 @@ async def test_openai_stream_yields_content_then_a_final_usage_chunk(monkeypatch
 async def test_openai_stream_skips_empty_deltas(monkeypatch):
     """OpenAI sends a role-only opening delta and keep-alive frames carrying no
     content. Forwarding those would make the router treat an empty frame as the
-    committing first chunk."""
+    committing first chunk.
+    """
     provider, _ = _openai_provider(
         monkeypatch,
         [_openai_delta(None), _openai_delta(""), _openai_delta("real"), _openai_usage(1, 1)],
@@ -97,7 +98,8 @@ async def test_openai_stream_skips_empty_deltas(monkeypatch):
 async def test_openai_stream_requests_usage(monkeypatch):
     """Without stream_options include_usage no usage frame ever arrives, cost
     is recorded as $0.00, and the budget silently stops counting streamed
-    requests."""
+    requests.
+    """
     provider, create = _openai_provider(monkeypatch, [_openai_usage(1, 1)])
 
     [c async for c in provider.chat_stream("gpt-4o-mini", MESSAGES)]
@@ -109,7 +111,8 @@ async def test_openai_stream_requests_usage(monkeypatch):
 @pytest.mark.asyncio
 async def test_openai_stream_failure_becomes_a_provider_error(monkeypatch):
     """It has to be ProviderError specifically — that's what FallbackRouter
-    catches. Anything else escapes the chain and surfaces as a raw 500."""
+    catches. Anything else escapes the chain and surfaces as a raw 500.
+    """
     import httpx
     from openai import APIStatusError
 
@@ -184,7 +187,8 @@ async def test_anthropic_stream_yields_text_then_a_final_usage_chunk(monkeypatch
 @pytest.mark.asyncio
 async def test_anthropic_stream_still_reports_usage_for_an_empty_response(monkeypatch):
     """A response with no text still costs input tokens. Skipping the final
-    chunk would mean the request is served and never billed."""
+    chunk would mean the request is served and never billed.
+    """
     provider = _anthropic_provider(
         monkeypatch, texts=[], usage=SimpleNamespace(input_tokens=7, output_tokens=0)
     )

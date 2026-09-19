@@ -56,7 +56,8 @@ import app.main  # noqa: E402, F401
 async def test_isolated_db_patches_every_by_name_importer(isolated_db):
     """`isolated_db` is autouse, so this test is already inside one. Walk
     each importer and check the name it holds is the fixture's fake, not the
-    real factory."""
+    real factory.
+    """
     import importlib
 
     from app.db import session as real

@@ -59,7 +59,8 @@ async def test_reset_ledger_reads_as_ledger_low(monkeypatch, capsys):
 @pytest.mark.asyncio
 async def test_float_drift_is_not_a_gap(monkeypatch):
     """46 real requests left the stores $0.000002 apart. That is rounding on
-    the Redis side, not a lost request, and must not page anyone."""
+    the Redis side, not a lost request, and must not page anyone.
+    """
     monkeypatch.setattr("scripts.reconcile.billable_providers", lambda: PROVIDERS)
     await budget_dependency.provider_budget.record_unreserved("openai", 0.000273)
     await _audit("openai", 0.000270)

@@ -27,7 +27,8 @@ def test_x_api_key_header_is_used_when_present():
 def test_x_api_key_wins_over_authorization():
     """Not arbitrary — checking the more specific header first means a client
     that sets both gets deterministic behavior rather than order-of-evaluation
-    luck."""
+    luck.
+    """
     assert _extract_key("Bearer from-bearer", "from-header") == "from-header"
 
 
@@ -107,7 +108,8 @@ async def test_wrong_key_is_rejected_with_401_when_keys_are_configured(
 @pytest.mark.asyncio
 async def test_admin_issued_key_in_the_database_is_accepted(monkeypatch, isolated_db):
     """The migration path: an operator starts with GATEWAY_API_KEYS and moves
-    to admin-issued keys without a flag day, so both sources must work."""
+    to admin-issued keys without a flag day, so both sources must work.
+    """
     monkeypatch.setattr(settings, "gateway_api_keys", "env-key")
 
     async with isolated_db() as session:
@@ -123,7 +125,8 @@ async def test_admin_issued_key_in_the_database_is_accepted(monkeypatch, isolate
 @pytest.mark.asyncio
 async def test_revoked_database_key_is_rejected(monkeypatch, isolated_db):
     """Revocation has to take effect immediately — a revoked key that still
-    authenticates is the whole feature failing silently."""
+    authenticates is the whole feature failing silently.
+    """
     monkeypatch.setattr(settings, "gateway_api_keys", "env-key")
 
     async with isolated_db() as session:
@@ -141,7 +144,8 @@ async def test_fails_closed_with_503_when_nothing_is_configured(monkeypatch, iso
     """No env keys and no matching database key means auth isn't set up. The
     endpoint refuses rather than serving openly, and a 503 says
     "misconfigured", which is the truth, where a 401 would say "your key is
-    wrong"."""
+    wrong".
+    """
     monkeypatch.setattr(settings, "gateway_api_keys", "")
 
     async with isolated_db() as session:
@@ -156,7 +160,8 @@ async def test_fails_closed_with_503_when_nothing_is_configured(monkeypatch, iso
 async def test_database_key_works_even_with_no_env_keys_configured(monkeypatch, isolated_db):
     """The fail-closed 503 must not fire when the admin API is the only key
     source — otherwise migrating off GATEWAY_API_KEYS would break the
-    gateway."""
+    gateway.
+    """
     monkeypatch.setattr(settings, "gateway_api_keys", "")
 
     async with isolated_db() as session:

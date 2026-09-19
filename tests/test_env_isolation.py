@@ -16,7 +16,8 @@ from app.core import config
 
 def _settings_env_var_names() -> set[str]:
     """The env var each Settings field reads. No env_prefix is configured, so
-    pydantic-settings maps a field to its own name, upper-cased."""
+    pydantic-settings maps a field to its own name, upper-cased.
+    """
     return {name.upper() for name in config.Settings.model_fields}
 
 

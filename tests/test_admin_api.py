@@ -137,7 +137,8 @@ def test_list_keys_offset_paginates_past_limit(isolated_db):
 
 def test_issuing_a_key_returns_its_id_so_it_can_be_revoked(isolated_db):
     """The caller that just minted a key is exactly who needs to revoke it,
-    and without the id that meant listing every key and matching on team."""
+    and without the id that meant listing every key and matching on team.
+    """
     admin = {"X-Admin-Key": "test-admin-secret"}
     with TestClient(app) as client:
         created = client.post("/admin/keys", json={"team": "t"}, headers=admin).json()

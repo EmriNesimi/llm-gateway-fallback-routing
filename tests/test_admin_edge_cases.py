@@ -38,7 +38,8 @@ def test_fetching_a_missing_key_is_a_404(client):
 
 def test_revoking_a_missing_key_is_a_404(client):
     """A revoke that silently succeeded against a nonexistent id would let an
-    operator believe they'd cut off access when they hadn't."""
+    operator believe they'd cut off access when they hadn't.
+    """
     r = client.delete("/admin/keys/99999", headers=HEADERS)
 
     assert r.status_code == 404
@@ -84,7 +85,8 @@ async def test_offset_walks_past_the_first_page(client, isolated_db):
 @pytest.mark.asyncio
 async def test_audit_log_filters_by_request_id(client, isolated_db):
     """The support path: someone reports a failure and quotes the X-Request-ID
-    off their response, and this is what turns that into a row."""
+    off their response, and this is what turns that into a row.
+    """
     async with isolated_db() as session:
         for rid, team in [("req-a", "acme"), ("req-b", "globex")]:
             session.add(

@@ -14,7 +14,8 @@ def test_healthz():
 def test_root_points_at_the_docs():
     """The only unauthenticated, undocumented endpoint, and the first URL
     anyone opens after starting the stack. It had no test at all, so a rename
-    of /docs would leave the landing page pointing somewhere that 404s."""
+    of /docs would leave the landing page pointing somewhere that 404s.
+    """
     r = client.get("/")
 
     assert r.status_code == 200

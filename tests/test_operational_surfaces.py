@@ -32,7 +32,8 @@ def client(monkeypatch, isolated_db):
 
 def test_metrics_is_open_when_no_token_is_configured(client, monkeypatch):
     """The default suits a loopback-bound dev stack; docker-compose.yml binds
-    every port to 127.0.0.1 precisely so this default is safe there."""
+    every port to 127.0.0.1 precisely so this default is safe there.
+    """
     monkeypatch.setattr(settings, "metrics_token", None)
 
     assert client.get("/metrics").status_code == 200
@@ -52,7 +53,8 @@ def test_prometheus_can_authenticate_with_a_bearer_token(client, monkeypatch):
     """The scraper this gate exists for. Prometheus scrape configs can send
     Authorization: Bearer natively and have no generic custom-header field, so
     a gate that only read X-Metrics-Token would be one the intended client
-    physically could not satisfy — it would just show the target as down."""
+    physically could not satisfy — it would just show the target as down.
+    """
     monkeypatch.setattr(settings, "metrics_token", "scrape-me")
 
     ok = client.get("/metrics", headers={"Authorization": "Bearer scrape-me"})
@@ -64,7 +66,8 @@ def test_prometheus_can_authenticate_with_a_bearer_token(client, monkeypatch):
 
 def test_a_rejected_scrape_leaks_no_spend_figures(client, monkeypatch):
     """The reason to gate it at all: these metrics say exactly how much has
-    been spent and on what."""
+    been spent and on what.
+    """
     monkeypatch.setattr(settings, "metrics_token", "scrape-me")
 
     r = client.get("/metrics")
@@ -74,7 +77,8 @@ def test_a_rejected_scrape_leaks_no_spend_figures(client, monkeypatch):
 
 def test_the_scrape_token_is_not_a_gateway_key(client, monkeypatch):
     """A scraper shouldn't hold a credential that can spend money, so a valid
-    client key must not open /metrics."""
+    client key must not open /metrics.
+    """
     monkeypatch.setattr(settings, "metrics_token", "scrape-me")
     monkeypatch.setattr(settings, "gateway_api_keys", "a-real-client-key")
 
@@ -90,7 +94,8 @@ def test_the_scrape_token_is_not_a_gateway_key(client, monkeypatch):
 
 def test_admin_api_is_rate_limited(client, monkeypatch):
     """It mints and revokes client keys, and was the one surface with no limit
-    — X-Admin-Key was guessable at unlimited rate."""
+    — X-Admin-Key was guessable at unlimited rate.
+    """
     monkeypatch.setattr(settings, "rate_limit_capacity", 3)
 
     statuses = [client.get("/admin/keys", headers=ADMIN).status_code for _ in range(25)]
@@ -100,7 +105,8 @@ def test_admin_api_is_rate_limited(client, monkeypatch):
 
 def test_a_wrong_admin_key_is_also_rate_limited(client, monkeypatch):
     """Guesses have to consume the bucket too. A limiter that only counts
-    successfully authenticated calls is no defence against brute force."""
+    successfully authenticated calls is no defence against brute force.
+    """
     monkeypatch.setattr(settings, "rate_limit_capacity", 3)
 
     statuses = [
@@ -151,7 +157,8 @@ def test_system_messages_are_hoisted_out_of_the_conversation():
     """Anthropic takes a system prompt as a top-level parameter and rejects it
     inside messages[] with a 400 — which, being non-retryable, made the router
     fall past Anthropic entirely. Any request with a system prompt silently
-    never used it."""
+    never used it.
+    """
     system, conversation = _split_system(
         [
             ChatMessage(role="system", content="be terse"),
@@ -178,7 +185,8 @@ def test_multiple_system_messages_are_joined():
 
 def test_no_system_message_yields_an_empty_string():
     """Which the provider then omits entirely — sending system="" is not the
-    same as not sending it."""
+    same as not sending it.
+    """
     system, conversation = _split_system([ChatMessage(role="user", content="hi")])
 
     assert system == ""

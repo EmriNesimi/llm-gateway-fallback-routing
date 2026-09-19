@@ -120,7 +120,8 @@ def test_messages_that_are_individually_legal_can_still_be_too_much(client, endp
 @pytest.mark.parametrize("endpoint", ["/v1/chat", "/v1/chat/completions"])
 def test_a_request_exactly_at_the_total_limit_is_accepted(client, endpoint):
     """The boundary itself must pass, or the limit is off by one and the
-    error message lies about where the line is."""
+    error message lies about where the line is.
+    """
     messages = [{"role": "user", "content": "x" * MAX_TOTAL_CONTENT_CHARS}]
 
     r = client.post(endpoint, json={"model": "default", "messages": messages})

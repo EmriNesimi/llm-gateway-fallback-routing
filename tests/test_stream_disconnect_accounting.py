@@ -24,7 +24,8 @@ from app.providers.base import ChatMessage, StreamChunk
 
 class _EndlessRouter:
     """Streams forever, so the test decides when to hang up rather than
-    racing the end of a fixed list."""
+    racing the end of a fixed list.
+    """
 
     def __init__(self):
         self.name = "anthropic"
@@ -76,7 +77,8 @@ async def test_hanging_up_on_v1_chat_stream_still_charges(budget, isolated_db):
 async def test_hanging_up_on_the_openai_endpoint_still_charges(budget, isolated_db):
     """The OpenAI-compatible endpoint has its own generator and its own copy
     of this handler. Duplicated accounting logic tested once is how the two
-    halves drift apart."""
+    halves drift apart.
+    """
     await budget.reserve("anthropic", 0.80)
 
     stream = main_module._openai_event_stream(
@@ -133,7 +135,8 @@ async def test_a_disconnected_stream_is_counted(budget, isolated_db):
 async def test_an_aborted_stream_is_not_counted_as_an_error(budget, isolated_db):
     """A third status rather than reusing "error". Nothing failed — the client
     left — and folding the two together would make
-    GatewayRequestsFailingAcrossWholeChain fire on people closing tabs."""
+    GatewayRequestsFailingAcrossWholeChain fire on people closing tabs.
+    """
     from prometheus_client import REGISTRY
 
     def errors() -> float:

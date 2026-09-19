@@ -83,7 +83,8 @@ def test_gauge_tracks_the_breaker_through_a_full_cycle():
 
 def test_state_values_ascend_with_severity():
     """A Grafana threshold or alert rule should be able to say "> 0" and mean
-    "something is wrong", which only holds if the ordering is deliberate."""
+    "something is wrong", which only holds if the ordering is deliberate.
+    """
     healthy = CircuitBreaker(failure_threshold=1, cooldown_seconds=60)
     broken = CircuitBreaker(failure_threshold=1, cooldown_seconds=60)
     broken.record_failure()
@@ -128,7 +129,8 @@ async def test_successful_attempts_are_timed_per_provider():
 @pytest.mark.asyncio
 async def test_failed_attempts_are_timed_too():
     """A provider that fails slowly is a different problem from one that fails
-    fast; timing only successes would hide the difference."""
+    fast; timing only successes would hide the difference.
+    """
     breaker = CircuitBreaker(failure_threshold=9, cooldown_seconds=1)
     router = FallbackRouter(
         [(StubProvider("timed-fail", fail=True), "m", breaker)], retry_attempts=0
@@ -143,7 +145,8 @@ async def test_failed_attempts_are_timed_too():
 @pytest.mark.asyncio
 async def test_each_provider_in_a_chain_is_timed_separately():
     """The whole point: REQUEST_LATENCY covers retries and every fallback hop,
-    so it can't compare providers against each other."""
+    so it can't compare providers against each other.
+    """
     breaker_a = CircuitBreaker(failure_threshold=9, cooldown_seconds=1)
     breaker_b = CircuitBreaker(failure_threshold=9, cooldown_seconds=1)
     router = FallbackRouter(
@@ -164,7 +167,8 @@ async def test_each_provider_in_a_chain_is_timed_separately():
 async def test_retry_backoff_is_not_counted_as_provider_latency():
     """The backoff sleep lives inside the except block, so a naive `finally`
     would bill a deliberate delay to the provider and make a healthy-but-
-    retried provider look slow."""
+    retried provider look slow.
+    """
     breaker = CircuitBreaker(failure_threshold=9, cooldown_seconds=1)
     router = FallbackRouter(
         [(StubProvider("backoff", fail=True), "m", breaker)],
@@ -201,7 +205,8 @@ def test_cost_and_tokens_are_recorded_per_provider_and_model():
 
 def test_usage_is_not_recorded_when_no_provider_answered():
     """Every provider failing means there was no usage — recording a zero-cost
-    sample against an empty provider label would just add a junk series."""
+    sample against an empty provider label would just add a junk series.
+    """
     from app.main import _record_usage
 
     _record_usage("", "m", input_tokens=5, output_tokens=5, cost_usd=1.0)
@@ -214,7 +219,8 @@ def test_usage_is_not_recorded_when_no_provider_answered():
 
 def test_new_metrics_are_actually_exposed():
     """Defining a metric that never gets registered is a silent no-op, and the
-    dashboard would just render an empty panel."""
+    dashboard would just render an empty panel.
+    """
     exposed = {m.name for m in REGISTRY.collect()}
 
     assert "gateway_circuit_state" in exposed
@@ -226,7 +232,8 @@ def test_new_metrics_are_actually_exposed():
 def test_dashboard_only_queries_metrics_that_exist():
     """A panel pointing at a renamed or deleted metric doesn't error — it just
     renders empty, which looks identical to "no traffic yet". This is the only
-    thing that would tell you the difference."""
+    thing that would tell you the difference.
+    """
     import json
     import pathlib
     import re
@@ -427,14 +434,16 @@ def _alert_names_and_runbooks() -> list[tuple[str, str | None]]:
 def test_every_alert_links_to_a_runbook_section():
     """Alertmanager puts runbook_url in the notification, so the instructions
     arrive with the page. An alert without one sends someone to go and find
-    them while the thing is on fire."""
+    them while the thing is on fire.
+    """
     missing = sorted(name for name, url in _alert_names_and_runbooks() if not url)
     assert not missing, f"alert(s) {missing} have no runbook_url annotation"
 
 
 def test_no_runbook_link_points_at_a_missing_section():
     """The dead-link case, which is worse than no link: it reads as help and
-    lands on a page with nothing about this alert."""
+    lands on a page with nothing about this alert.
+    """
     import pathlib
     import re
 
@@ -628,7 +637,8 @@ def test_latency_buckets_reach_past_every_configured_timeout():
 def test_the_latency_alert_threshold_is_inside_the_buckets():
     """An alert comparing a quantile against a number past the last finite
     bucket can only be true by way of +Inf, which makes it fire on a cliff
-    rather than on the threshold it names."""
+    rather than on the threshold it names.
+    """
     import pathlib
     import re
 
@@ -691,7 +701,8 @@ async def test_a_stranded_reservation_does_not_leave_the_gauge_optimistic():
     """The gauge has to show what Redis actually holds after the failed
     refund, not the pre-claim total. Publishing the latter would advertise
     headroom that is no longer there, on the one path where it just shrank —
-    and nothing else reads this provider again to correct it."""
+    and nothing else reads this provider again to correct it.
+    """
     import fakeredis.aioredis
 
     from app.budget.provider_budget import ProviderBudget, ProviderBudgetExhausted
