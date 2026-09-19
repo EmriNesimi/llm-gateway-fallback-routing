@@ -136,7 +136,7 @@ def test_the_compose_only_exclusion_list_is_accurate():
     If it drifts from what the compose file actually uses, it either skips a
     real setting (hiding drift) or names one that no longer exists.
     """
-    assert _COMPOSE_ONLY == _compose_variables() - set(Settings.model_fields), (
+    assert _compose_variables() - set(Settings.model_fields) == _COMPOSE_ONLY, (
         f"_COMPOSE_ONLY is {sorted(_COMPOSE_ONLY)} but the compose file"
         f" substitutes {sorted(_compose_variables())}"
     )

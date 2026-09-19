@@ -3,7 +3,7 @@ import logging
 
 import pytest
 
-import app.observability.logging_config as logging_config
+from app.observability import logging_config
 from app.observability.logging_config import JsonFormatter, configure_logging
 
 

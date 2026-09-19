@@ -98,7 +98,7 @@ def test_served_version_matches_the_changelog():
     newest = versions[0]
 
     m = re.search(r'^\s*version="(\d+\.\d+\.\d+)",', _read("app/main.py"), re.MULTILINE)
-    assert m, "app/main.py no longer declares a `version=\"X.Y.Z\",` on the FastAPI app"
+    assert m, 'app/main.py no longer declares a `version="X.Y.Z",` on the FastAPI app'
 
     assert m.group(1) == newest, (
         f"app/main.py serves version {m.group(1)} but the newest CHANGELOG"
