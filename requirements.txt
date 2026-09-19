@@ -17,4 +17,4 @@ alembic>=1.13
 
 # providers
 openai>=1.35
-anthropic>=0.30
+anthropic>=1.6.0
