@@ -37,6 +37,15 @@ updates:
     directory: /
     schedule: {interval: monthly}
     open-pull-requests-limit: 3
+    ignore:
+      # The interpreter version is written in seven places that move together
+      # (tests/test_toolchain_consistency.py), and bumping the image alone
+      # ships a Python the suite has never run on. PR #2 proposed exactly that
+      # and was closed for it; without this, 3.15 arrives and is closed for
+      # the same reason. Digest and patch bumps still come through — those
+      # are the security updates the pin exists to take.
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
     groups:
       # One PR for the whole stack. These images are upgraded together in
       # practice anyway: the point of pinning them was that the stack is a
