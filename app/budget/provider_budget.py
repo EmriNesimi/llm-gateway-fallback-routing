@@ -104,7 +104,8 @@ class ProviderBudget:
     async def exhausted_providers(self, providers: list[str]) -> set[str]:
         """Which of these can no longer be called. Used to drop providers from
         a chain before the router tries them, so an exhausted provider costs
-        nothing instead of being called and refused upstream."""
+        nothing instead of being called and refused upstream.
+        """
         out = set()
         for provider in providers:
             if await self.is_exhausted(provider):

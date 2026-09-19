@@ -10,7 +10,8 @@ class Base(DeclarativeBase):
 
 class ApiKeyRecord(Base):
     """A client API key issued through the admin API. Only the HMAC hash is
-    stored — the raw key is shown once, at creation time, and never again."""
+    stored — the raw key is shown once, at creation time, and never again.
+    """
 
     __tablename__ = "api_keys"
 
@@ -55,7 +56,8 @@ class AdminAuditEntry(Base):
 
 class AuditLogEntry(Base):
     """One row per gateway request, success or failure — the "why did this
-    fail at 2am" record."""
+    fail at 2am" record.
+    """
 
     __tablename__ = "audit_log"
 

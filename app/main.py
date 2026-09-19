@@ -142,7 +142,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> Respo
     Starlette's ServerErrorMiddleware, which wraps *outside* every
     add_middleware()'d layer (RequestIDMiddleware included) — so this
     response never passes back through that middleware and must set its own
-    X-Request-ID header rather than relying on it."""
+    X-Request-ID header rather than relying on it.
+    """
     UNHANDLED_EXCEPTIONS.inc()
     request_id = getattr(request.state, "request_id", "")
     logger.error(
@@ -166,7 +167,8 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> Respo
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
     """Liveness: is the process up? No dependency checks — used by orchestrators
-    to decide whether to restart the container."""
+    to decide whether to restart the container.
+    """
     return {"status": "ok"}
 
 
@@ -204,7 +206,8 @@ async def readyz() -> Response:
     their own bounded timeouts (see decision 007), a naive sequential await
     would mean this endpoint's own worst-case latency is the SUM of both
     timeouts instead of the max of the two, undermining the point of a fast
-    readiness probe."""
+    readiness probe.
+    """
     redis_status, database_status = await asyncio.gather(_check_redis(), _check_database())
     checks = {"redis": redis_status, "database": database_status}
 
@@ -263,7 +266,8 @@ async def list_models(_: str = Depends(require_api_key)) -> dict[str, Any]:
 
     Shaped like OpenAI's /v1/models (an object/data envelope) so the same
     client code works against either, with the provider chain added since
-    knowing what a name actually resolves to is the useful part here."""
+    knowing what a name actually resolves to is the useful part here.
+    """
     return {
         "object": "list",
         "data": [
@@ -291,7 +295,8 @@ def _route(
     set STRICT_MODEL_ROUTING=true. See docs/decisions/009.
 
     `strict` overrides that setting for callers with no back-compat debt —
-    /v1/chat/completions is new, so nothing depends on it substituting."""
+    /v1/chat/completions is new, so nothing depends on it substituting.
+    """
     if not is_routable(requested_model):
         reject = settings.strict_model_routing if strict is None else strict
         if reject:
@@ -320,7 +325,8 @@ def _record_usage(
 
     These already reach the audit table, but a table can't fire an alert. A
     provider is only absent when every one of them failed, in which case there
-    was no usage to record."""
+    was no usage to record.
+    """
     if not provider:
         return
     COST_USD.labels(provider=provider, model=model).inc(cost_usd)
@@ -710,7 +716,8 @@ async def _serve_chat(
     Shared by /v1/chat and /v1/chat/completions so there's exactly one
     implementation of spend recording, audit logging, and the metrics around
     them. Two copies would drift, and the direction they'd drift in is a
-    request that gets served but never billed."""
+    request that gets served but never billed.
+    """
     start = time.perf_counter()
     try:
         result = await router.chat(
@@ -1045,7 +1052,8 @@ async def _openai_event_stream(
     Differs from _event_stream in wire format only — same router, same
     first-chunk-buffered fallback, same bookkeeping. The role arrives in the
     first delta and the last delta carries finish_reason, which is the
-    sequence the OpenAI SDK's stream parser expects."""
+    sequence the OpenAI SDK's stream parser expects.
+    """
     start = time.perf_counter()
     final_provider = ""
     # Empty, not requested_model. This is priced against on the abort path,
@@ -1235,7 +1243,8 @@ async def chat_completions(
 
     Routes strictly: this endpoint has no existing callers, so unlike
     /v1/chat it can reject an unroutable model from day one rather than
-    inheriting the silent substitution /v1 is stuck with. See decision 009."""
+    inheriting the silent substitution /v1 is stuck with. See decision 009.
+    """
     request_id = http_request.state.request_id
     chain_name, router = _route(request.model, request_id, strict=True)
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]

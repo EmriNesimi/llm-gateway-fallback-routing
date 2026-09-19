@@ -38,7 +38,8 @@ def publish_circuit_state(provider_name: str, breaker: CircuitBreaker) -> None:
     Called wherever the state could have changed, which includes reads: the
     OPEN -> HALF_OPEN transition happens lazily on inspection rather than on a
     timer, so without publishing on the read path a cooled-down breaker would
-    keep reporting OPEN until its next recorded success or failure."""
+    keep reporting OPEN until its next recorded success or failure.
+    """
     CIRCUIT_STATE.labels(provider=provider_name).set(_CIRCUIT_STATE_VALUES[breaker.state])
 
 

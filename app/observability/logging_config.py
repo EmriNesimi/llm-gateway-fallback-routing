@@ -6,7 +6,8 @@ from app.core.config import settings
 
 class JsonFormatter(logging.Formatter):
     """One JSON object per line — plays nicely with log aggregators (Loki,
-    CloudWatch, etc.) that expect structured fields rather than free text."""
+    CloudWatch, etc.) that expect structured fields rather than free text.
+    """
 
     def format(self, record: logging.LogRecord) -> str:
         payload = {

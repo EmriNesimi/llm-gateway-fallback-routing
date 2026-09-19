@@ -19,7 +19,8 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     """Every request gets a correlation ID: honors an incoming X-Request-ID
     (so a caller's own tracing can carry through), otherwise generates one.
     Stashed on request.state for handlers/audit log/spans, and echoed back
-    on the response so a caller always has something to hand to support."""
+    on the response so a caller always has something to hand to support.
+    """
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint

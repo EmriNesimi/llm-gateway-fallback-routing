@@ -23,7 +23,8 @@ async def record_audit_log(
     """Best-effort: the audit log is bookkeeping, not the primary contract of
     /v1/chat. A DB outage here must not turn an already-successful chat
     response into a 500 for the caller — so failures are logged (loudly, with
-    the request_id needed to notice and investigate) rather than raised."""
+    the request_id needed to notice and investigate) rather than raised.
+    """
     try:
         key_hash = hash_key(api_key)
 

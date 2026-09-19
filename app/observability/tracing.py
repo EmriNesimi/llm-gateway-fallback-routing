@@ -11,7 +11,8 @@ _configured = False
 
 def configure_tracing() -> None:
     """Set up the global tracer provider. No-op if no OTLP endpoint is configured
-    or if called more than once (keeps re-imports/tests safe)."""
+    or if called more than once (keeps re-imports/tests safe).
+    """
     global _configured
     if _configured or not settings.otel_exporter_otlp_endpoint:
         return

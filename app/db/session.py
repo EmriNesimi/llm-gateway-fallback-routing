@@ -17,7 +17,8 @@ def build_connect_args(
     app/core/config.py for why these exist: asyncpg's own defaults either
     aren't set (command_timeout) or are too long for a request path
     (connect). A plain function so this logic is testable without reloading
-    the module (`engine` below is built once at import time)."""
+    the module (`engine` below is built once at import time).
+    """
     if not database_url.startswith("postgresql"):
         return {}
     return {"timeout": connect_timeout_seconds, "command_timeout": command_timeout_seconds}

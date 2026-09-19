@@ -1,6 +1,7 @@
 """Auth for the admin API (key issuance/revocation) — a separate, higher-trust
 secret from the client-facing GATEWAY_API_KEYS, so a leaked client key can't
-be used to mint more keys."""
+be used to mint more keys.
+"""
 import hmac
 
 from fastapi import Header, HTTPException, status
@@ -13,7 +14,8 @@ async def require_admin_key(
 ) -> str:
     """Returns the presented key so handlers can record *which* admin
     credential acted. FastAPI caches a dependency per request, so depending on
-    this again inside a handler doesn't re-run the check."""
+    this again inside a handler doesn't re-run the check.
+    """
     if not settings.admin_api_key:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

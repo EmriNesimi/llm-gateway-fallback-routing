@@ -96,7 +96,8 @@ def is_retryable_status_code(status_code: int) -> bool:
     succeed a moment later. Any other 4xx (bad request, invalid model,
     auth failure) will fail identically every time; retrying it is pure
     wasted latency. Shared by every provider adapter so the rule is defined
-    once, not reimplemented slightly differently per provider."""
+    once, not reimplemented slightly differently per provider.
+    """
     return status_code == 429 or status_code >= 500
 
 

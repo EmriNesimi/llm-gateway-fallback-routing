@@ -63,7 +63,8 @@ class AuditLogEntryOut(BaseModel):
 class AdminAuditEntryOut(BaseModel):
     """A key issuance or revocation. `admin_key_hash` identifies which admin
     credential acted without disclosing it — useful for spotting activity from
-    one that should have been rotated."""
+    one that should have been rotated.
+    """
 
     model_config = ConfigDict(from_attributes=True)
 

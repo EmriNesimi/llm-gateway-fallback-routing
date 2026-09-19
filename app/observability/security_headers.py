@@ -6,7 +6,8 @@ from starlette.responses import Response
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """A handful of response headers that cost nothing and rule out whole
     classes of browser-side attacks (MIME sniffing, clickjacking) on any
-    endpoint that ends up rendered rather than consumed by a script."""
+    endpoint that ends up rendered rather than consumed by a script.
+    """
 
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint

@@ -116,7 +116,8 @@ async def list_audit_log(
     X-Request-ID a caller reports to jump straight to the row (and, via
     tracing spans tagged with the same ID, the exact provider attempts)
     behind a specific failed or slow request. `offset` paginates past
-    `limit`'s 1000-row ceiling for callers paging through a wider window."""
+    `limit`'s 1000-row ceiling for callers paging through a wider window.
+    """
     limit = max(1, min(limit, 1000))
     offset = max(0, offset)
     query = (
