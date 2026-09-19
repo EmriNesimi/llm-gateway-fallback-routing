@@ -163,7 +163,7 @@ def test_system_messages_are_hoisted_out_of_the_conversation():
         [
             ChatMessage(role="system", content="be terse"),
             ChatMessage(role="user", content="hello"),
-        ]
+        ],
     )
 
     assert system == "be terse"
@@ -176,7 +176,7 @@ def test_multiple_system_messages_are_joined():
             ChatMessage(role="system", content="be terse"),
             ChatMessage(role="system", content="be kind"),
             ChatMessage(role="user", content="hi"),
-        ]
+        ],
     )
 
     assert system == "be terse\n\nbe kind"

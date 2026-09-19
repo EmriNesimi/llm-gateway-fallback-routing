@@ -221,10 +221,10 @@ async def test_the_ledger_is_visible_as_metrics(budget):
     await budget.spent("openai")
 
     spent = REGISTRY.get_sample_value(
-        "gateway_provider_budget_spent_usd", {"provider": "openai"}
+        "gateway_provider_budget_spent_usd", {"provider": "openai"},
     )
     remaining = REGISTRY.get_sample_value(
-        "gateway_provider_budget_remaining_usd", {"provider": "openai"}
+        "gateway_provider_budget_remaining_usd", {"provider": "openai"},
     )
 
     assert spent == pytest.approx(1.5)
@@ -242,7 +242,7 @@ async def test_remaining_never_reports_negative(budget):
     from prometheus_client import REGISTRY
 
     assert REGISTRY.get_sample_value(
-        "gateway_provider_budget_remaining_usd", {"provider": "anthropic"}
+        "gateway_provider_budget_remaining_usd", {"provider": "anthropic"},
     ) == 0.0
 
 
@@ -376,7 +376,7 @@ async def test_the_gauge_follows_every_write_not_just_reads():
 
     def spent_gauge():
         v = REGISTRY.get_sample_value(
-            "gateway_provider_budget_spent_usd", {"provider": "gauge-follows"}
+            "gateway_provider_budget_spent_usd", {"provider": "gauge-follows"},
         )
         return 0.0 if v is None else v
 
@@ -404,12 +404,12 @@ async def test_an_external_correction_reaches_the_gauge_on_the_next_read():
 
     await budget.record_unreserved("corrected", 3.97)  # the phantom figure
     assert REGISTRY.get_sample_value(
-        "gateway_provider_budget_remaining_usd", {"provider": "corrected"}
+        "gateway_provider_budget_remaining_usd", {"provider": "corrected"},
     ) == pytest.approx(0.03)
 
     await redis.set("provider_budget:corrected", 0.0003)  # operator, out of band
     await budget.snapshot(("corrected",))  # what `make reconcile` does
 
     assert REGISTRY.get_sample_value(
-        "gateway_provider_budget_remaining_usd", {"provider": "corrected"}
+        "gateway_provider_budget_remaining_usd", {"provider": "corrected"},
     ) == pytest.approx(3.9997)

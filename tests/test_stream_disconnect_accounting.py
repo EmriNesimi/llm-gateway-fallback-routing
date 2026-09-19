@@ -33,7 +33,7 @@ class _EndlessRouter:
     async def chat_stream(self, messages, request_id="", params=None, skip_providers=None):
         while True:
             yield StreamChunk(
-                content="x" * 300, provider="anthropic", model="claude-opus-5"
+                content="x" * 300, provider="anthropic", model="claude-opus-5",
             )
 
 
@@ -102,7 +102,7 @@ def _aborted_count() -> float:
     from prometheus_client import REGISTRY
 
     return REGISTRY.get_sample_value(
-        "gateway_requests_total", {"status": "aborted"}
+        "gateway_requests_total", {"status": "aborted"},
     ) or 0.0
 
 
@@ -141,7 +141,7 @@ async def test_an_aborted_stream_is_not_counted_as_an_error(budget, isolated_db)
 
     def errors() -> float:
         return REGISTRY.get_sample_value(
-            "gateway_requests_total", {"status": "error"}
+            "gateway_requests_total", {"status": "error"},
         ) or 0.0
 
     before = errors()

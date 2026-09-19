@@ -44,7 +44,7 @@ async def _collect(router, messages):
 async def test_stream_retries_before_first_chunk_then_succeeds():
     flaky = FakeStreamProvider("flaky", fail_before_first_chunk=1)
     router = FallbackRouter(
-        chain=[(flaky, "model-a", _breaker())], retry_attempts=1, retry_backoff_seconds=0
+        chain=[(flaky, "model-a", _breaker())], retry_attempts=1, retry_backoff_seconds=0,
     )
 
     chunks = await _collect(router, [])
@@ -75,7 +75,7 @@ async def test_stream_falls_back_before_committing():
 async def test_stream_mid_failure_after_commit_raises_but_keeps_partial_chunks():
     provider = FakeStreamProvider("provider", fail_after_chunks=1)
     router = FallbackRouter(
-        chain=[(provider, "model-a", _breaker())], retry_attempts=0, retry_backoff_seconds=0
+        chain=[(provider, "model-a", _breaker())], retry_attempts=0, retry_backoff_seconds=0,
     )
 
     received = []

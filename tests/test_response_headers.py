@@ -11,7 +11,7 @@ from app.ratelimit import dependency as ratelimit_dependency
 class FakeRouter:
     async def chat(self, messages, request_id="", params=None, skip_providers=None):
         return ChatResponse(
-            content="hi", provider="openai", model="gpt-4o-mini", input_tokens=5, output_tokens=5
+            content="hi", provider="openai", model="gpt-4o-mini", input_tokens=5, output_tokens=5,
         )
 
     async def chat_stream(self, messages, request_id="", params=None, skip_providers=None):
@@ -54,7 +54,7 @@ def test_stream_response_includes_rate_limit_and_budget_headers(isolated_db, iso
 
 
 def test_rate_limit_headers_decrement_and_429_includes_retry_after(
-    isolated_db, isolated_redis, monkeypatch
+    isolated_db, isolated_redis, monkeypatch,
 ):
     # _limiter is a module-level singleton already constructed from settings at
     # import time, so its instance attributes must be patched directly.
@@ -77,7 +77,7 @@ def test_rate_limit_headers_decrement_and_429_includes_retry_after(
 
 
 def test_budget_exceeded_returns_402_with_zero_remaining_header(
-    isolated_db, isolated_redis, monkeypatch
+    isolated_db, isolated_redis, monkeypatch,
 ):
     # enforce_budget reads settings.monthly_budget_usd_per_key directly (not
     # tracker._monthly_cap_usd), so patching settings here is what actually matters.

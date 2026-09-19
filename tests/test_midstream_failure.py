@@ -47,7 +47,7 @@ class _ExplodingRouter:
 def exploding_client(monkeypatch, isolated_db, isolated_redis):
     monkeypatch.setattr(settings, "gateway_api_keys", "test-client-key")
     monkeypatch.setattr(
-        main_module, "build_router", lambda m: ("default", _ExplodingRouter())
+        main_module, "build_router", lambda m: ("default", _ExplodingRouter()),
     )
     with TestClient(app) as c:
         yield c
@@ -84,7 +84,7 @@ def test_a_failure_after_the_last_chunk_is_reported_in_band(client, monkeypatch)
     assert "data: [DONE]" not in r.text, "a failed stream claimed to be complete"
 
     payload = json.loads(
-        next(f for f in frames if f.startswith("event: error")).split("data: ", 1)[1]
+        next(f for f in frames if f.startswith("event: error")).split("data: ", 1)[1],
     )
     assert payload["error"] == "internal server error"
     assert payload["request_id"], "no request id to correlate with the logs"
@@ -173,7 +173,7 @@ def test_a_failed_stream_is_not_counted_as_a_success(client, monkeypatch):
 
     def count(status: str) -> float:
         return REGISTRY.get_sample_value(
-            "gateway_requests_total", {"status": status}
+            "gateway_requests_total", {"status": status},
         ) or 0.0
 
     def boom(**kwargs):

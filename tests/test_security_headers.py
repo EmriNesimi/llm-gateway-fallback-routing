@@ -34,7 +34,7 @@ def test_security_headers_present_on_response():
 
 
 def test_security_headers_present_on_a_streaming_response(
-    streaming_client, isolated_db, isolated_redis
+    streaming_client, isolated_db, isolated_redis,
 ):
     """Streaming responses are built by the endpoint rather than by FastAPI,
     and travel a different path through BaseHTTPMiddleware than a plain JSON

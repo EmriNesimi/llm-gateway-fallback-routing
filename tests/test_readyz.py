@@ -93,7 +93,7 @@ def test_readyz_reports_ok_when_both_dependencies_answer(isolated_db, monkeypatc
 
 
 def test_readyz_reports_unavailable_when_the_database_is_unreachable(
-    isolated_db, monkeypatch
+    isolated_db, monkeypatch,
 ):
     """The database half of the same contract, which had no test at all.
 

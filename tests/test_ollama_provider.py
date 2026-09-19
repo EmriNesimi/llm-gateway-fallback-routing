@@ -44,7 +44,7 @@ async def test_chat_succeeds_on_well_formed_response(monkeypatch):
                 "model": "llama3",
                 "prompt_eval_count": 3,
                 "eval_count": 5,
-            }
+            },
         )
 
     monkeypatch.setattr("httpx.AsyncClient.post", fake_post)
@@ -97,7 +97,7 @@ async def test_chat_stream_yields_chunks_from_well_formed_response(monkeypatch):
             [
                 '{"message": {"content": "hi"}, "done": false}',
                 '{"done": true, "prompt_eval_count": 2, "eval_count": 4}',
-            ]
+            ],
         )
 
     monkeypatch.setattr("httpx.AsyncClient.stream", fake_stream)
@@ -126,7 +126,7 @@ async def test_blank_lines_in_the_stream_are_skipped(monkeypatch):
                 '{"message": {"content": "hi"}, "done": false}',
                 "",
                 '{"done": true, "prompt_eval_count": 2, "eval_count": 4}',
-            ]
+            ],
         )
 
     monkeypatch.setattr("httpx.AsyncClient.stream", fake_stream)
@@ -149,7 +149,7 @@ async def test_blank_lines_in_the_stream_are_skipped(monkeypatch):
 
 def test_every_sampling_field_reaches_ollama():
     payload = _sampling_payload(
-        SamplingParams(temperature=0.2, top_p=0.9, max_tokens=64, stop=["END"])
+        SamplingParams(temperature=0.2, top_p=0.9, max_tokens=64, stop=["END"]),
     )
 
     assert payload == {
@@ -158,7 +158,7 @@ def test_every_sampling_field_reaches_ollama():
             "top_p": 0.9,
             "num_predict": 64,  # Ollama's name for max_tokens
             "stop": ["END"],
-        }
+        },
     }
 
 
@@ -168,7 +168,7 @@ def test_unset_sampling_fields_are_omitted_entirely():
     who never asked.
     """
     assert _sampling_payload(SamplingParams(temperature=0.5)) == {
-        "options": {"temperature": 0.5}
+        "options": {"temperature": 0.5},
     }
     assert _sampling_payload(None) == {}
     assert _sampling_payload(SamplingParams()) == {}
@@ -186,10 +186,10 @@ def test_http_status_errors_are_classified_by_status_code():
     request = httpx.Request("POST", "http://localhost:11434/api/chat")
 
     bad_request = httpx.HTTPStatusError(
-        "bad request", request=request, response=httpx.Response(400, request=request)
+        "bad request", request=request, response=httpx.Response(400, request=request),
     )
     unavailable = httpx.HTTPStatusError(
-        "unavailable", request=request, response=httpx.Response(503, request=request)
+        "unavailable", request=request, response=httpx.Response(503, request=request),
     )
 
     assert _provider_error("ollama", bad_request).retryable is False

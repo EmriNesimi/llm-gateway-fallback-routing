@@ -140,7 +140,7 @@ async def test_a_response_with_no_usage_is_still_charged(monkeypatch, caplog):
 
     with caplog.at_level(logging.WARNING):
         result = await provider.chat(
-            "gpt-4o-mini", [ChatMessage(role="user", content="y" * 60)]
+            "gpt-4o-mini", [ChatMessage(role="user", content="y" * 60)],
         )
 
     assert result.output_tokens > 0, "a billed response was recorded as free"

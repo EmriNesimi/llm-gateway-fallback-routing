@@ -34,7 +34,7 @@ class FakeRouter:
     async def chat_stream(self, messages, request_id="", params=None, skip_providers=None):
         for piece in ("hel", "lo"):
             yield StreamChunk(
-                content=piece, provider="openai", model="gpt-4o-mini", done=False
+                content=piece, provider="openai", model="gpt-4o-mini", done=False,
             )
         yield StreamChunk(
             content="",
@@ -139,7 +139,7 @@ def test_stream_emits_chat_completion_chunks(client):
 
 def test_stream_sends_role_first_then_content_then_finish_reason(client):
     chunks = _sse_payloads(
-        client.post("/v1/chat/completions", json=_body(stream=True)).text
+        client.post("/v1/chat/completions", json=_body(stream=True)).text,
     )
 
     # The exact sequence the OpenAI SDK's stream parser expects.
@@ -151,7 +151,7 @@ def test_stream_sends_role_first_then_content_then_finish_reason(client):
 
 def test_stream_keeps_one_id_across_every_chunk(client):
     chunks = _sse_payloads(
-        client.post("/v1/chat/completions", json=_body(stream=True)).text
+        client.post("/v1/chat/completions", json=_body(stream=True)).text,
     )
 
     assert len({c["id"] for c in chunks}) == 1
@@ -232,7 +232,7 @@ def openai_client(monkeypatch, isolated_db, isolated_redis):
     app.dependency_overrides[require_api_key] = lambda: "test-client-key"
 
     http_client = httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app), base_url="http://gateway"
+        transport=httpx.ASGITransport(app=app), base_url="http://gateway",
     )
     yield AsyncOpenAI(
         api_key="test-client-key",

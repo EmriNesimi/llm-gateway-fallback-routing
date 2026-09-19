@@ -12,7 +12,7 @@ from app.routing.fallback import AllProvidersFailedError
 class FakeRouter:
     async def chat(self, messages, request_id="", params=None, skip_providers=None):
         return ChatResponse(
-            content="hi", provider="openai", model="gpt-4o-mini", input_tokens=5, output_tokens=5
+            content="hi", provider="openai", model="gpt-4o-mini", input_tokens=5, output_tokens=5,
         )
 
     async def chat_stream(self, messages, request_id="", params=None, skip_providers=None):
@@ -109,7 +109,7 @@ def test_request_id_links_response_to_audit_log_row(isolated_db, isolated_redis,
 
 
 def test_request_id_included_in_error_response_and_audit_log(
-    isolated_db, isolated_redis, monkeypatch
+    isolated_db, isolated_redis, monkeypatch,
 ):
     monkeypatch.setattr(main_module, "build_router", lambda model: ("default", FailingRouter()))
 

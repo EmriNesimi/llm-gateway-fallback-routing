@@ -84,7 +84,7 @@ def test_implausibly_short_keys_are_treated_as_unset():
 
 def test_real_looking_keys_are_kept():
     settings = _settings(
-        openai_api_key=REAL_LOOKING_OPENAI, anthropic_api_key=REAL_LOOKING_ANTHROPIC
+        openai_api_key=REAL_LOOKING_OPENAI, anthropic_api_key=REAL_LOOKING_ANTHROPIC,
     )
 
     assert settings.openai_api_key == REAL_LOOKING_OPENAI
@@ -103,7 +103,7 @@ def test_a_real_key_containing_an_x_is_not_mistaken_for_a_placeholder():
 def test_keeping_a_real_key_produces_no_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="gateway.config"):
         _settings(
-            openai_api_key=REAL_LOOKING_OPENAI, anthropic_api_key=REAL_LOOKING_ANTHROPIC
+            openai_api_key=REAL_LOOKING_OPENAI, anthropic_api_key=REAL_LOOKING_ANTHROPIC,
         )
 
     messages = [r.getMessage() for r in caplog.records]
@@ -126,7 +126,7 @@ def test_a_bad_key_does_not_stop_the_process_booting():
     remove that provider from the chain, not take the whole gateway down.
     """
     settings = _settings(
-        anthropic_api_key=EXAMPLE_ANTHROPIC_KEY, openai_api_key=REAL_LOOKING_OPENAI
+        anthropic_api_key=EXAMPLE_ANTHROPIC_KEY, openai_api_key=REAL_LOOKING_OPENAI,
     )
 
     assert settings.anthropic_api_key is None

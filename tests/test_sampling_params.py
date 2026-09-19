@@ -62,7 +62,7 @@ def test_set_names_reports_only_what_the_caller_set():
 
 def _request(**kwargs):
     return ChatCompletionRequest(
-        model="default", messages=[{"role": "user", "content": "hi"}], **kwargs
+        model="default", messages=[{"role": "user", "content": "hi"}], **kwargs,
     )
 
 
@@ -151,7 +151,7 @@ def test_an_explicit_smaller_cap_is_respected():
 
 def test_openai_uses_its_own_names():
     kwargs = openai_kwargs(
-        SamplingParams(temperature=0.2, top_p=0.9, max_tokens=32, stop=["X"])
+        SamplingParams(temperature=0.2, top_p=0.9, max_tokens=32, stop=["X"]),
     )
 
     assert kwargs == {"temperature": 0.2, "top_p": 0.9, "max_tokens": 32, "stop": ["X"]}
@@ -259,7 +259,7 @@ def test_dropping_sampling_controls_still_honours_max_tokens_and_stop():
     controls still work and shouldn't be collateral damage.
     """
     kwargs = anthropic_kwargs(
-        "claude-opus-5", SamplingParams(temperature=0.6, max_tokens=99, stop=["Z"])
+        "claude-opus-5", SamplingParams(temperature=0.6, max_tokens=99, stop=["Z"]),
     )
 
     assert kwargs["max_tokens"] == 99
@@ -351,7 +351,7 @@ async def test_router_carries_controls_down_the_fallback_chain():
             if self._fail:
                 raise ProviderError("down")
             return ChatResponse(
-                content="ok", provider=self.name, model=model, input_tokens=1, output_tokens=1
+                content="ok", provider=self.name, model=model, input_tokens=1, output_tokens=1,
             )
 
     router = FallbackRouter(

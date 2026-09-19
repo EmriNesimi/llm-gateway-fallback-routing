@@ -28,7 +28,7 @@ class StubProvider:
         if self._fail:
             raise ProviderError(f"{self.name} is down")
         return ChatResponse(
-            content="ok", provider=self.name, model=model, input_tokens=3, output_tokens=5
+            content="ok", provider=self.name, model=model, input_tokens=3, output_tokens=5,
         )
 
 
@@ -93,7 +93,7 @@ def test_state_values_ascend_with_severity():
     publish_circuit_state("ordering-broken", broken)
 
     assert _sample("gateway_circuit_state", provider="ordering-healthy") < _sample(
-        "gateway_circuit_state", provider="ordering-broken"
+        "gateway_circuit_state", provider="ordering-broken",
     )
 
 
@@ -101,7 +101,7 @@ def test_state_values_ascend_with_severity():
 async def test_router_publishes_breaker_state_without_being_asked():
     breaker = CircuitBreaker(failure_threshold=1, cooldown_seconds=60)
     router = FallbackRouter(
-        [(StubProvider("router-gauge", fail=True), "m", breaker)], retry_attempts=0
+        [(StubProvider("router-gauge", fail=True), "m", breaker)], retry_attempts=0,
     )
 
     with pytest.raises(AllProvidersFailedError):
@@ -133,7 +133,7 @@ async def test_failed_attempts_are_timed_too():
     """
     breaker = CircuitBreaker(failure_threshold=9, cooldown_seconds=1)
     router = FallbackRouter(
-        [(StubProvider("timed-fail", fail=True), "m", breaker)], retry_attempts=0
+        [(StubProvider("timed-fail", fail=True), "m", breaker)], retry_attempts=0,
     )
 
     with pytest.raises(AllProvidersFailedError):
@@ -239,7 +239,7 @@ def test_dashboard_only_queries_metrics_that_exist():
     import re
 
     dashboard = json.loads(
-        pathlib.Path("deploy/grafana/dashboards/gateway-overview.json").read_text()
+        pathlib.Path("deploy/grafana/dashboards/gateway-overview.json").read_text(),
     )
     exposed = {m.name for m in REGISTRY.collect()}
 
@@ -392,9 +392,8 @@ def test_every_metric_is_graphed_or_alerted():
     import pathlib
     import re
 
-    declared = set(
-        re.findall(r'"(gateway_[a-z_]+)"', pathlib.Path("app/observability/metrics.py").read_text())
-    )
+    metrics_source = pathlib.Path("app/observability/metrics.py").read_text()
+    declared = set(re.findall(r'"(gateway_[a-z_]+)"', metrics_source))
     assert declared, "no metrics declared — the guard would pass vacuously"
 
     watched_text = (
@@ -725,7 +724,7 @@ async def test_a_stranded_reservation_does_not_leave_the_gauge_optimistic():
 
     spent = _sample("gateway_provider_budget_spent_usd", provider="stale-gauge-provider")
     remaining = _sample(
-        "gateway_provider_budget_remaining_usd", provider="stale-gauge-provider"
+        "gateway_provider_budget_remaining_usd", provider="stale-gauge-provider",
     )
     assert spent == pytest.approx(9.0), "the gauge understates what Redis holds"
     assert remaining == pytest.approx(0.0), "the gauge still advertises headroom"

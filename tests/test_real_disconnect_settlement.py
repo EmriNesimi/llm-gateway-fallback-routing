@@ -54,7 +54,7 @@ class _EndlessRouter:
     async def chat_stream(self, messages, request_id="", params=None, skip_providers=None):
         while True:
             yield StreamChunk(
-                content="x" * 400, provider="anthropic", model="claude-opus-5"
+                content="x" * 400, provider="anthropic", model="claude-opus-5",
             )
             await asyncio.sleep(0.01)
 
@@ -82,7 +82,7 @@ async def test_a_real_client_disconnect_still_settles_the_ledger(monkeypatch, is
     budget = ProviderBudget(redis=client, cap_usd=4.0)
     monkeypatch.setattr(main_module, "provider_budget", budget)
     monkeypatch.setattr(
-        main_module, "build_router", lambda m: ("smart", _EndlessRouter())
+        main_module, "build_router", lambda m: ("smart", _EndlessRouter()),
     )
     # The override has to populate request.state as well. chat_stream builds
     # its own Response and reads rate_limit_limit / rate_limit_remaining /

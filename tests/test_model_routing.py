@@ -130,7 +130,7 @@ def test_every_chain_model_is_priced_or_free():
 
 
 def test_unknown_model_is_served_but_the_substitution_is_reported(
-    client, monkeypatch, caplog
+    client, monkeypatch, caplog,
 ):
     """The old behavior, minus the silence."""
     import app.main as main_module
@@ -203,7 +203,7 @@ def test_strict_mode_still_serves_a_known_model(client, monkeypatch):
 
 
 def test_strict_mode_rejects_an_unknown_model_on_the_streaming_endpoint(
-    client, monkeypatch
+    client, monkeypatch,
 ):
     monkeypatch.setattr(settings, "strict_model_routing", True)
 

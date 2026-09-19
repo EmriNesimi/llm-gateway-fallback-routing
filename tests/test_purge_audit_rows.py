@@ -28,7 +28,7 @@ async def _count(isolated_db, request_id: str) -> int:
 
     async with isolated_db() as s:
         return (await s.execute(
-            select(func.count(AuditLogEntry.id)).where(AuditLogEntry.request_id == request_id)
+            select(func.count(AuditLogEntry.id)).where(AuditLogEntry.request_id == request_id),
         )).scalar_one()
 
 

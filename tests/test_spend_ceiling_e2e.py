@@ -163,7 +163,7 @@ def test_the_ceiling_eventually_refuses_with_402(client, monkeypatch):
 
 
 def test_an_exhausted_provider_stops_being_served_and_the_chain_moves_on(
-    client, monkeypatch
+    client, monkeypatch,
 ):
     """Exhausting one provider must fail over, not halt: the two balances are
     independent, which is the whole reason the ceiling is per-provider. And
@@ -407,7 +407,7 @@ def _refusals(reason: str) -> float:
     from prometheus_client import REGISTRY
 
     return REGISTRY.get_sample_value(
-        "gateway_requests_refused_total", {"reason": reason}
+        "gateway_requests_refused_total", {"reason": reason},
     ) or 0.0
 
 
@@ -470,7 +470,7 @@ async def test_a_redis_failure_at_settle_does_not_discard_a_paid_response(monkey
 
     # Must not raise.
     await main_module._settle_providers(
-        {"anthropic": 0.5}, "anthropic", 0.25, "req-settle-fails"
+        {"anthropic": 0.5}, "anthropic", 0.25, "req-settle-fails",
     )
 
 
@@ -495,7 +495,7 @@ async def test_one_failing_settle_does_not_strand_the_others(monkeypatch):
     monkeypatch.setattr(main_module, "provider_budget", _FlakyFirst())
 
     await main_module._settle_providers(
-        {"anthropic": 0.5, "openai": 0.5}, "openai", 0.25, "req-flaky-first"
+        {"anthropic": 0.5, "openai": 0.5}, "openai", 0.25, "req-flaky-first",
     )
 
     assert settled == ["openai"], "a failure on one provider skipped the rest"
@@ -655,7 +655,7 @@ async def test_a_settle_failure_names_the_request_it_belongs_to(monkeypatch, cap
 
     with caplog.at_level(logging.ERROR):
         await main_module._settle_providers(
-            {"anthropic": 0.5}, "anthropic", 0.25, "req-correlate-me"
+            {"anthropic": 0.5}, "anthropic", 0.25, "req-correlate-me",
         )
 
     assert "req-correlate-me" in caplog.text
@@ -702,7 +702,7 @@ async def test_a_cancellation_mid_refund_still_refunds_the_rest(monkeypatch, cap
                 "openai",
                 0.25,
                 "req-cancelled",
-            )
+            ),
         )
         await reached_anthropic.wait()
         task.cancel()
@@ -759,7 +759,7 @@ async def test_repeated_cancellations_still_finish_the_chain(monkeypatch, caplog
                 "openai",
                 0.25,
                 "req-twice",
-            )
+            ),
         )
         canceller = asyncio.create_task(cancel_twice(task))
         with pytest.raises(asyncio.CancelledError):

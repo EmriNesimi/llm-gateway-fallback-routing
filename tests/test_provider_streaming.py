@@ -30,13 +30,13 @@ MESSAGES = [ChatMessage(role="user", content="hi")]
 
 def _openai_delta(text):
     return SimpleNamespace(
-        usage=None, choices=[SimpleNamespace(delta=SimpleNamespace(content=text))]
+        usage=None, choices=[SimpleNamespace(delta=SimpleNamespace(content=text))],
     )
 
 
 def _openai_usage(prompt, completion):
     return SimpleNamespace(
-        usage=SimpleNamespace(prompt_tokens=prompt, completion_tokens=completion), choices=[]
+        usage=SimpleNamespace(prompt_tokens=prompt, completion_tokens=completion), choices=[],
     )
 
 
@@ -68,7 +68,7 @@ def _openai_provider(monkeypatch, events=None, error=None):
 @pytest.mark.asyncio
 async def test_openai_stream_yields_content_then_a_final_usage_chunk(monkeypatch):
     provider, _ = _openai_provider(
-        monkeypatch, [_openai_delta("Hel"), _openai_delta("lo"), _openai_usage(9, 4)]
+        monkeypatch, [_openai_delta("Hel"), _openai_delta("lo"), _openai_usage(9, 4)],
     )
 
     chunks = [c async for c in provider.chat_stream("gpt-4o-mini", MESSAGES)]
@@ -162,7 +162,7 @@ def _anthropic_provider(monkeypatch, texts=None, usage=None, error=None):
         if error is not None:
             raise error
         return _FakeAnthropicStream(
-            texts or [], usage or SimpleNamespace(input_tokens=0, output_tokens=0)
+            texts or [], usage or SimpleNamespace(input_tokens=0, output_tokens=0),
         )
 
     monkeypatch.setattr(provider._client.messages, "stream", stream)
@@ -190,7 +190,7 @@ async def test_anthropic_stream_still_reports_usage_for_an_empty_response(monkey
     chunk would mean the request is served and never billed.
     """
     provider = _anthropic_provider(
-        monkeypatch, texts=[], usage=SimpleNamespace(input_tokens=7, output_tokens=0)
+        monkeypatch, texts=[], usage=SimpleNamespace(input_tokens=7, output_tokens=0),
     )
 
     chunks = [c async for c in provider.chat_stream("claude-haiku-4-5", MESSAGES)]

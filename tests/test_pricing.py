@@ -31,7 +31,7 @@ def test_every_routable_model_has_a_pricing_entry():
             for chain in FALLBACK_CHAINS.values()
             for provider, model in chain
             if provider not in _FREE_PROVIDERS and f"{provider}:{model}" not in _PRICING
-        }
+        },
     )
 
     assert not missing, (
@@ -44,7 +44,7 @@ def test_every_routable_model_has_a_pricing_entry():
 
 def test_known_model_computes_nonzero_cost():
     cost = estimate_cost_usd(
-        provider="openai", model="gpt-4o-mini", input_tokens=1000, output_tokens=1000
+        provider="openai", model="gpt-4o-mini", input_tokens=1000, output_tokens=1000,
     )
     assert cost > 0
 
@@ -52,7 +52,7 @@ def test_known_model_computes_nonzero_cost():
 def test_ollama_is_silently_free_with_no_warning(caplog):
     with caplog.at_level(logging.WARNING, logger="gateway.pricing"):
         cost = estimate_cost_usd(
-            provider="ollama", model="llama3", input_tokens=1000, output_tokens=1000
+            provider="ollama", model="llama3", input_tokens=1000, output_tokens=1000,
         )
     assert cost == 0.0
     assert caplog.records == []
@@ -61,7 +61,7 @@ def test_ollama_is_silently_free_with_no_warning(caplog):
 def test_unknown_non_ollama_model_costs_zero_but_warns_loudly(caplog):
     with caplog.at_level(logging.WARNING, logger="gateway.pricing"):
         cost = estimate_cost_usd(
-            provider="openai", model="some-future-model", input_tokens=1000, output_tokens=1000
+            provider="openai", model="some-future-model", input_tokens=1000, output_tokens=1000,
         )
     assert cost == 0.0
     assert len(caplog.records) == 1

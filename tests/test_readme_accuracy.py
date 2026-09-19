@@ -75,7 +75,7 @@ def test_readme_panel_count_matches_the_dashboard():
     import json
 
     dashboard = json.loads(
-        (ROOT / "deploy" / "grafana" / "dashboards" / "gateway-overview.json").read_text()
+        (ROOT / "deploy" / "grafana" / "dashboards" / "gateway-overview.json").read_text(),
     )
 
     match = re.search(r"(\d+) panels:", README.read_text())
