@@ -1,0 +1,20 @@
+# Review is requested automatically for these paths. A one-owner repository
+# today, so the effect is a reminder on the PR rather than a gate — but the
+# list is the map of where a wrong change costs money, and that is worth
+# having written down whoever is reviewing.
+
+# The spend ceiling and both ledgers. Three bugs here have shipped with
+# passing tests; see docs/decisions/011, 014, 015, 017.
+/app/budget/            @EmriNesimi
+/app/main.py            @EmriNesimi
+
+# What the ceiling is measured in. A wrong price is a wrong reservation.
+/app/budget/pricing.py  @EmriNesimi
+
+# The only copy of the lifetime ledger lives in this Redis; its flags are
+# guarded by tests/test_ledger_durability.py.
+/docker-compose.yml     @EmriNesimi
+
+# The contract and the workflows that publish it.
+/docs/api-versioning.md @EmriNesimi
+/.github/workflows/     @EmriNesimi
