@@ -12,12 +12,20 @@ on:
 permissions:
   contents: read
 
-# One run per branch. Pushing twice in quick succession — which this repo does
-# constantly, given how granular the commits are — otherwise leaves the first
-# run grinding through code that's already been replaced.
+# One run per branch, and superseded runs are cancelled — on pull requests.
+# Pushing twice in quick succession otherwise leaves the first run grinding
+# through code that's already been replaced.
+#
+# Not on main. Cancelling there means a commit that broke the build gets its
+# run killed by the next push and never records a failure; the red only shows
+# up on whichever commit happens to be last. That is how four consecutive
+# failures on main went unnoticed on 2026-09-18 — six of the runs in between
+# read "cancelled", not "failed", and cancelled looks like nothing. Every
+# commit on main gets its own verdict, so `git bisect` against CI means
+# something.
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   test:
