@@ -30,7 +30,23 @@ CLIENT_KEY_ID=$(echo "$create_response" | json_field id)
 echo "-> Using this freshly issued key (team: demo-team) for the rest of the demo."
 # Revoked on the way out, however the script exits. Every earlier run left
 # a live key behind, each one a full monthly budget's worth of exposure.
-trap 'curl -sf -X DELETE "$GATEWAY_URL/admin/keys/$CLIENT_KEY_ID" -H "X-Admin-Key: $ADMIN_KEY" >/dev/null && echo "-> Demo key $CLIENT_KEY_ID revoked."' EXIT
+#
+# A function, not a one-liner: if the revoke itself fails — the gateway went
+# down mid-demo — the key is still live and that has to be said out loud,
+# not swallowed by `&&`. And the script's own exit code is preserved, so a
+# failed demo still reports as failed.
+revoke_demo_key() {
+  local rc=$?
+  if curl -sf -X DELETE "$GATEWAY_URL/admin/keys/$CLIENT_KEY_ID" \
+       -H "X-Admin-Key: $ADMIN_KEY" >/dev/null; then
+    echo "-> Demo key $CLIENT_KEY_ID revoked."
+  else
+    echo "!! Could not revoke demo key $CLIENT_KEY_ID — it is still live." >&2
+    echo "   DELETE $GATEWAY_URL/admin/keys/$CLIENT_KEY_ID with X-Admin-Key to revoke it." >&2
+  fi
+  exit "$rc"
+}
+trap revoke_demo_key EXIT
 
 step "3. A normal chat request (routed through the fallback chain)"
 # Not using curl -f here on purpose: a failure response (e.g. no provider
