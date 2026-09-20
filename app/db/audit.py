@@ -1,3 +1,11 @@
+"""Writing the per-request audit row.
+
+Best-effort by decision 004: this runs after a provider has answered, so a
+database failure here is logged with the request_id and swallowed rather
+than turned into a 500 for a response already paid for. The row is one of
+the two spend records; decision 017 says how it relates to the other.
+"""
+
 import logging
 
 from sqlalchemy import select

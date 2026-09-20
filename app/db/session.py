@@ -1,3 +1,12 @@
+"""Engine, session factory, and startup table creation.
+
+init_db creates tables on SQLite only; Postgres expects migrations to have
+been applied as a deploy step, not raced by every replica on boot. Modules
+that import async_session by name bind the real factory at import — the
+isolated_db fixture patches those by hand, and
+tests/test_db_isolation_reaches_every_import.py checks it reached them all.
+"""
+
 import logging
 from collections.abc import AsyncIterator
 

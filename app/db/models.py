@@ -1,3 +1,12 @@
+"""The three tables.
+
+ApiKeyRecord holds client keys as HMAC hashes, never raw. AuditLogEntry is
+one row per chat request — provider, tokens, cost, latency, request_id.
+AdminAuditEntry is one row per key issued or revoked, kept separate because
+it answers a different question and would otherwise be mostly empty columns
+in queries that exist to look at traffic.
+"""
+
 import datetime
 
 from sqlalchemy import Boolean, DateTime, Float, Integer, String
