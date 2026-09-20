@@ -1,3 +1,12 @@
+"""Anthropic, via the official SDK.
+
+The one adapter that has to move `role: system` messages out of the list
+and into the top-level `system=` argument; sent inline they are a 400,
+which is non-retryable, so the router used to fall past Anthropic on every
+request that carried a system prompt. Also the one that rejects two of the
+four sampling parameters outright rather than ignoring them.
+"""
+
 import logging
 from collections.abc import AsyncIterator
 from typing import cast

@@ -1,3 +1,10 @@
+"""Ollama over its local HTTP API. Free, so exempt from both ledgers.
+
+The last hop in the default chain and the whole of the `local` one. An
+unreachable Ollama is a clean skip (decision 006), not a crash — most
+machines running this do not have it.
+"""
+
 import json
 from collections.abc import AsyncIterator
 

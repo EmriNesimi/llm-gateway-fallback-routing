@@ -1,3 +1,12 @@
+"""The types every provider speaks, and the base class they implement.
+
+ProviderError carries a `retryable` flag (decision 005): a 429 or a timeout
+is worth another attempt at the same provider, a 400 is not and the router
+moves on. DEFAULT_MAX_OUTPUT_TOKENS lives here because both the request
+schema and the OpenAI adapter read it, and they must agree — the
+reservation is computed from one and the request sent with the other.
+"""
+
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, fields

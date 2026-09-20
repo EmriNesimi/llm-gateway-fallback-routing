@@ -1,3 +1,11 @@
+"""OpenAI, via the official SDK.
+
+Always sent an explicit max_tokens, because the reservation assumes one
+(decision 014): called without it, the model generates to its own limit and
+the reservation bounds nothing. A response arriving without a usage block
+is charged an estimate rather than settling as free.
+"""
+
 import logging
 from collections.abc import AsyncIterator
 from typing import cast
