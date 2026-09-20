@@ -1,3 +1,10 @@
+"""Root logger setup: JSON or text, chosen by LOG_FORMAT.
+
+JSON is for a log pipeline; text is for a terminal. Either way every line
+from the request path carries [request_id=...], so a log line and an audit
+row and a trace can be lined up.
+"""
+
 import json
 import logging
 

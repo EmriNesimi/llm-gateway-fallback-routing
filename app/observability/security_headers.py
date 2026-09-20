@@ -1,3 +1,5 @@
+"""nosniff, DENY, no-referrer — on every response, including streamed ones."""
+
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response

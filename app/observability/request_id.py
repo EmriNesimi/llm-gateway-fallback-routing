@@ -1,3 +1,10 @@
+"""Correlation ID per request: honoured from X-Request-ID, else generated.
+
+Capped at the audit table's column width at the boundary, so an oversized
+client-supplied ID cannot fail the INSERT and silently lose that caller's
+audit trail.
+"""
+
 import uuid
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint

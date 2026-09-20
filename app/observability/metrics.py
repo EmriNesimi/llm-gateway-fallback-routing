@@ -1,3 +1,11 @@
+"""Every Prometheus series this gateway exports, declared in one place.
+
+Declared here and nowhere else so a test can walk the file:
+tests/test_metrics_observability.py checks that each series is graphed on
+the dashboard or alerted on, and that each alert queries a series that
+exists. A metric declared inline elsewhere would be invisible to both.
+"""
+
 from prometheus_client import Counter, Gauge, Histogram
 
 REQUEST_COUNT = Counter(
