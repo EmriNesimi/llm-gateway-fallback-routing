@@ -67,6 +67,10 @@ select = ["E", "F", "I", "UP", "B", "S"]
 extend-select = [
     "PT018", "ASYNC110", "PLW1510", "PT006", "PLC0415", "G201",
     "D209", "D403", "D202", "COM812", "SIM300", "Q003", "PLR0402", "RSE102",
+    # Every module and package under app/ has a docstring saying what it is
+    # for. Scoped to app/ via per-file-ignores: a test module's name is its
+    # docstring, and a scripts/ module already has one by convention.
+    "D100", "D104",
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -77,7 +81,7 @@ extend-select = [
 # S101 is `assert`, which is what a test is made of. Only S101 is waived —
 # the rest of the security ruleset still applies to test code, which handles
 # the same secrets the app does.
-"tests/*.py" = ["S101", "PLC0415"]
+"tests/*.py" = ["S101", "PLC0415", "D100", "D104"]
 
 [tool.mypy]
 python_version = "3.12"

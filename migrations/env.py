@@ -1,3 +1,9 @@
+"""Alembic environment: points migrations at the app's models and DATABASE_URL.
+
+Reads the same Settings the gateway does, so `alembic upgrade head` migrates
+the database the gateway will actually connect to.
+"""
+
 import asyncio
 from logging.config import fileConfig
 
