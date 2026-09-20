@@ -79,7 +79,10 @@ async def enforce_rate_limit(
 
 
 async def enforce_admin_rate_limit(
-    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),
+    # Declared so this dependency runs *at* the header, alongside the key
+    # check, and deliberately never read: the bucket is keyed on a fixed
+    # label, not on the presented value. See the docstring.
+    x_admin_key: str | None = Header(default=None, alias="X-Admin-Key"),  # noqa: ARG001
 ) -> None:
     """Rate limit the admin API.
 
