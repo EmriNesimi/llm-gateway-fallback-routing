@@ -1,3 +1,11 @@
+"""Walk a chain: retry the same provider on a retryable error, then move on.
+
+The breaker gates the retry, not the other way round (decision 001). For
+streams, the first chunk is buffered before committing to a provider
+(decision 003), so a provider that dies on its first token still falls
+through rather than truncating a 200 that has already been sent.
+"""
+
 import asyncio
 import logging
 import time

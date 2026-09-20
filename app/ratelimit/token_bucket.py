@@ -1,3 +1,10 @@
+"""A token bucket whose refill-and-take is one Lua script, so it is atomic.
+
+Two concurrent requests cannot both see the last token. fakeredis runs the
+same script through lupa in tests; tests/test_redis_integration.py runs it
+against a real server because the two have disagreed before.
+"""
+
 import time
 
 from redis.asyncio import Redis

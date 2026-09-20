@@ -1,3 +1,12 @@
+"""The two rate-limit dependencies, and why they are ordered differently.
+
+Client routes limit *after* authenticating: the bucket is keyed on the
+caller's key, and there is no trustworthy identity before that. The admin
+route limits *before*, on a fixed label, because the admin key mints client
+keys and is worth throttling guesses at. Decision 016 has the reasoning;
+tests pin both orderings so neither can be "fixed" to match the other.
+"""
+
 import math
 
 from fastapi import Depends, Header, HTTPException, Request, Response, status

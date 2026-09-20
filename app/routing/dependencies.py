@@ -1,3 +1,10 @@
+"""Building a FallbackRouter for a requested chain.
+
+Providers and breakers are process-wide singletons, built on first use.
+Breakers are per-process on purpose (decision 010): a shared one would let
+one sick replica trip the circuit for the whole fleet.
+"""
+
 from app.core.config import settings
 from app.providers.anthropic_provider import AnthropicProvider
 from app.providers.base import BaseProvider, UnconfiguredProvider
