@@ -1,3 +1,12 @@
+"""The per-key monthly ledger.
+
+One Redis key per (client key hash, 30-day period), holding running USD.
+Reserve claims the worst case atomically and hands it back if that crosses
+the cap; settle replaces the claim with the real cost. The key is hashed
+because the raw client key in a Redis key name is the credential in
+plaintext for anyone who can run KEYS.
+"""
+
 import logging
 import time
 

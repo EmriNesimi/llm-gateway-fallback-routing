@@ -1,3 +1,13 @@
+"""The module-level ledger instances, and the pre-flight budget check.
+
+`tracker` and `provider_budget` are built here once against the shared Redis
+client and imported everywhere else — app.main reserves and settles against
+them, scripts/reconcile reads them. `enforce_budget` is the FastAPI dependency
+that turns an exhausted caller away before routing; the reservation itself
+happens later, in _reserve_chain, because that is the first point that knows
+the worst case.
+"""
+
 from fastapi import Depends, HTTPException, Request, Response, status
 
 from app.budget.provider_budget import ProviderBudget
