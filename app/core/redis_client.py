@@ -1,3 +1,10 @@
+"""One Redis client for the process, built on first use.
+
+The rate limiter and both spend ledgers share it. Tests swap it out per
+test through the autouse isolated_redis fixture; anything that captured the
+client at import time is patched there by hand.
+"""
+
 from functools import lru_cache
 
 from redis.asyncio import Redis

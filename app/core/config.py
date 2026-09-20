@@ -1,3 +1,15 @@
+"""Settings, read once at import from the environment and an optional .env.
+
+Read at import rather than lazily, which is why tests/conftest.py has to
+clear the environment *before* importing anything under app — by the time a
+fixture runs, the singleton already exists. GATEWAY_ENV_FILE overrides which
+file is read; empty means none, which is what the suite sets.
+
+Also where a placeholder provider key is recognised and treated as unset,
+so a copied .env.example does not 401 every request while the router quietly
+falls past that provider.
+"""
+
 import logging
 import os
 import re
