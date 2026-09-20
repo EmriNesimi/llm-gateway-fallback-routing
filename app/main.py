@@ -1,3 +1,12 @@
+"""The FastAPI app: routes, lifespan, and the request path from reserve to settle.
+
+Big on purpose. _reserve_chain and _settle_chain are the two ends of every
+billable request and sit next to the handlers that call them, so the pairing
+— every reserve reaches exactly one settle, on success and failure alike —
+can be read in one file. That pairing has broken three times when it was
+spread out; tests/test_ledger_conservation.py now asserts it from outside.
+"""
+
 import asyncio
 import hmac
 import json

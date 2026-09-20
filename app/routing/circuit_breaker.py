@@ -1,3 +1,11 @@
+"""Per-provider circuit breaker: closed, open after N failures, half-open after a cooldown.
+
+Half-open admits exactly one trial request — the claim is timestamped so a
+trial that never reports back cannot wedge the breaker shut. The clock is
+injectable so the tests drive a fake one instead of racing wall time; that
+race was one of the candidates in issue #17.
+"""
+
 import time
 from collections.abc import Callable
 from enum import Enum

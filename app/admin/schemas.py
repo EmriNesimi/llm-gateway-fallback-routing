@@ -1,3 +1,5 @@
+"""Request and response shapes for /admin. CreateKeyResponse carries the raw key exactly once."""
+
 import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator

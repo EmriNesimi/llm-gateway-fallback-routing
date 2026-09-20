@@ -1,3 +1,5 @@
+"""The /admin routes. Every key event writes an AdminAuditEntry in the same transaction."""
+
 import secrets
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status

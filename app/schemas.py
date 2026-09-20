@@ -1,3 +1,12 @@
+"""Request and response shapes for /v1/chat, and the size caps on them.
+
+The caps are cost control, not validation for its own sake (decision 008):
+every provider bills per token, so an unbounded request is an unbounded
+bill. MAX_TOTAL_CONTENT_CHARS is the load-bearing one — a per-message cap
+alone multiplies out to more than the whole lifetime ceiling on the most
+expensive model.
+"""
+
 from typing import Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
