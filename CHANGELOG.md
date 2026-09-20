@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+**Every module says what it is for**
+- A docstring on every module and package under `app/`, written from the
+  code rather than templated — each names the decision it rests on where
+  there is one. D100/D104 pinned for `app/`.
+- ARG pinned for `app/`: a parameter accepted and never read is how a config
+  value gets silently ignored. The admin rate limiter's deliberately-unread
+  header now says so beside the parameter.
+- The demo's exit trap reports a failed key revoke instead of swallowing it,
+  and preserves the script's own exit code.
+- GitHub surface: PR and bug-report templates, `CONTRIBUTING.md`,
+  `CODEOWNERS` for the money path, `.editorconfig`. Dependabot no longer
+  proposes a Python major for the image alone. CI cancels superseded runs
+  on pull requests only — on `main` every commit gets its own verdict, so a
+  failure can no longer hide behind the next push's cancellation.
+
 **Lint tightened, with the rules that caught something pinned**
 - Composite assertions split; three in the ledger-durability tests were
   wrong — `"always"` anywhere in the redis block passed a check meant to
