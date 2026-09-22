@@ -6,6 +6,11 @@
 - A docstring on every module and package under `app/`, written from the
   code rather than templated — each names the decision it rests on where
   there is one. D100/D104 pinned for `app/`.
+- Every public class, method and function under `app/` has a docstring too,
+  and every multi-line docstring opens with a one-line summary that stands
+  alone — tools that show only the first line were showing half a sentence.
+  D101–D103, D204 and D205 pinned. D107, D401 and D212/D213 are off with the
+  reason stated, so they read as decided rather than overlooked.
 - ARG pinned for `app/`: a parameter accepted and never read is how a config
   value gets silently ignored. The admin rate limiter's deliberately-unread
   header now says so beside the parameter.
