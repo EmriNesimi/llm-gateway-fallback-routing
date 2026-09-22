@@ -41,6 +41,7 @@ async def create_key(
     session: AsyncSession = Depends(get_session),
     admin_key: str = Depends(require_admin_key),
 ) -> CreateKeyResponse:
+    """Mint a client key for a team. The raw key is returned once and stored only as a hash."""
     # Shown once, here, and never again — only the hash is persisted.
     raw_key = secrets.token_hex(24)
     record = ApiKeyRecord(key_hash=hash_key(raw_key), team=request.team)
@@ -66,6 +67,7 @@ async def create_key(
 async def list_keys(
     limit: int = 100, offset: int = 0, session: AsyncSession = Depends(get_session),
 ) -> list[ApiKeyRecord]:
+    """Newest first. Hashes only; the raw keys are not recoverable from here."""
     limit = max(1, min(limit, 1000))
     offset = max(0, offset)
     query = select(ApiKeyRecord).order_by(desc(ApiKeyRecord.created_at)).limit(limit).offset(offset)
@@ -75,6 +77,7 @@ async def list_keys(
 
 @router.get("/keys/{key_id}", response_model=ApiKeyOut)
 async def get_key(key_id: int, session: AsyncSession = Depends(get_session)) -> ApiKeyRecord:
+    """One key by id, or 404."""
     record = await session.get(ApiKeyRecord, key_id)
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="key not found")
@@ -88,6 +91,7 @@ async def revoke_key(
     session: AsyncSession = Depends(get_session),
     admin_key: str = Depends(require_admin_key),
 ) -> dict:
+    """Mark a key revoked. 404 if unknown; revoking twice is a no-op, not an error."""
     record = await session.get(ApiKeyRecord, key_id)
     if record is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="key not found")
