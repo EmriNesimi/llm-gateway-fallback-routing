@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+**The two stream generators stopped being two copies**
+- They were 67% identical, including a 25-line block of settle-and-audit
+  repeated verbatim — the shape that has already cost this project three
+  money-path bugs, where a fix lands on one copy and the other keeps the
+  defect. `_settle_stream_spend` and `_try_settle_stream_on_abort` are now
+  shared; the latter replaced four copies of the same try/except-and-log.
+- `settled = True` deliberately did *not* move. It has to sit between the
+  settle and the audit write, and extracting the whole tail would have put
+  it after both and quietly reintroduced a double settle.
+- That flag's own arc — the tail raising *after* the settle succeeded — was
+  the last uncovered branch in `app/`, and is now tested on both stream
+  endpoints. **`app/` is at 100% of statements and branches**, measured the
+  same with and without a real Redis, and the CI floor moved to match.
+- Guards against the money-path tests drifting from the config they stub:
+  three files hardcode a copy of the `smart` chain and two spell out
+  opus-5's per-million rates. Re-pointing a chain or a price change now
+  fails one named guard instead of silently rotting three suites.
+
 **Every module says what it is for**
 - A docstring on every module and package under `app/`, written from the
   code rather than templated — each names the decision it rests on where
