@@ -12,6 +12,8 @@ from enum import Enum
 
 
 class CircuitState(Enum):
+    """Closed is normal. Open blocks calls. Half-open admits one trial after the cooldown."""
+
     CLOSED = "closed"  # normal operation
     OPEN = "open"  # failing, calls blocked
     HALF_OPEN = "half_open"  # cooldown elapsed, one trial call allowed
@@ -82,12 +84,14 @@ class CircuitBreaker:
         return True
 
     def record_success(self) -> None:
+        """Close the circuit and clear the failure count, whatever state it was in."""
         self._failure_count = 0
         self._state = CircuitState.CLOSED
         self._opened_at = None
         self._trial_started_at = None
 
     def record_failure(self) -> None:
+        """Count a failure. Opens at the threshold, or at once if this was the half-open trial."""
         self._failure_count += 1
         if (
             self._state is CircuitState.HALF_OPEN
@@ -99,5 +103,6 @@ class CircuitBreaker:
 
     @property
     def state(self) -> CircuitState:
+        """Current state, after applying the open-to-half-open transition if the cooldown is up."""
         self._update_state()
         return self._state
