@@ -404,7 +404,6 @@ async def _reserve_chain(
     billable = 0
 
     try:
-
         for provider, model in FALLBACK_CHAINS[chain_name]:
             if provider in FREE_PROVIDERS:
                 continue
