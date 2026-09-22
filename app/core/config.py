@@ -58,6 +58,8 @@ _SUPPORTED_DATABASE_SCHEMES = ("sqlite+aiosqlite", "postgresql+asyncpg")
 
 
 class Settings(BaseSettings):
+    """Every setting the gateway reads, with its default. `.env.example` documents each."""
+
     model_config = SettingsConfigDict(env_file=_ENV_FILE, extra="ignore")
 
     openai_api_key: str | None = None
@@ -197,12 +199,15 @@ class Settings(BaseSettings):
         return value
 
     def allowed_api_keys(self) -> list[str]:
+        """GATEWAY_API_KEYS split on commas, blanks dropped. Empty means fail closed."""
         return [k.strip() for k in self.gateway_api_keys.split(",") if k.strip()]
 
     def allowed_cors_origins(self) -> list[str]:
+        """CORS_ALLOWED_ORIGINS split on commas, blanks dropped. Empty means CORS is off."""
         return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
 
     def model_post_init(self, __context: object) -> None:
+        """Warn at startup about the default secret and about missing or placeholder keys."""
         if self.gateway_secret_key == _INSECURE_SECRET_DEFAULT:
             logger.warning(
                 "GATEWAY_SECRET_KEY is the insecure built-in default; set a long "
