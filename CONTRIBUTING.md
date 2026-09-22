@@ -14,6 +14,11 @@ make check       # what CI runs without Docker: lint, types, audit, migrations, 
 `make check` has to pass before a push. CI runs the same steps plus the
 Docker-dependent ones (`make shellcheck` is the local version of one).
 
+If `make check` fails at `migrate-check` with "Target database is not up to
+date", that is almost certainly not model drift: running the gateway locally
+creates its SQLite tables directly, without going through Alembic, so the
+file has no revision recorded. `alembic stamp head` fixes it.
+
 ## Where the rules live
 
 - **Why the code is shaped the way it is:** [`docs/decisions/`](docs/decisions/).

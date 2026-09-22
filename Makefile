@@ -60,6 +60,14 @@ run:  ## uvicorn with reload
 # Same check CI runs: fails if app/db/models.py has drifted from the committed
 # migrations. Worth having locally, since otherwise drift is only ever caught
 # after pushing.
+#
+# "Target database is not up to date" on the default SQLite usually is NOT
+# drift. Starting the gateway creates its tables with create_all (see
+# init_db), which bypasses Alembic, so the file has every table but no
+# alembic_version row and `alembic current` comes back empty. `alembic stamp
+# head` records the revision without re-running anything and this passes
+# again. CI never hits it: its database is fresh and reached head by
+# migration.
 migrate-check:  ## fail if models have drifted from the migrations
 	alembic check
 
