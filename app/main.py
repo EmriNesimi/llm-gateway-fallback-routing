@@ -81,6 +81,7 @@ logger = logging.getLogger("gateway.main")
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Create SQLite tables on startup; close Redis and the DB pool on shutdown, independently."""
     await init_db()
     yield
     # Close pooled connections explicitly on shutdown rather than letting the
@@ -231,6 +232,7 @@ async def readyz() -> Response:
 
 @app.get("/")
 async def root() -> dict[str, str]:
+    """Service name and a pointer to the docs."""
     return {"service": "llm-gateway", "docs": "/docs"}
 
 
@@ -819,6 +821,7 @@ async def chat(
     response: Response,
     api_key: str = Depends(enforce_budget),
 ) -> ChatResponseOut:
+    """Native endpoint: route through the chain, reserve, serve, settle, audit."""
     request_id = http_request.state.request_id
     chain_name, router = _route(request.model, request_id)
     response.headers["X-Gateway-Chain"] = chain_name
@@ -1017,6 +1020,7 @@ async def _event_stream(
 async def chat_stream(
     request: ChatRequest, http_request: Request, api_key: str = Depends(enforce_budget),
 ) -> StreamingResponse:
+    """Native streaming endpoint. Same bookkeeping as `chat`, settled at the end of the stream."""
     request_id = http_request.state.request_id
     chain_name, router = _route(request.model, request_id)
     messages = [ChatMessage(role=m.role, content=m.content) for m in request.messages]
