@@ -24,17 +24,25 @@ Neither store is the provider's invoice. When they disagree, the provider's
 own billing page is the arbiter; this tells you *that* you need to look, and
 which direction the error runs.
 
-Exit code is 1 on any gap above the tolerance, so this can gate a deploy or a
-cron job. Read-only: it changes nothing in either store.
+Exit codes, because the runbook has this on a cron and the two cases call for
+different responses:
+
+    0   the two records agree
+    1   they disagree — investigate, per the runbook
+    2   one of them could not be read at all
+
+Read-only: it changes nothing in either store.
 """
 
 import argparse
 import asyncio
+import re
 import sys
 
 from sqlalchemy import func, select
 
 from app.budget.dependency import provider_budget
+from app.core.config import settings
 from app.db import session as db_session
 from app.db.models import AuditLogEntry
 from app.routing.model_map import billable_providers
@@ -65,6 +73,14 @@ async def _audit_totals() -> dict[str, tuple[int, float]]:
         return {provider: (count, float(total)) for provider, count, total in rows}
 
 
+_UNREACHABLE = 2
+
+
+def _redacted(url: str) -> str:
+    """The URL with any password blanked, so this can be printed."""
+    return re.sub(r"(://[^:/@]*:)[^@]*(@)", r"\1***\2", url)
+
+
 async def reconcile(tolerance_usd: float) -> int:
     # The gateway creates its SQLite tables at startup; a script has no
     # startup. Without this the first run against a fresh database — which is
@@ -73,8 +89,22 @@ async def reconcile(tolerance_usd: float) -> int:
     # For Postgres init_db is a no-op and migrations are expected, as in the app.
     await db_session.init_db()
     providers = billable_providers()
-    ledger = await provider_budget.snapshot(providers)
-    audit = await _audit_totals()
+    # A store that cannot be read is not a store that agrees. Reported as its
+    # own exit code rather than a traceback: the runbook puts this on a cron,
+    # and "could not check" needs a different response from "found a gap".
+    try:
+        ledger = await provider_budget.snapshot(providers)
+    except Exception as exc:  # noqa: BLE001 - reported, not handled
+        print(
+            f"cannot read the ledger at {_redacted(settings.redis_url)}: {exc}",
+            file=sys.stderr,
+        )
+        return _UNREACHABLE
+    try:
+        audit = await _audit_totals()
+    except Exception as exc:  # noqa: BLE001 - reported, not handled
+        print(f"cannot read the audit log: {exc}", file=sys.stderr)
+        return _UNREACHABLE
 
     print(
         f"{'provider':<12} {'ledger':>12} {'audit log':>12} {'requests':>9}"

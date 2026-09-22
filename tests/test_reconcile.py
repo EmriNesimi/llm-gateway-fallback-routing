@@ -66,3 +66,32 @@ async def test_float_drift_is_not_a_gap(monkeypatch):
     await _audit("openai", 0.000270)
 
     assert await reconcile(tolerance_usd=1e-5) == 0
+
+
+@pytest.mark.asyncio
+async def test_an_unreachable_ledger_exits_two_not_one(monkeypatch, capsys):
+    """The runbook crons this. "Could not check" and "found a gap" need
+    different responses, so they get different exit codes — and a page is
+    worth more than a traceback.
+    """
+    monkeypatch.setattr("scripts.reconcile.billable_providers", lambda: PROVIDERS)
+
+    async def _unreachable(*a, **k):
+        raise ConnectionError("connection refused")
+
+    monkeypatch.setattr(budget_dependency.provider_budget, "snapshot", _unreachable)
+
+    assert await reconcile(tolerance_usd=1e-5) == 2
+    assert "cannot read the ledger" in capsys.readouterr().err
+
+
+def test_the_printed_url_has_no_password():
+    """It is printed on failure, which is exactly when someone pastes the
+    output into an issue.
+    """
+    from scripts.reconcile import _redacted
+
+    assert _redacted("redis://:hunter2@localhost:6379/0") == "redis://:***@localhost:6379/0"
+    assert "hunter2" not in _redacted("redis://:hunter2@localhost:6379/0")
+    # No credentials, nothing to redact.
+    assert _redacted("redis://localhost:6379/0") == "redis://localhost:6379/0"
