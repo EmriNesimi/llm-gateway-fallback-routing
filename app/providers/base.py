@@ -14,6 +14,8 @@ from dataclasses import dataclass, fields
 
 @dataclass
 class ChatMessage:
+    """One turn of conversation, provider-neutral. Adapters translate the role names."""
+
     role: str
     content: str
 
@@ -47,6 +49,7 @@ class SamplingParams:
     stop: list[str] | None = None
 
     def is_empty(self) -> bool:
+        """True when the caller set nothing, so adapters can skip the parameter block entirely."""
         return all(getattr(self, f.name) is None for f in fields(self))
 
     def set_names(self) -> list[str]:
@@ -56,6 +59,8 @@ class SamplingParams:
 
 @dataclass
 class ChatResponse:
+    """A completed, non-streamed answer with the token counts the ledgers price it from."""
+
     content: str
     provider: str
     model: str
@@ -111,6 +116,8 @@ def is_retryable_status_code(status_code: int) -> bool:
 
 
 class BaseProvider(ABC):
+    """What every adapter implements: a name, a chat call, and a chat stream."""
+
     name: str
 
     @abstractmethod
@@ -120,6 +127,7 @@ class BaseProvider(ABC):
         messages: list[ChatMessage],
         params: SamplingParams | None = None,
     ) -> ChatResponse:
+        """Complete the conversation. Raise ProviderError, with `retryable` set, on any failure."""
         ...
 
     @abstractmethod
@@ -129,6 +137,7 @@ class BaseProvider(ABC):
         messages: list[ChatMessage],
         params: SamplingParams | None = None,
     ) -> AsyncIterator[StreamChunk]:
+        """Stream the completion. The last chunk must carry `done=True` and token counts."""
         ...
 
 
@@ -151,6 +160,7 @@ class UnconfiguredProvider(BaseProvider):
         messages: list[ChatMessage],
         params: SamplingParams | None = None,
     ) -> ChatResponse:
+        """Fail without a network call. Non-retryable: the same key is missing next time too."""
         raise ProviderError(f"{self.name} is not configured (no API key set)", retryable=False)
 
     async def chat_stream(
@@ -159,5 +169,6 @@ class UnconfiguredProvider(BaseProvider):
         messages: list[ChatMessage],
         params: SamplingParams | None = None,
     ) -> AsyncIterator[StreamChunk]:
+        """Same as `chat`. An async generator, so the raise happens on first iteration."""
         raise ProviderError(f"{self.name} is not configured (no API key set)", retryable=False)
         yield  # pragma: no cover - unreachable, makes this an async generator
