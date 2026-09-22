@@ -59,8 +59,9 @@ class TokenBucketLimiter:
         self._script = redis.register_script(_LUA_TOKEN_BUCKET)
 
     async def check(self, key: str, cost: int = 1) -> tuple[bool, float]:
-        """Like `allow`, but also returns the tokens remaining after this
-        check — used to surface X-RateLimit-Remaining on responses.
+        """Like `allow`, but also returns the tokens remaining after this check.
+
+        Used to surface X-RateLimit-Remaining on responses.
         """
         allowed, remaining = await self._script(
             keys=[f"ratelimit:{hash_key(key)}"],
