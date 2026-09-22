@@ -88,6 +88,12 @@ extend-select = [
 # - D212/D213 (summary on first vs second line): the repo is consistent on
 #   first-line summaries already; the rule pair is incompatible with itself
 #   and warns on every run.
+# - RUF100 (unused noqa): it judges a noqa unused against the *selected*
+#   rules, and sixteen here suppress rules this config does not select but
+#   that a contributor running `--select ALL` will hit — S105 on the Lua
+#   script, BLE001 on the deliberate swallows. Enabling it would strip every
+#   one of them. Verified: `ruff check --select ALL` reports zero RUF100,
+#   which is the check that matters.
 
 [tool.ruff.lint.per-file-ignores]
 # B008 flags function calls in argument defaults, which is exactly how FastAPI
