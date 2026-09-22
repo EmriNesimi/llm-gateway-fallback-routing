@@ -722,6 +722,38 @@ async def _settle_providers(
         raise cancellation
 
 
+async def _try_settle_stream_on_abort(
+    api_key: str,
+    requested_model: str,
+    final_provider: str,
+    final_model: str,
+    input_tokens: int,
+    streamed_chars: int,
+    reservations: dict[str, float] | None,
+    request_id: str,
+    start: float,
+) -> None:
+    """_settle_stream_on_abort, with its own failure swallowed and logged.
+
+    Four call sites, every one of them inside a handler that is already
+    reporting a failure to the caller. The settle recomputes cost through the
+    same code that just failed, so it can fail identically — and telling the
+    caller matters more than the bookkeeping here: losing the error frame
+    would truncate the stream, which is the whole failure those handlers
+    exist to prevent.
+    """
+    try:
+        await _settle_stream_on_abort(
+            api_key, requested_model, final_provider, final_model,
+            input_tokens, streamed_chars, reservations, request_id, start,
+        )
+    except Exception:  # noqa: BLE001 - see docstring
+        logger.exception(
+            "[request_id=%s] could not settle after a mid-stream failure",
+            request_id,
+        )
+
+
 async def _settle_stream_spend(
     api_key: str,
     final_provider: str,
@@ -991,21 +1023,10 @@ async def _event_stream(
         logger.error(
             "[request_id=%s] unhandled exception mid-stream", request_id, exc_info=exc,
         )
-        try:
-            await _settle_stream_on_abort(
-                api_key, requested_model, final_provider, final_model,
-                input_tokens, streamed_chars, reservations, request_id, start,
-            )
-        except Exception:  # noqa: BLE001
-            # The settle recomputes cost through the same code that just
-            # failed, so it can fail identically. Telling the caller matters
-            # more than the bookkeeping here — losing the frame would truncate
-            # the stream, which is the whole failure this handler exists to
-            # prevent.
-            logger.exception(
-                "[request_id=%s] could not settle after a mid-stream failure",
-                request_id,
-            )
+        await _try_settle_stream_on_abort(
+            api_key, requested_model, final_provider, final_model,
+            input_tokens, streamed_chars, reservations, request_id, start,
+        )
         yield _stream_error_frame(request_id)
         return
     finally:
@@ -1047,16 +1068,10 @@ async def _event_stream(
             exc_info=exc,
         )
         if not settled:
-            try:
-                await _settle_stream_on_abort(
-                    api_key, requested_model, final_provider, final_model,
-                    input_tokens, streamed_chars, reservations, request_id, start,
-                )
-            except Exception:  # noqa: BLE001 - same reasoning as above
-                logger.exception(
-                    "[request_id=%s] could not settle after a mid-stream failure",
-                    request_id,
-                )
+            await _try_settle_stream_on_abort(
+                api_key, requested_model, final_provider, final_model,
+                input_tokens, streamed_chars, reservations, request_id, start,
+            )
         REQUEST_COUNT.labels(status="error").inc()
         yield _stream_error_frame(request_id)
         return
@@ -1204,16 +1219,10 @@ async def _openai_event_stream(
         logger.error(
             "[request_id=%s] unhandled exception mid-stream", request_id, exc_info=exc,
         )
-        try:
-            await _settle_stream_on_abort(
-                api_key, requested_model, final_provider, final_model,
-                input_tokens, streamed_chars, reservations, request_id, start,
-            )
-        except Exception:  # noqa: BLE001
-            logger.exception(
-                "[request_id=%s] could not settle after a mid-stream failure",
-                request_id,
-            )
+        await _try_settle_stream_on_abort(
+            api_key, requested_model, final_provider, final_model,
+            input_tokens, streamed_chars, reservations, request_id, start,
+        )
         yield _stream_error_frame(request_id)
         return
     finally:
@@ -1250,16 +1259,10 @@ async def _openai_event_stream(
             exc_info=exc,
         )
         if not settled:
-            try:
-                await _settle_stream_on_abort(
-                    api_key, requested_model, final_provider, final_model,
-                    input_tokens, streamed_chars, reservations, request_id, start,
-                )
-            except Exception:  # noqa: BLE001
-                logger.exception(
-                    "[request_id=%s] could not settle after a mid-stream failure",
-                    request_id,
-                )
+            await _try_settle_stream_on_abort(
+                api_key, requested_model, final_provider, final_model,
+                input_tokens, streamed_chars, reservations, request_id, start,
+            )
         REQUEST_COUNT.labels(status="error").inc()
         yield _stream_error_frame(request_id)
         return
