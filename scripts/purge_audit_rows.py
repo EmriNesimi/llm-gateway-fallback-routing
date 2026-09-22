@@ -43,47 +43,79 @@ def _serialise(row: AuditLogEntry) -> dict:
     }
 
 
-async def purge(request_id: str, apply: bool, export_dir: pathlib.Path) -> int:
-    await db_session.init_db()  # see reconcile.py: no startup, no tables otherwise
+_UNREACHABLE = 2
+
+
+async def _rows_carrying(request_id: str) -> list[dict]:
+    """Every audit row with exactly this request_id, already serialised.
+
+    Serialised inside the session rather than returning ORM objects: a
+    detached instance reads its loaded columns fine today, but nothing
+    downstream needs the ORM and dicts cannot lazy-load against a closed
+    session by accident.
+    """
     async with db_session.async_session() as session:
-        rows = list(
-            (await session.execute(
+        rows = (
+            await session.execute(
                 select(AuditLogEntry).where(AuditLogEntry.request_id == request_id),
-            )).scalars(),
+            )
+        ).scalars()
+        return [_serialise(r) for r in rows]
+
+
+async def _delete_rows_carrying(request_id: str) -> None:
+    """Remove them. Called only after the export has been written and read back."""
+    async with db_session.async_session() as session:
+        await session.execute(
+            delete(AuditLogEntry).where(AuditLogEntry.request_id == request_id),
         )
-        if not rows:
-            print(f"no audit rows carry request_id={request_id!r}; nothing to do")
-            return 0
-
-        total = sum(r.cost_usd for r in rows)
-        by_provider: dict[str, int] = {}
-        for r in rows:
-            by_provider[r.provider] = by_provider.get(r.provider, 0) + 1
-        print(
-            f"{len(rows)} rows carry request_id={request_id!r}, totalling ${total:.6f}"
-            f" across {by_provider}",
-        )
-
-        if not apply:
-            print("dry run — pass --apply to remove them (a JSON copy is written first)")
-            return 0
-
-        export_dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
-        export = export_dir / f"audit-purge-{stamp}-{request_id}.json"
-        export.write_text(json.dumps([_serialise(r) for r in rows], indent=2))
-        # Read it back before deleting anything. A write that raised would
-        # have stopped us already; this guards against the quieter case of a
-        # file that exists and is not the rows. A real raise, not an assert —
-        # `python -O` strips asserts, and this is the one check that must run.
-        if len(json.loads(export.read_text())) != len(rows):
-            raise RuntimeError(f"export at {export} did not round-trip; nothing deleted")
-        print(f"exported to {export}")
-
-        await session.execute(delete(AuditLogEntry).where(AuditLogEntry.request_id == request_id))
         await session.commit()
-        print(f"removed {len(rows)} rows")
+
+
+async def purge(request_id: str, apply: bool, export_dir: pathlib.Path) -> int:
+    # A database that cannot be reached is its own exit code, not a traceback
+    # — the same split reconcile.py makes. It matters more here: this is the
+    # tool that deletes rows, so "nothing happened because the database was
+    # down" must not read like "nothing happened because nothing matched".
+    try:
+        await db_session.init_db()  # see reconcile.py: no startup, no tables otherwise
+        rows = await _rows_carrying(request_id)
+    except Exception as exc:  # noqa: BLE001 - reported, not handled
+        print(f"cannot read the audit log: {exc}", file=sys.stderr)
+        return _UNREACHABLE
+
+    if not rows:
+        print(f"no audit rows carry request_id={request_id!r}; nothing to do")
         return 0
+
+    total = sum(r["cost_usd"] for r in rows)
+    by_provider: dict[str, int] = {}
+    for r in rows:
+        by_provider[r["provider"]] = by_provider.get(r["provider"], 0) + 1
+    print(
+        f"{len(rows)} rows carry request_id={request_id!r}, totalling ${total:.6f}"
+        f" across {by_provider}",
+    )
+
+    if not apply:
+        print("dry run — pass --apply to remove them (a JSON copy is written first)")
+        return 0
+
+    export_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.datetime.now(datetime.UTC).strftime("%Y%m%dT%H%M%SZ")
+    export = export_dir / f"audit-purge-{stamp}-{request_id}.json"
+    export.write_text(json.dumps(rows, indent=2))
+    # Read it back before deleting anything. A write that raised would have
+    # stopped us already; this guards against the quieter case of a file that
+    # exists and is not the rows. A real raise, not an assert — `python -O`
+    # strips asserts, and this is the one check that must run.
+    if len(json.loads(export.read_text())) != len(rows):
+        raise RuntimeError(f"export at {export} did not round-trip; nothing deleted")
+    print(f"exported to {export}")
+
+    await _delete_rows_carrying(request_id)
+    print(f"removed {len(rows)} rows")
+    return 0
 
 
 def main() -> None:

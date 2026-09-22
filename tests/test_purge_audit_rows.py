@@ -82,3 +82,23 @@ async def test_nothing_to_do_is_not_an_error(isolated_db, tmp_path, capsys):
     assert await purge("absent", apply=True, export_dir=tmp_path) == 0
     assert "nothing to do" in capsys.readouterr().out
     assert not list(tmp_path.iterdir())
+
+
+@pytest.mark.asyncio
+async def test_an_unreachable_database_exits_two(monkeypatch, tmp_path, capsys):
+    """Distinct from 0 ("nothing matched") on purpose.
+
+    This is the tool that deletes rows. "Nothing happened because the
+    database was down" and "nothing happened because nothing matched" are
+    both quiet successes at a glance, and only one of them means the purge
+    still needs doing.
+    """
+    async def _unreachable(*a, **k):
+        raise ConnectionError("connection refused")
+
+    monkeypatch.setattr("scripts.purge_audit_rows._rows_carrying", _unreachable)
+
+    assert await purge("fake-id", apply=True, export_dir=tmp_path) == 2
+
+    assert "cannot read the audit log" in capsys.readouterr().err
+    assert not list(tmp_path.iterdir()), "an unreachable database still wrote an export"
