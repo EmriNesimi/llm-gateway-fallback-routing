@@ -60,5 +60,6 @@ async def init_db() -> None:
 
 
 async def get_session() -> AsyncIterator[AsyncSession]:
+    """FastAPI dependency yielding one session per request."""
     async with async_session() as session:
         yield session

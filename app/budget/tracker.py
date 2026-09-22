@@ -59,6 +59,7 @@ class BudgetTracker:
         return f"budget:{hash_key(api_key)}:{period}"
 
     async def spent_usd(self, api_key: str) -> float:
+        """This key's total for the period, reservations included. Raises on Redis failure."""
         # Deliberately NOT swallowed like settle below: this backs the
         # pre-flight budget check in app/budget/dependency.py, which must
         # fail closed on a Redis outage (block the request) rather than
@@ -67,6 +68,7 @@ class BudgetTracker:
         return float(raw) if raw else 0.0
 
     async def has_budget(self, api_key: str) -> bool:
+        """True while spent is under the monthly cap."""
         return await self.spent_usd(api_key) < self._monthly_cap_usd
 
     async def reserve(self, api_key: str, worst_case_usd: float) -> None:

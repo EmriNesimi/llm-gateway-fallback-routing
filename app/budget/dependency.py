@@ -36,6 +36,7 @@ async def enforce_budget(
     response: Response,
     api_key: str = Depends(enforce_rate_limit),
 ) -> str:
+    """Refuse a caller already at its monthly cap. The reservation itself is in _reserve_chain."""
     # A fast refusal for a caller already over its cap, not the enforcement
     # itself. Enforcement is the atomic reservation in _reserve_chain
     # (decision 015): the worst case depends on the resolved chain and model,

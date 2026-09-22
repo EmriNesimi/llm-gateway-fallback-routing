@@ -91,6 +91,7 @@ def worst_case_cost_usd(
 def estimate_cost_usd(
     provider: str, model: str, input_tokens: int, output_tokens: int,
 ) -> float:
+    """USD for a completed request, from the priced rates for this provider and model."""
     key = f"{provider}:{model}"
     pricing = _PRICING.get(key)
     if pricing is None:

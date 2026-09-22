@@ -14,6 +14,7 @@ from app.core.config import settings
 
 @lru_cache
 def get_redis() -> Redis:
+    """The process-wide async Redis client, created on first call."""
     return Redis.from_url(
         settings.redis_url,
         decode_responses=True,

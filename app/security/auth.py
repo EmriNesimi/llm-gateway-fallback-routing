@@ -42,6 +42,7 @@ async def require_api_key(
     x_api_key: str | None = Header(default=None, alias="X-API-Key"),
     session: AsyncSession = Depends(get_session),
 ) -> str:
+    """Authenticate X-API-Key or a Bearer token: env list first, then the database. Else 401."""
     allowed = settings.allowed_api_keys()
     presented = _extract_key(authorization, x_api_key)
 
