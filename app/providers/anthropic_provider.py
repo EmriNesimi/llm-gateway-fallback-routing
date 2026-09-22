@@ -111,6 +111,8 @@ def _provider_error(prefix: str, exc: AnthropicError) -> ProviderError:
 
 
 class AnthropicProvider(BaseProvider):
+    """Anthropic via the official async SDK."""
+
     name = "anthropic"
 
     def __init__(self, api_key: str, timeout_seconds: float = 30.0):
@@ -122,6 +124,7 @@ class AnthropicProvider(BaseProvider):
         messages: list[ChatMessage],
         params: SamplingParams | None = None,
     ) -> ChatResponse:
+        """One completion. System messages are hoisted out of the list into `system=` first."""
         system, conversation = _split_system(messages)
         kwargs = _sampling_kwargs(model, params)
         if system:
@@ -151,6 +154,7 @@ class AnthropicProvider(BaseProvider):
         messages: list[ChatMessage],
         params: SamplingParams | None = None,
     ) -> AsyncIterator[StreamChunk]:
+        """Stream text deltas, then a final chunk with usage from the message_delta event."""
         system, conversation = _split_system(messages)
         kwargs = _sampling_kwargs(model, params)
         if system:
