@@ -35,11 +35,13 @@ MAX_OUTPUT_TOKENS = DEFAULT_MAX_OUTPUT_TOKENS
 
 
 class ChatMessageIn(BaseModel):
+    """One message in the conversation, as a client sends it."""
     role: Literal["system", "user", "assistant"]
     content: str = Field(min_length=1, max_length=MAX_CONTENT_CHARS)
 
 
 class ChatRequest(BaseModel):
+    """Body of the native /v1/chat endpoint. `model` names a chain, not a model."""
     # max_length matches AuditLogEntry.requested_model's String(255) column.
     # An oversized value wouldn't break /v1/chat itself (record_audit_log
     # catches DB failures — see decision 004) but would silently and
@@ -72,6 +74,7 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponseOut(BaseModel):
+    """Response from /v1/chat: the text, plus which provider and model actually answered."""
     content: str
     provider: str
     model: str
@@ -99,6 +102,11 @@ FORWARDED_COMPLETION_FIELDS = frozenset(
 
 
 class ChatCompletionRequest(BaseModel):
+    """OpenAI-shaped request body for /v1/chat/completions.
+
+    Unknown fields are allowed and reported back via `ignored_params`, so an
+    existing client keeps working and can see what the gateway did not forward.
+    """
     model_config = ConfigDict(extra="allow")
 
     model: str = Field(min_length=1, max_length=255)
@@ -136,6 +144,7 @@ class ChatCompletionRequest(BaseModel):
         return self
 
     def sampling_params(self) -> SamplingParams:
+        """The four forwarded parameters, in the shape every provider adapter takes."""
         return SamplingParams(
             temperature=self.temperature,
             top_p=self.top_p,
@@ -152,23 +161,27 @@ class ChatCompletionRequest(BaseModel):
 
 
 class ChatCompletionMessage(BaseModel):
+    """The assistant turn inside an OpenAI-shaped choice."""
     role: Literal["assistant"] = "assistant"
     content: str
 
 
 class ChatCompletionChoice(BaseModel):
+    """One completion. This gateway always returns exactly one."""
     index: int = 0
     message: ChatCompletionMessage
     finish_reason: str = "stop"
 
 
 class ChatCompletionUsage(BaseModel):
+    """Token counts in OpenAI's field names, so client-side cost tracking keeps working."""
     prompt_tokens: int
     completion_tokens: int
     total_tokens: int
 
 
 class ChatCompletionResponse(BaseModel):
+    """OpenAI-shaped response for /v1/chat/completions."""
     id: str
     object: Literal["chat.completion"] = "chat.completion"
     created: int
