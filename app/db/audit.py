@@ -28,8 +28,10 @@ async def record_audit_log(
     latency_ms: float = 0.0,
     request_id: str = "",
 ) -> None:
-    """Best-effort: the audit log is bookkeeping, not the primary contract of
-    /v1/chat. A DB outage here must not turn an already-successful chat
+    """Write one audit row. Best-effort by decision 004.
+
+    The audit log is bookkeeping, not the primary contract of /v1/chat. A DB
+    outage here must not turn an already-successful chat
     response into a 500 for the caller — so failures are logged (loudly, with
     the request_id needed to notice and investigate) rather than raised.
     """

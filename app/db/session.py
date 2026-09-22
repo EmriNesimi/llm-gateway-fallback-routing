@@ -21,8 +21,10 @@ logger = logging.getLogger("gateway.db")
 def build_connect_args(
     database_url: str, connect_timeout_seconds: float, command_timeout_seconds: float,
 ) -> dict[str, float]:
-    """asyncpg-specific connect/command timeouts — meaningless to (and
-    rejected by) aiosqlite, so only returned for a Postgres DATABASE_URL. See
+    """Driver connect arguments, Postgres only.
+
+    asyncpg-specific connect/command timeouts — meaningless to (and rejected
+    by) aiosqlite, so only returned for a Postgres DATABASE_URL. See
     app/core/config.py for why these exist: asyncpg's own defaults either
     aren't set (command_timeout) or are too long for a request path
     (connect). A plain function so this logic is testable without reloading
@@ -45,8 +47,10 @@ async_session = async_sessionmaker(engine, expire_on_commit=False)
 
 
 async def init_db() -> None:
-    """Create tables if they don't exist yet — a zero-config convenience for
-    local dev on the default SQLite DB. For Postgres (or any deployment where
+    """Create tables on SQLite; expect migrations everywhere else.
+
+    A zero-config convenience for local dev on the default SQLite DB. For
+    Postgres (or any deployment where
     multiple instances might boot concurrently), this is skipped: schema
     changes belong to `alembic upgrade head`, run once as an explicit deploy
     step (see docker-entrypoint.sh), not raced by every replica on startup.
