@@ -6,8 +6,9 @@ from starlette.responses import Response
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
-    """A handful of response headers that cost nothing and rule out whole
-    classes of browser-side attacks (MIME sniffing, clickjacking) on any
+    """Response headers that cost nothing and rule out whole classes of attack.
+
+    MIME sniffing and clickjacking, on any (MIME sniffing, clickjacking) on any
     endpoint that ends up rendered rather than consumed by a script.
     """
 

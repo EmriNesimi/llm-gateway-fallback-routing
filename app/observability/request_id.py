@@ -23,8 +23,10 @@ _MAX_REQUEST_ID_LENGTH = 64
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):
-    """Every request gets a correlation ID: honors an incoming X-Request-ID
-    (so a caller's own tracing can carry through), otherwise generates one.
+    """Every request gets a correlation ID.
+
+    Honors an incoming X-Request-ID (so a caller's own tracing can carry
+    through), otherwise generates one.
     Stashed on request.state for handlers/audit log/spans, and echoed back
     on the response so a caller always has something to hand to support.
     """
