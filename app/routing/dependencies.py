@@ -64,8 +64,9 @@ def _get_breaker(name: str) -> CircuitBreaker:
 
 
 def build_router(virtual_model: str) -> tuple[str, FallbackRouter]:
-    """Build the router for a requested model, and report which chain it
-    resolved to. The caller needs the name to tell the client what actually
+    """Build the router for a requested model, and say which chain it resolved to.
+
+    The caller needs the name to tell the client what actually
     served the request when the requested model wasn't routable.
     """
     chain_name, chain_spec = resolve_chain(virtual_model)
