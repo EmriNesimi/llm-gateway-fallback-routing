@@ -74,6 +74,8 @@ def _to_openai_messages(messages: list[ChatMessage]) -> list[ChatCompletionMessa
 
 
 class OpenAIProvider(BaseProvider):
+    """OpenAI via the official async SDK."""
+
     name = "openai"
 
     def __init__(self, api_key: str, timeout_seconds: float = 30.0):
@@ -85,6 +87,7 @@ class OpenAIProvider(BaseProvider):
         messages: list[ChatMessage],
         params: SamplingParams | None = None,
     ) -> ChatResponse:
+        """One completion. Always sends max_tokens; estimates usage if the response omits it."""
         try:
             response = await self._client.chat.completions.create(
                 model=model,
@@ -143,6 +146,7 @@ class OpenAIProvider(BaseProvider):
         messages: list[ChatMessage],
         params: SamplingParams | None = None,
     ) -> AsyncIterator[StreamChunk]:
+        """Stream deltas, then a final chunk with usage, which has to be asked for explicitly."""
         try:
             stream = await self._client.chat.completions.create(
                 model=model,
