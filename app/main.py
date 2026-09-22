@@ -141,7 +141,9 @@ app.include_router(admin_router)
 
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(request: Request, exc: Exception) -> Response:
-    """Catches anything that isn't an HTTPException (which FastAPI already
+    """Last-resort handler for anything nothing else caught.
+
+    Catches anything that isn't an HTTPException (which FastAPI already
     handles) or AllProvidersFailedError (which the chat endpoints handle
     themselves) — an unexpected bug, a DB or Redis outage that wasn't caught
     closer to its source, etc. Without this, such a failure would still
@@ -176,8 +178,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> Respo
 
 @app.get("/healthz")
 async def healthz() -> dict[str, str]:
-    """Liveness: is the process up? No dependency checks — used by orchestrators
-    to decide whether to restart the container.
+    """Liveness: is the process up?
+
+    No dependency checks — used by orchestrators to decide whether to restart
+    the container.
     """
     return {"status": "ok"}
 
@@ -207,8 +211,9 @@ async def _check_database() -> str:
 
 @app.get("/readyz")
 async def readyz() -> Response:
-    """Readiness: can this instance actually serve traffic? Checks the
-    dependencies /v1/chat needs (Redis for rate limits/budgets, the DB for
+    """Readiness: can this instance actually serve traffic?
+
+    Checks the dependencies /v1/chat needs (Redis for rate limits/budgets, the DB for
     the admin API/audit log) so a load balancer can route around an instance
     that's up but can't reach them.
 
@@ -272,8 +277,10 @@ async def metrics(
 
 @app.get("/v1/models")
 async def list_models(_: str = Depends(require_api_key)) -> dict[str, Any]:
-    """The model names this gateway will route, so a client can discover them
-    instead of guessing and silently landing on the default chain.
+    """The chain names a client may pass as `model`.
+
+    Published so a client can discover them instead of guessing and silently
+    landing on the default chain.
 
     Shaped like OpenAI's /v1/models (an object/data envelope) so the same
     client code works against either, with the provider chain added since
@@ -296,8 +303,9 @@ async def list_models(_: str = Depends(require_api_key)) -> dict[str, Any]:
 def _route(
     requested_model: str, request_id: str, *, strict: bool | None = None,
 ) -> tuple[str, FallbackRouter]:
-    """Pick the chain for a requested model, and decide what to do when there
-    isn't one.
+    """Pick the chain for a requested model.
+
+    And decide what to do when there isn't one.
 
     Unrecognized names resolve to the default chain by default — that's what
     this gateway has always done, and turning it into an error would break
@@ -352,8 +360,10 @@ async def _reserve_chain(
     request_id: str,
     api_key: str,
 ) -> tuple[dict[str, float], set[str]]:
-    """Claim worst-case budget on every billable provider the chain may reach,
-    and the same total against the caller's own monthly share.
+    """Reserve the worst case on both ledgers before any provider is called.
+
+    Every billable provider the chain may reach is claimed against, and the
+    same total against the caller's own monthly share.
 
     Reserving up front rather than checking-then-calling is what makes the
     ceiling hold under concurrency: with a burst allowance of 20, twenty
@@ -1250,9 +1260,11 @@ async def chat_completions(
     response: Response,
     api_key: str = Depends(enforce_budget),
 ) -> ChatCompletionResponse | StreamingResponse:
-    """OpenAI Chat Completions, so an unmodified `openai` client can point its
-    base_url here and get the fallback chain, rate limiting, budgets, and audit
-    trail without changing a line of application code.
+    """OpenAI Chat Completions, as a drop-in.
+
+    An unmodified `openai` client can point its base_url here and get the
+    fallback chain, rate limiting, budgets, and audit trail without changing a
+    line of application code.
 
     Routes strictly: this endpoint has no existing callers, so unlike
     /v1/chat it can reject an unroutable model from day one rather than
