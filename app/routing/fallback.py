@@ -88,6 +88,7 @@ class FallbackRouter:
         params: SamplingParams | None = None,
         skip_providers: set[str] | None = None,
     ) -> ChatResponse:
+        """Try each provider in order, retrying a retryable failure on the same one first."""
         errors: list[str] = []
         tried_any = False
 

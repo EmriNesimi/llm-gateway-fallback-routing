@@ -75,6 +75,7 @@ def routable_models() -> list[str]:
 
 
 def is_routable(virtual_model: str) -> bool:
+    """True if `virtual_model` names a chain this gateway knows."""
     return virtual_model in FALLBACK_CHAINS
 
 

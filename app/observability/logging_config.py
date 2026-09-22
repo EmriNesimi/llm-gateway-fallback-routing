@@ -17,6 +17,7 @@ class JsonFormatter(logging.Formatter):
     """
 
     def format(self, record: logging.LogRecord) -> str:
+        """One JSON object per line: level, logger, message, timestamp, and the traceback if any."""
         payload = {
             "level": record.levelname,
             "logger": record.name,
@@ -28,6 +29,7 @@ class JsonFormatter(logging.Formatter):
 
 
 def configure_logging() -> None:
+    """Install the JSON or text formatter on the root logger, per LOG_FORMAT."""
     handler = logging.StreamHandler()
     if settings.log_format == "json":
         handler.setFormatter(JsonFormatter())

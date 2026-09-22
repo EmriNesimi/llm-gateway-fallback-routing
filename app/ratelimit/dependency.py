@@ -37,6 +37,7 @@ async def enforce_rate_limit(
     response: Response,
     api_key: str = Depends(require_api_key),
 ) -> str:
+    """Take one token from the caller's bucket, or 429 with Retry-After. Runs after auth."""
     # NOTE the ordering, which is the opposite of the admin API's on purpose.
     # require_api_key is a SUB-dependency here, so FastAPI resolves it first:
     # an invalid key 401s before the bucket is touched, and a key that is not

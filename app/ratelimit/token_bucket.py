@@ -69,9 +69,11 @@ class TokenBucketLimiter:
         return bool(allowed), float(remaining)
 
     async def allow(self, key: str, cost: int = 1) -> bool:
+        """Take `cost` tokens if available. Just the yes/no; `check` also returns what is left."""
         allowed, _remaining = await self.check(key, cost)
         return allowed
 
     @property
     def capacity(self) -> int:
+        """Bucket size, from RATE_LIMIT_CAPACITY. Also the burst a fresh key can make."""
         return self._capacity

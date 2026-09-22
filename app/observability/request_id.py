@@ -32,6 +32,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint,
     ) -> Response:
+        """Attach a request_id to request.state and echo it back as X-Request-ID."""
         incoming = request.headers.get("X-Request-ID")
         if incoming and len(incoming) <= _MAX_REQUEST_ID_LENGTH:
             request_id = incoming
