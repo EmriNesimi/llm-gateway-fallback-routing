@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class CreateKeyRequest(BaseModel):
+    """Body of POST /admin/keys: the team the new key belongs to."""
     # max_length matches ApiKeyRecord.team / AuditLogEntry.team's
     # String(255) column. Without this, SQLite (used in dev/tests) silently
     # accepts an oversized value — VARCHAR length isn't enforced there — but
@@ -28,6 +29,7 @@ class CreateKeyRequest(BaseModel):
 
 
 class CreateKeyResponse(BaseModel):
+    """The raw key, shown once, plus its team and row id for later revocation."""
     api_key: str
     team: str
     # The row id, so the caller that just minted this key can revoke it
@@ -37,6 +39,7 @@ class CreateKeyResponse(BaseModel):
 
 
 class ApiKeyOut(BaseModel):
+    """A key as listed: id, team, created, revoked. Never the key itself."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
@@ -46,6 +49,7 @@ class ApiKeyOut(BaseModel):
 
 
 class AuditLogEntryOut(BaseModel):
+    """One request audit row, as returned by GET /admin/audit-log."""
     model_config = ConfigDict(from_attributes=True)
 
     id: int
