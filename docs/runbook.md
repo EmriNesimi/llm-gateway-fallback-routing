@@ -237,6 +237,11 @@ on a gap, so the whole job is:
 cd /path/to/llm-gateway-fallback-routing && make reconcile || <page someone>
 ```
 
+It exits `1` when the two records disagree and `2` when one of them could not
+be read at all. Worth splitting if the job can: a `1` is a ledger to
+investigate, a `2` means nobody checked — Redis or the database was down, and
+the answer is unknown rather than good.
+
 From a checkout, not from inside the container: `scripts/` is deliberately
 left out of the image (it is operator tooling, not something the gateway
 runs), so `docker exec` will not find it. Point the checkout's `REDIS_URL`
