@@ -63,6 +63,7 @@ class ProviderBudget:
 
     @property
     def cap_usd(self) -> float:
+        """The lifetime ceiling per provider, from PROVIDER_LIFETIME_BUDGET_USD."""
         return self._cap_usd
 
     def _key(self, provider: str) -> str:
@@ -70,6 +71,7 @@ class ProviderBudget:
         return f"provider_budget:{provider}"
 
     async def spent(self, provider: str) -> float:
+        """Lifetime USD recorded against this provider, republished to the gauges on every read."""
         raw = await self._redis.get(self._key(provider))
         total = float(raw) if raw else 0.0
         self._publish(provider, total)
@@ -92,11 +94,13 @@ class ProviderBudget:
         )
 
     async def remaining(self, provider: str) -> float:
+        """Headroom before the provider is refused. Infinite for free providers."""
         if provider in FREE_PROVIDERS:
             return float("inf")
         return max(0.0, self._cap_usd - await self.spent(provider))
 
     async def is_exhausted(self, provider: str) -> bool:
+        """True once spent has reached the cap. Never true for a free provider."""
         if provider in FREE_PROVIDERS:
             return False
         return await self.spent(provider) >= self._cap_usd
