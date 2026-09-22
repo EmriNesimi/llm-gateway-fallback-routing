@@ -90,13 +90,16 @@ ledger:  ## print lifetime spend and headroom per provider
 # to do this before trusting a ProviderBudgetExhausted page or resetting the
 # ledger, and until now that meant ad-hoc SQL against one store and redis-cli
 # against the other. Exits 1 on a gap, so it can gate a deploy.
-reconcile:  ## check the ledger against the audit log; exits 1 on a gap
+reconcile:  ## check the ledger against the audit log; 1 = gap, 2 = unreadable
 	python -m scripts.reconcile
 
 # Remove audit rows carrying one exact request_id, exporting a JSON copy of
 # each first. Dry run unless APPLY=1. Exists for the case that happened: the
 # suite wrote 150 rows of stub traffic into the production audit log, and
 # reconcile could not go green until they were gone.
+#
+# Exit 0 means it ran (whether or not anything matched); 2 means the database
+# could not be read, so the rows are still there.
 #   make purge-audit ID=client-hung-up
 #   make purge-audit ID=client-hung-up APPLY=1
 purge-audit:  ## remove audit rows by exact ID=...; dry run unless APPLY=1
