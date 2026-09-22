@@ -77,6 +77,18 @@ extend-select = [
     "ARG",
 ]
 
+# Docstring rules deliberately NOT enabled, so nobody adds them thinking
+# they were overlooked:
+# - D107 (__init__ docstring): every constructor here is documented by its
+#   class docstring and its own signature. Thirteen "Initialise." lines add
+#   nothing a reader did not already have.
+# - D401 (imperative mood): "The most a request could cost" is a better
+#   summary for a property-like function than "Return the most...". The rule
+#   optimises for a convention over the sentence.
+# - D212/D213 (summary on first vs second line): the repo is consistent on
+#   first-line summaries already; the rule pair is incompatible with itself
+#   and warns on every run.
+
 [tool.ruff.lint.per-file-ignores]
 # B008 flags function calls in argument defaults, which is exactly how FastAPI
 # declares dependencies — `x: T = Depends(...)`. Idiomatic here, not a bug.
