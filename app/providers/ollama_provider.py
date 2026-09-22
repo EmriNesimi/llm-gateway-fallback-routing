@@ -49,6 +49,8 @@ def _provider_error(prefix: str, exc: httpx.HTTPError) -> ProviderError:
 
 
 class OllamaProvider(BaseProvider):
+    """Ollama's local HTTP API. No key, no cost, no ledger."""
+
     name = "ollama"
 
     def __init__(self, base_url: str, timeout_seconds: float = 60.0):
@@ -61,6 +63,7 @@ class OllamaProvider(BaseProvider):
         messages: list[ChatMessage],
         params: SamplingParams | None = None,
     ) -> ChatResponse:
+        """POST /api/chat with stream=false. An unreachable server is a retryable ProviderError."""
         payload = {
             "model": model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
@@ -98,6 +101,7 @@ class OllamaProvider(BaseProvider):
         messages: list[ChatMessage],
         params: SamplingParams | None = None,
     ) -> AsyncIterator[StreamChunk]:
+        """POST /api/chat with stream=true: one NDJSON line per chunk, the last with counts."""
         payload = {
             "model": model,
             "messages": [{"role": m.role, "content": m.content} for m in messages],
