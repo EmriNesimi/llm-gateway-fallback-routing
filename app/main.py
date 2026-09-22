@@ -722,6 +722,54 @@ async def _settle_providers(
         raise cancellation
 
 
+async def _settle_stream_spend(
+    api_key: str,
+    final_provider: str,
+    final_model: str,
+    input_tokens: int,
+    output_tokens: int,
+    reservations: dict[str, float] | None,
+    request_id: str,
+) -> float:
+    """Price a finished stream, publish the usage, and settle both ledgers.
+
+    Returns the cost, which the caller still needs for its audit row.
+
+    Shared by both stream generators rather than duplicated. A fix applied to
+    one copy and not the other is how money-path bugs have shipped here
+    before, and these two tails were 67% identical.
+
+    What deliberately stays in the callers is `settled = True`. It has to sit
+    between this call and the audit write: settle computes a delta against the
+    reservation, so running it twice refunds money that was spent, and that
+    flag is what stops the error branch doing exactly that when the audit
+    write is what failed.
+    """
+    cost = 0.0
+    # The false branch of this is the one uncovered arc left in app/, and it
+    # stays that way on purpose. Every chunk the router yields carries a
+    # provider, so a stream that completes always has one — the branch is
+    # unreachable today.
+    #
+    # It is NOT marked `# pragma: no branch`, unlike the equivalent in
+    # fallback.py where unreachability follows from the control flow itself.
+    # Here it follows from a convention in a different module: that the router
+    # stamps chunk.provider. A future change that forgot to would make this
+    # reachable, and suppressing the arc would hide exactly that bug. An
+    # uncovered arc that says why is worth more than a clean report.
+    if final_provider:
+        cost = estimate_cost_usd(
+            provider=final_provider,
+            model=final_model,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+        )
+        _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
+
+    await _settle_chain(api_key, reservations or {}, final_provider, cost, request_id)
+    return cost
+
+
 async def _serve_chat(
     router: FallbackRouter,
     messages: list[ChatMessage],
@@ -974,18 +1022,9 @@ async def _event_stream(
     # reservation, and running it twice would refund money that was spent.
     settled = False
     try:
-        cost = 0.0
-        if final_provider:
-            cost = estimate_cost_usd(
-                provider=final_provider,
-                model=final_model,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-            )
-            _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
-
-        await _settle_chain(
-            api_key, reservations or {}, final_provider, cost, request_id,
+        cost = await _settle_stream_spend(
+            api_key, final_provider, final_model, input_tokens, output_tokens,
+            reservations, request_id,
         )
         settled = True
 
@@ -1184,29 +1223,9 @@ async def _openai_event_stream(
     # once the bookkeeping has succeeded.
     settled = False
     try:
-        cost = 0.0
-        # The false branch of this is the one uncovered arc left in app/, and it
-        # stays that way on purpose. Every chunk the router yields carries a
-        # provider, so a stream that completes always has one — the branch is
-        # unreachable today.
-        #
-        # It is NOT marked `# pragma: no branch`, unlike the equivalent in
-        # fallback.py where unreachability follows from the control flow itself.
-        # Here it follows from a convention in a different module: that the router
-        # stamps chunk.provider. A future change that forgot to would make this
-        # reachable, and suppressing the arc would hide exactly that bug. An
-        # uncovered arc that says why is worth more than a clean report.
-        if final_provider:
-            cost = estimate_cost_usd(
-                provider=final_provider,
-                model=final_model,
-                input_tokens=input_tokens,
-                output_tokens=output_tokens,
-            )
-            _record_usage(final_provider, final_model, input_tokens, output_tokens, cost)
-
-        await _settle_chain(
-            api_key, reservations or {}, final_provider, cost, request_id,
+        cost = await _settle_stream_spend(
+            api_key, final_provider, final_model, input_tokens, output_tokens,
+            reservations, request_id,
         )
         settled = True
 
