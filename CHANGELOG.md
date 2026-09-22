@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+**Papercuts**
+- `make check` failed at `migrate-check` for anyone who had run the gateway
+  locally — starting it creates the SQLite tables with `create_all`, which
+  bypasses Alembic, so the file has every table and no revision recorded.
+  It reads as model drift and is not. Both the Makefile and `CONTRIBUTING.md`
+  now say so, and that `alembic stamp head` is the fix.
+- `CONTRIBUTING.md` and `.editorconfig` are dockerignored; neither reached
+  the image but both rode along in the build context.
+- Recorded why `RUF100` stays off: it judges a noqa unused against the
+  *selected* rules, and sixteen here suppress rules this config does not
+  select but that `--select ALL` hits.
+
 **The two stream generators stopped being two copies**
 - They were 67% identical, including a 25-line block of settle-and-audit
   repeated verbatim — the shape that has already cost this project three
