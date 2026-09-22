@@ -32,8 +32,9 @@ _CHARS_PER_TOKEN = 3
 
 
 def _sampling_kwargs(params: SamplingParams | None) -> dict:
-    """Only the controls the caller actually set. Passing None values through
-    would override the provider's own defaults with nulls.
+    """Only the controls the caller actually set.
+
+    Passing None values through would override the provider's own defaults with nulls.
     """
     if params is None:
         return {"max_tokens": DEFAULT_MAX_OUTPUT_TOKENS}

@@ -70,8 +70,10 @@ class ChatResponse:
 
 @dataclass
 class StreamChunk:
-    """One piece of a streamed response. `done` marks the final chunk, which
-    carries the usage totals (providers report token counts once, at the end).
+    """One piece of a streamed response.
+
+    `done` marks the final chunk, which carries the usage totals (providers report token counts
+    once, at the end).
 
     `provider`/`model` are left blank by the provider adapters themselves —
     the router fills them in once a provider is committed to, since that's
@@ -106,8 +108,10 @@ class ProviderError(Exception):
 
 
 def is_retryable_status_code(status_code: int) -> bool:
-    """429 (rate limited) and 5xx are worth retrying — the same request might
-    succeed a moment later. Any other 4xx (bad request, invalid model,
+    """Whether a failed call with this status is worth retrying.
+
+    429 (rate limited) and 5xx are: the same request might succeed a moment later. Any other 4xx
+    (bad request, invalid model,
     auth failure) will fail identically every time; retrying it is pure
     wasted latency. Shared by every provider adapter so the rule is defined
     once, not reimplemented slightly differently per provider.
@@ -142,8 +146,9 @@ class BaseProvider(ABC):
 
 
 class UnconfiguredProvider(BaseProvider):
-    """Stand-in for a provider with no API key set (e.g. OPENAI_API_KEY
-    unset). Fails instantly and non-retryably, with zero network calls —
+    """Stand-in for a provider with no API key set.
+
+    Fails instantly and non-retryably, with zero network calls —
     the alternative, constructing the real SDK client with an empty key, is
     actively dangerous: the OpenAI SDK raises at *construction* time on a
     missing key, which previously crashed build_router() outright and took

@@ -22,8 +22,10 @@ from app.providers.base import (
 
 
 def _sampling_payload(params: SamplingParams | None) -> dict:
-    """Ollama nests generation controls under `options` and names the output
-    cap `num_predict` rather than `max_tokens`. Returns an empty dict when
+    """Sampling params in Ollama's spelling.
+
+    Ollama nests generation controls under `options` and names the output cap `num_predict` rather
+    than `max_tokens`. Returns an empty dict when
     nothing was set, so the key is absent rather than present-and-empty —
     Ollama treats an explicit empty options block differently from no block.
     """
