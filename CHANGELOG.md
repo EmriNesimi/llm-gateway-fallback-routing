@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+**The operator scripts fail legibly**
+- Both dumped a traceback when their store was unreachable. `reconcile`
+  exited `1` for it — the same code as "the two records disagree", which is
+  the one distinction that matters when the runbook has it on a cron.
+  `purge-audit` exited `0`, indistinguishable from "nothing matched", for the
+  tool that deletes rows.
+- Both now print one line naming the store and exit `2`. The Redis URL is
+  printed with its password blanked, since failure output is what gets pasted
+  into an issue. Runbook and `make help` say what each code means.
+- `purge-audit` reads and deletes in separate session scopes and serialises
+  inside the read, so nothing downstream holds a detached ORM object.
+
 **Papercuts**
 - `make check` failed at `migrate-check` for anyone who had run the gateway
   locally — starting it creates the SQLite tables with `create_all`, which
