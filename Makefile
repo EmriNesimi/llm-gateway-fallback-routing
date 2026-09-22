@@ -38,15 +38,21 @@ audit:  ## pip-audit for known-vulnerable dependencies
 # ever taken, which is how an untested early-return hides.
 #
 # The floor tracks reality rather than sitting where it was first set: 92
-# when branch coverage arrived, 97 once the real gaps were closed, 99 now
-# that only one branch is left uncovered. A floor well below what the suite
-# actually achieves is not a safety net — a whole module can rot out without
-# the build noticing.
+# when branch coverage arrived, 97 once the real gaps were closed, 99 for a
+# long while, and now 100 — every statement and every branch in app/ is
+# exercised. A floor below what the suite achieves is not a safety net; a
+# whole module can rot out without the build noticing.
 #
-# 99 still allows for the Redis integration tests skipping locally, which is
-# the only legitimate reason the number moves between environments.
+# 100 is measured identically with and without a real Redis, so the Redis
+# integration tests skipping locally no longer moves the number.
+#
+# The escape hatch is `# pragma: no cover` (or `no branch`) with a comment
+# saying why, which this codebase already uses where a line is genuinely
+# unreachable — app/providers/base.py and app/routing/fallback.py both do.
+# Marking something unreachable is a claim a reader can check. Lowering the
+# floor is not.
 test:  ## pytest with the 99% branch-coverage floor
-	pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=99
+	pytest -q --cov=app --cov-branch --cov-report=term-missing --cov-fail-under=100
 
 run:  ## uvicorn with reload
 	uvicorn app.main:app --reload

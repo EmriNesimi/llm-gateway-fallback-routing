@@ -270,3 +270,45 @@ async def test_a_cancelled_provider_settle_still_settles_the_key_ledger(monkeypa
     assert await tracker.spent_usd("cancelled-key") == pytest.approx(0.2), (
         "the key ledger kept its reservation when the provider settle was cancelled"
     )
+
+
+@pytest.mark.parametrize(
+    ("endpoint", "body"),
+    [
+        ("/v1/chat/stream", BODY),
+        ("/v1/chat/completions", {**BODY, "stream": True}),
+    ],
+)
+def test_a_failed_audit_write_does_not_settle_a_second_time(
+    client, monkeypatch, endpoint, body,
+):
+    """The `settled` flag's entire job, and the last uncovered arc in app/.
+
+    The stream's bookkeeping tail settles both ledgers and then writes the
+    audit row. If that write raises, the handler still has to report the
+    failure to a caller whose response is already committed to 200 — and on
+    the way it must not settle again. settle computes a delta against the
+    reservation, so a second one refunds money that was genuinely spent, and
+    the ledger drifts below the truth: the one direction a spend ceiling may
+    never fail in.
+
+    Every other path through those handlers reaches them with settled=False.
+    This is the only one that does not, which is why the arc was never
+    exercised — in either stream endpoint, so both are checked here.
+    """
+    monkeypatch.setattr(main_module, "build_router", lambda m: ("smart", Router("ok")))
+
+    async def _audit_is_down(*a, **k):
+        raise RuntimeError("audit table is gone")
+
+    monkeypatch.setattr(main_module, "record_audit_log", _audit_is_down)
+
+    before = client.portal.call(_ledgers)
+    client.post(endpoint, json=body, headers=HEADERS).read()
+    anthropic, openai, key = _deltas(client, before)
+
+    assert key == pytest.approx(_EXPECTED_COST["ok"], abs=1e-9), (
+        f"expected one request's cost (${_EXPECTED_COST['ok']:.6f}) to remain,"
+        f" found ${key:.6f} — a failed audit write settled the ledger twice"
+    )
+    assert key == pytest.approx(anthropic + openai, abs=1e-9)
