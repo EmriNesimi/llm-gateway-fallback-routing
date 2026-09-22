@@ -70,7 +70,7 @@ extend-select = [
     # Every module and package under app/ has a docstring saying what it is
     # for. Scoped to app/ via per-file-ignores: a test module's name is its
     # docstring, and a scripts/ module already has one by convention.
-    "D100", "D104",
+    "D100", "D104", "D101", "D102", "D103",
     # A parameter accepted and never read is how a config value gets
     # silently ignored. app/ only; a test helper's unused fixture parameter
     # is the injection mechanism, not a bug.
@@ -85,8 +85,8 @@ extend-select = [
 # S101 is `assert`, which is what a test is made of. Only S101 is waived —
 # the rest of the security ruleset still applies to test code, which handles
 # the same secrets the app does.
-"tests/*.py" = ["S101", "PLC0415", "D100", "D104", "ARG"]
-"scripts/*.py" = ["ARG"]
+"tests/*.py" = ["S101", "PLC0415", "D100", "D104", "D101", "D102", "D103", "ARG"]
+"scripts/*.py" = ["ARG", "D101", "D102", "D103"]
 # UnconfiguredProvider implements the BaseProvider signature and raises
 # before looking at any of it. That is the whole point of the class.
 "app/providers/base.py" = ["ARG002"]

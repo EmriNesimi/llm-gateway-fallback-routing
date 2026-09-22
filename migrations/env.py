@@ -62,6 +62,7 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
+    """Run the migrations on an already-open sync connection; called from the async runner."""
     context.configure(connection=connection, target_metadata=target_metadata)
 
     with context.begin_transaction():
