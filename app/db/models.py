@@ -15,6 +15,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 class Base(DeclarativeBase):
     """Declarative base every table inherits from; Alembic reads its metadata."""
+
     pass
 
 
