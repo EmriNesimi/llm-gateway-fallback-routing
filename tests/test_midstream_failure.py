@@ -188,3 +188,53 @@ def test_a_failed_stream_is_not_counted_as_a_success(client, monkeypatch):
     assert "event: error" in r.text
     assert count("success") == before_success, "a failed stream counted as a success"
     assert count("error") == before_error + 1
+
+
+@pytest.mark.asyncio
+async def test_the_best_effort_abort_settle_never_raises(monkeypatch, caplog):
+    """_try_settle_stream_on_abort is called from four handlers that are each
+    already reporting a failure to the caller, and every one of them calls it
+    unguarded. If it could raise, it would replace the error frame those
+    handlers exist to send — turning a reported failure into a truncated
+    stream, which is the worse of the two outcomes.
+
+    Covered indirectly by the stream tests, which reach it only when the
+    settle happens to succeed. This pins the contract itself.
+    """
+    import logging
+
+    async def _explode(*a, **k):
+        raise ConnectionError("redis went away during the abort settle")
+
+    monkeypatch.setattr(main_module, "_settle_stream_on_abort", _explode)
+
+    with caplog.at_level(logging.ERROR):
+        await main_module._try_settle_stream_on_abort(
+            "key", "smart", "anthropic", "claude-opus-5", 10, 300, {}, "req-abort", 0.0,
+        )
+
+    assert "could not settle after a mid-stream failure" in caplog.text
+    assert "req-abort" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_the_best_effort_abort_settle_does_not_swallow_cancellation():
+    """Swallowing CancelledError here would wedge a shutdown: the task would
+    report itself as having finished normally while the loop is trying to
+    cancel it. Same reasoning as _settle_providers, which holds a cancellation
+    until its refunds are done and then re-raises.
+    """
+    import asyncio
+
+    async def _cancelled(*a, **k):
+        raise asyncio.CancelledError
+
+    original = main_module._settle_stream_on_abort
+    main_module._settle_stream_on_abort = _cancelled
+    try:
+        with pytest.raises(asyncio.CancelledError):
+            await main_module._try_settle_stream_on_abort(
+                "key", "smart", "anthropic", "claude-opus-5", 10, 300, {}, "req-x", 0.0,
+            )
+    finally:
+        main_module._settle_stream_on_abort = original
