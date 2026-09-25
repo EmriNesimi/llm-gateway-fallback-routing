@@ -40,6 +40,9 @@ def test_readme_test_count_is_current(request):
     assert claimed == collected, (
         f"README claims {claimed} tests, the suite collects {collected}."
         f" Update the build-log line in README.md to {collected}."
+        " If the difference is larger than the number of tests you wrote, a"
+        " parametrised one is multiplying: count what pytest collects rather"
+        " than what you added."
     )
 
 
