@@ -23,7 +23,7 @@ _SECONDS_PER_MONTH = 30 * 24 * 60 * 60
 class KeyBudgetExhausted(Exception):
     """Raised when one caller has claimed its whole monthly share."""
 
-    def __init__(self, spent: float, cap: float):
+    def __init__(self, spent: float, cap: float) -> None:
         super().__init__(f"key has claimed ${spent:.4f} of its ${cap:.2f} monthly budget")
         self.spent = spent
         self.cap = cap
@@ -45,7 +45,7 @@ class BudgetTracker:
     bounds the operator's actual money. They now close the race the same way.
     """
 
-    def __init__(self, redis: Redis, monthly_cap_usd: float):
+    def __init__(self, redis: Redis, monthly_cap_usd: float) -> None:
         self._redis = redis
         self._monthly_cap_usd = monthly_cap_usd
 

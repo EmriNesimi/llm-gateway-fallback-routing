@@ -18,7 +18,7 @@ class UnpricedModelError(Exception):
     cannot promise to stop.
     """
 
-    def __init__(self, provider: str, model: str):
+    def __init__(self, provider: str, model: str) -> None:
         super().__init__(
             f"no pricing entry for {provider}:{model} — cannot bound the cost of"
             " this request, so it cannot be allowed to run",

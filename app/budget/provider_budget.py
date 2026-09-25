@@ -45,7 +45,7 @@ FREE_PROVIDERS = frozenset({"ollama"})
 class ProviderBudgetExhausted(Exception):
     """Raised when a provider has spent its lifetime allowance."""
 
-    def __init__(self, provider: str, spent: float, cap: float):
+    def __init__(self, provider: str, spent: float, cap: float) -> None:
         super().__init__(
             f"{provider} has spent ${spent:.4f} of its ${cap:.2f} lifetime budget",
         )
@@ -57,7 +57,7 @@ class ProviderBudgetExhausted(Exception):
 class ProviderBudget:
     """Tracks lifetime USD spend per provider in Redis."""
 
-    def __init__(self, redis: Redis, cap_usd: float):
+    def __init__(self, redis: Redis, cap_usd: float) -> None:
         self._redis = redis
         self._cap_usd = cap_usd
 
