@@ -79,7 +79,7 @@ class OpenAIProvider(BaseProvider):
 
     name = "openai"
 
-    def __init__(self, api_key: str, timeout_seconds: float = 30.0):
+    def __init__(self, api_key: str, timeout_seconds: float = 30.0) -> None:
         self._client = AsyncOpenAI(api_key=api_key, timeout=timeout_seconds)
 
     async def chat(

@@ -102,7 +102,7 @@ class ProviderError(Exception):
     can positively identify a non-transient failure.
     """
 
-    def __init__(self, message: str, *, retryable: bool = True):
+    def __init__(self, message: str, *, retryable: bool = True) -> None:
         super().__init__(message)
         self.retryable = retryable
 
@@ -156,7 +156,7 @@ class UnconfiguredProvider(BaseProvider):
     chance), rather than the intended "skip this one, fall back" behavior.
     """
 
-    def __init__(self, name: str):
+    def __init__(self, name: str) -> None:
         self.name = name
 
     async def chat(

@@ -55,7 +55,7 @@ class OllamaProvider(BaseProvider):
 
     name = "ollama"
 
-    def __init__(self, base_url: str, timeout_seconds: float = 60.0):
+    def __init__(self, base_url: str, timeout_seconds: float = 60.0) -> None:
         self._base_url = base_url.rstrip("/")
         self._timeout_seconds = timeout_seconds
 
