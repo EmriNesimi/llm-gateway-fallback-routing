@@ -52,7 +52,7 @@ return {allowed, tokens}
 class TokenBucketLimiter:
     """Redis-backed token bucket: `capacity` tokens, refilled at `refill_rate` tokens/sec."""
 
-    def __init__(self, redis: Redis, capacity: int, refill_rate: float):
+    def __init__(self, redis: Redis, capacity: int, refill_rate: float) -> None:
         self._redis = redis
         self._capacity = capacity
         self._refill_rate = refill_rate

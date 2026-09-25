@@ -69,7 +69,7 @@ class FallbackRouter:
         chain: list[tuple[BaseProvider, str, CircuitBreaker]],
         retry_attempts: int | None = None,
         retry_backoff_seconds: float | None = None,
-    ):
+    ) -> None:
         # chain is a list of (provider, model, breaker) triples, tried in order
         self._chain = chain
         self._retry_attempts = (

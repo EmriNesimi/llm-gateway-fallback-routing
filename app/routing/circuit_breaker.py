@@ -32,7 +32,7 @@ class CircuitBreaker:
         failure_threshold: int,
         cooldown_seconds: float,
         clock: Callable[[], float] = time.time,
-    ):
+    ) -> None:
         # Injectable so the tests can advance time instead of sleeping through
         # it. Every state transition here is a clock comparison, so a test that
         # races real time is testing the machine's scheduler as much as the
