@@ -39,6 +39,14 @@ file has no revision recorded. `alembic stamp head` fixes it.
 
 ## Commits
 
+Run the checks, **read the output**, then push as a separate command. Not
+`make check && git push` in one line: the failure scrolls past, the chain
+carries on, and the red lands on `main` where the next person finds it. That
+has happened here more than once.
+
+After pushing, look at the run — `main` has no `cancel-in-progress`, so every
+commit gets its own verdict and a failure cannot hide behind the next push.
+
 One change per commit, pushed as it lands. The message says why — what was
 wrong, what the alternative was, what was verified — not what the diff
 already shows. Look at `git log` for the register.
