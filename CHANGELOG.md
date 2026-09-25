@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+**Guards and lint**
+- A guard that prose naming a module path or a private function points at
+  one that exists. Decision records, SECURITY.md and the runbook all lean on
+  naming code, and a rename breaks them silently — a dangling reference
+  costs a reader more than no reference. Its own first version matched a
+  spelling the docs almost never use, so it checked nothing and passed;
+  there is now a vacuity assertion for that.
+- `/readyz` printed its failure twice: `logger.exception` already writes the
+  traceback, and the message interpolated the exception as well.
+- `__init__` return types annotated across `app/`, which is what lets mypy
+  check those bodies. `ANN204`, `TRY401` and `PIE790` pinned.
+- Recorded why `D400` and `N818` stay off. `ProviderBudgetExhausted` is the
+  exception, the Prometheus alert and the runbook section — one name for one
+  event, so whoever is paged can grep it and land on the raise.
+
 **The operator scripts fail legibly**
 - Both dumped a traceback when their store was unreachable. `reconcile`
   exited `1` for it — the same code as "the two records disagree", which is
