@@ -94,6 +94,12 @@ extend-select = [
 # - D212/D213 (summary on first vs second line): the repo is consistent on
 #   first-line summaries already; the rule pair is incompatible with itself
 #   and warns on every run.
+# - N818 (exceptions end in Error): the two it flags,
+#   ProviderBudgetExhausted and KeyBudgetExhausted, are named for the
+#   conditions they signal — and the first shares its name with the
+#   Prometheus alert and the runbook section for the same event, on purpose.
+#   Someone paged by ProviderBudgetExhausted greps it and finds the raise.
+#   An Error suffix on one of the three would break that.
 # - D400 (summary ends with a period): the two it flags are questions —
 #   "Liveness: is the process up?" — and a question mark is the right
 #   punctuation for a question. The rule would make both worse.
