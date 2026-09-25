@@ -71,6 +71,12 @@ extend-select = [
     # for. Scoped to app/ via per-file-ignores: a test module's name is its
     # docstring, and a scripts/ module already has one by convention.
     "D100", "D104", "D101", "D102", "D103", "D204", "D205",
+    # - ANN204: `__init__` returns None, and saying so is what lets mypy check
+    #   the body at all under its stricter settings.
+    # - TRY401: logger.exception already writes the traceback, so
+    #   interpolating the exception too prints it twice. It did, on /readyz.
+    # - PIE790: a `pass` kept next to a docstring that already fills the body.
+    "ANN204", "TRY401", "PIE790",
     # A parameter accepted and never read is how a config value gets
     # silently ignored. app/ only; a test helper's unused fixture parameter
     # is the injection mechanism, not a bug.
@@ -106,7 +112,13 @@ extend-select = [
 # S101 is `assert`, which is what a test is made of. Only S101 is waived —
 # the rest of the security ruleset still applies to test code, which handles
 # the same secrets the app does.
-"tests/*.py" = ["S101", "PLC0415", "D100", "D104", "D101", "D102", "D103", "D204", "D205", "ARG"]
+"tests/*.py" = [
+    "S101", "PLC0415", "D100", "D104", "D101", "D102", "D103", "D204", "D205",
+    "ARG",
+    # Annotating a throwaway stub's __init__ is noise; these classes exist for
+    # one test each and their types are obvious from the call two lines below.
+    "ANN204",
+]
 "scripts/*.py" = ["ARG", "D101", "D102", "D103", "D205"]
 # UnconfiguredProvider implements the BaseProvider signature and raises
 # before looking at any of it. That is the whole point of the class.
