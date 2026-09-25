@@ -190,12 +190,14 @@ async def _check_redis() -> str:
     try:
         await get_redis().ping()
         return "ok"
-    except Exception as exc:  # noqa: BLE001 - report any failure, not just known types
+    except Exception:  # noqa: BLE001 - report any failure, not just known types
         # Logged in full, reported as one word. /readyz is unauthenticated, so
         # the exception text handed hostnames, ports, driver versions and
         # failure modes to anyone who asked — reconnaissance for attacking the
         # very backends that hold the spend counters.
-        logger.exception("readiness check failed for redis: %s", exc)
+        # No %s of the exception: logger.exception already writes the
+        # traceback, so interpolating it too prints the message twice.
+        logger.exception("readiness check failed for redis")
         return "error"
 
 
@@ -204,8 +206,10 @@ async def _check_database() -> str:
         async with async_session() as session:
             await session.execute(text("SELECT 1"))
         return "ok"
-    except Exception as exc:  # noqa: BLE001
-        logger.exception("readiness check failed for database: %s", exc)
+    except Exception:  # noqa: BLE001
+        # No %s of the exception: logger.exception already writes the
+        # traceback, so interpolating it too prints the message twice.
+        logger.exception("readiness check failed for database")
         return "error"
 
 
