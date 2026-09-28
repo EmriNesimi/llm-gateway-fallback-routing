@@ -46,7 +46,7 @@ end
 redis.call('EXPIRE', key, ttl_seconds)
 
 return {allowed, tokens}
-"""  # noqa: S105 — flagged only because the name contains "TOKEN"; this is a Lua script, not a credential
+"""  # noqa: S105 - flagged only because the name contains "TOKEN"; a Lua script, not a credential
 
 
 class TokenBucketLimiter:
