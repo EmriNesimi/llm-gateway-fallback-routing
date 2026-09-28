@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+**The prose guards cover the prose that matters most**
+- The runbook is checked for endpoints and `make` targets that still exist.
+  It is read while something is already broken, which is the worst moment to
+  be sent to a 404.
+- Prose naming a test module is checked too — CONTRIBUTING now indexes the
+  guards by filename, and those are the references someone follows right
+  after a guard has failed them.
+- The README-accuracy guard is now `test_docs_accuracy.py`: it guards five
+  documents, and nobody whose runbook change fails a test goes looking in a
+  file named for the README.
+- CONTRIBUTING lists what each guard defends, so a failure says which fact
+  is at stake rather than just which file.
+
 **Two records, said out loud**
 - `SECURITY.md` still said there is no second copy of the spend number.
   There is a second *record* — the audit log, written by a different code
