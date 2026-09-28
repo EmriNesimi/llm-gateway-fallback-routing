@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**Two records, said out loud**
+- `SECURITY.md` still said there is no second copy of the spend number.
+  There is a second *record* — the audit log, written by a different code
+  path to a different store — so a flushed ledger is now detectable even
+  though it is still not preventable. The runbook says to reconcile before
+  resetting, and to prefer `SET` to the audit figure over `DEL`.
+- An issue template for accepted risks, which is the form this repo's issues
+  keep taking, and a note in the decisions index saying when one of those
+  wants a record instead.
+- The `make`-target guard covers the PR template too.
+
 **Every CI step now has a local equivalent**
 - `make promtool` and `make compose-check`, running the same images CI does.
   They were the last two steps nobody could run before pushing, which is the
