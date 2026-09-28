@@ -1,4 +1,4 @@
-.PHONY: help install check lint typecheck shellcheck audit test run migrate migrate-check up down demo ledger reconcile purge-audit
+.PHONY: help install check lint typecheck shellcheck promtool compose-check audit test run migrate migrate-check up down demo ledger reconcile purge-audit
 
 # Default target. A `## text` on the same line as a target is its help line.
 help:
@@ -29,6 +29,20 @@ typecheck:  ## mypy
 # must work with nothing but the venv.
 shellcheck:  ## lint shell scripts with CI's exact shellcheck (needs Docker)
 	git ls-files -z '*.sh' | xargs -0 docker run --rm -v "$$PWD:/mnt:ro" -w /mnt koalaman/shellcheck:v0.11.0
+
+# The other two CI steps that need Docker, for the same reason shellcheck is
+# here: a check nobody can run locally is one nobody runs before pushing.
+promtool:  ## validate the Prometheus config the way CI does (needs Docker)
+	docker run --rm -v "$$PWD/deploy/prometheus:/etc/prometheus:ro" \
+		--entrypoint promtool prom/prometheus:v3.14.0 \
+		check config /etc/prometheus/prometheus.yml
+
+# Uses your existing .env if there is one. CI copies .env.example in, which
+# also checks that file is a working starting point; locally it would
+# overwrite real credentials, so it does not.
+compose-check:  ## parse docker-compose.yml the way CI does (needs Docker)
+	@test -f .env || { echo "no .env — cp .env.example .env first"; exit 1; }
+	docker compose config --quiet && echo "docker-compose.yml parses."
 
 audit:  ## pip-audit for known-vulnerable dependencies
 	pip-audit -r requirements.txt -r requirements-dev.txt
