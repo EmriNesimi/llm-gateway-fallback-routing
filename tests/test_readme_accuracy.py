@@ -15,10 +15,17 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 README = ROOT / "README.md"
 
-# Below this, the run is a subset (a single file, a -k filter) rather than the
-# whole suite, and the collected count means nothing. Enforce only on full
-# runs — which is CI and `make test`, the two that matter.
-_FULL_RUN_THRESHOLD = 50
+# A partial run collects a subset, so its count means nothing to compare
+# against. Detected from the invocation rather than from a size threshold: a
+# threshold has to be guessed, and the guess goes stale as the suite grows —
+# this one was 50 while the suite was 631, so running any two files collected
+# 93, looked "full", and failed with a count nobody could make sense of.
+#
+# `pytest` with no paths uses testpaths from pyproject, which is the full run
+# CI and `make test` do. Anything else named a file, a directory or a filter.
+def _is_full_run(request) -> bool:
+    opts = request.config.option
+    return not (opts.file_or_dir or opts.keyword or opts.markexpr)
 
 
 def test_readme_test_count_is_current(request):
@@ -29,9 +36,9 @@ def test_readme_test_count_is_current(request):
     service — passes all 318. Pinning the passed count would fail in one
     environment or the other. Collected is the same number everywhere.
     """
+    if not _is_full_run(request):
+        pytest.skip("partial run — the collected count means nothing here")
     collected = request.session.testscollected
-    if collected < _FULL_RUN_THRESHOLD:
-        pytest.skip(f"partial run ({collected} tests) — nothing to compare against")
 
     match = re.search(r"(\d+) tests,", README.read_text())
     assert match, "README no longer states a test count in the form 'N tests,'"
