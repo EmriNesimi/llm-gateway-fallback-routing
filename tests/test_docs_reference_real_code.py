@@ -145,3 +145,26 @@ def test_referenced_constants_exist(doc):
         " constants defined in app/, nor listed in _NOT_OURS. Either it was"
         " renamed, or it belongs on that list with a note saying whose it is."
     )
+
+
+# `test_docs_accuracy.py` — a test module named in prose.
+_TEST_REF = re.compile(r"`(test_[a-z0-9_]+\.py)`")
+
+
+@pytest.mark.parametrize("doc", _PROSE, ids=lambda p: str(p.relative_to(ROOT)))
+def test_referenced_test_modules_exist(doc):
+    """CONTRIBUTING indexes the guards by filename, and decision records cite
+    the test that pins them. A renamed test file leaves prose pointing at
+    nothing — and these are exactly the references someone follows when a
+    guard has just failed them, which is the worst moment for a dead end.
+    """
+    missing = sorted(
+        {name for name in _TEST_REF.findall(doc.read_text())
+         if not (ROOT / "tests" / name).exists()},
+    )
+    assert not missing, (
+        f"{doc.relative_to(ROOT)} names test modules that do not exist:"
+        f" {missing}. Renaming one is what usually does this — I renamed"
+        " test_readme_accuracy.py to test_docs_accuracy.py the same day this"
+        " was written."
+    )
