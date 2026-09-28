@@ -206,7 +206,7 @@ async def _check_database() -> str:
         async with async_session() as session:
             await session.execute(text("SELECT 1"))
         return "ok"
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001 - report any failure, not just known types
         # No %s of the exception: logger.exception already writes the
         # traceback, so interpolating it too prints the message twice.
         logger.exception("readiness check failed for database")
