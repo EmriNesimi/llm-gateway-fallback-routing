@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+**Every CI step now has a local equivalent**
+- `make promtool` and `make compose-check`, running the same images CI does.
+  They were the last two steps nobody could run before pushing, which is the
+  reason `make shellcheck` exists.
+- The prose guards cover the Makefile, `.env.example`, `CONTRIBUTING.md` and
+  the runbook, not just the README — a `make` target named in the runbook is
+  read during an incident.
+- Capitalised names in backticks are checked too: either a setting, a
+  constant in `app/`, or on a list that says whose they are.
+- The test-count guard detected a partial run from a size threshold, which
+  went stale as the suite grew — two files collected enough to look like a
+  full run and failed with a nonsense number. It reads the invocation now.
+
 **Guards and lint**
 - A guard that prose naming a module path or a private function points at
   one that exists. Decision records, SECURITY.md and the runbook all lean on
