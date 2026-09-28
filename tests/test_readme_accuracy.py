@@ -122,7 +122,17 @@ def test_readme_alert_count_matches_the_rules_file():
     )
 
 
-@pytest.mark.parametrize("doc_name", ["README.md", "CONTRIBUTING.md", "docs/runbook.md"])
+@pytest.mark.parametrize(
+    "doc_name",
+    [
+        "README.md",
+        "CONTRIBUTING.md",
+        "docs/runbook.md",
+        # Names six targets, and is the one a contributor reads while already
+        # mid-change — the worst moment to be sent at a target that is gone.
+        ".github/pull_request_template.md",
+    ],
+)
 def test_docs_only_reference_make_targets_that_exist(doc_name):
     """These tell a reader to run `make` something. A renamed or dropped
     target turns one of those into `make: *** No rule to make target` —
