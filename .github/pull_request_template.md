@@ -17,5 +17,7 @@
 - [ ] The spend ceiling or either ledger (needs a `## Verified` line about `make reconcile`)
 - [ ] A `/v1/` response shape or status code (see `docs/api-versioning.md`)
 - [ ] A metric or alert (the "graphed or alerted" guard must still pass; new alerts need a runbook section)
-- [ ] `docker-compose.yml` or the Dockerfile (say what `make up` did)
+- [ ] `docker-compose.yml` or the Dockerfile (say what `make up` and `make compose-check` did)
+- [ ] `deploy/prometheus/` (say what `make promtool` said)
+- [ ] A shell script (say what `make shellcheck` said)
 - [ ] None of the above
