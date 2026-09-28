@@ -36,9 +36,23 @@ file has no revision recorded. `alembic stamp head` fixes it.
   the index before changing anything in the money path; several of those
   decisions exist because the obvious fix was tried and was wrong.
 - **What a change must not break:** the tests, and specifically the guards —
-  tests that check the docs against the code, the dashboard against the
-  metrics, the README's numbers against reality. If one fails on your change,
-  the guard is usually right. Update the thing it is checking, not the guard.
+  tests that check the prose against the code rather than the code against
+  itself. If one fails on your change, the guard is usually right. Update the
+  thing it is checking, not the guard.
+
+  | Guard | Fails when |
+  |---|---|
+  | `test_docs_accuracy.py` | a doc quotes a count, a `make` target or an endpoint that no longer matches |
+  | `test_docs_reference_real_code.py` | prose names a module, function or constant that was renamed |
+  | `test_decision_records.py` | a decision is cited by a number that does not exist, or is missing from the index |
+  | `test_toolchain_consistency.py` | the Python version disagrees across the seven places it is written |
+  | `test_env_example_matches_defaults.py` | `.env.example` documents a default the code no longer has |
+  | `test_stub_chains_match_reality.py` | a test's hardcoded copy of a chain or a price drifts from the real one |
+  | `test_metrics_observability.py` | a metric is exported but never graphed or alerted on |
+
+  They exist because each of those has gone stale at least once, and none of
+  them fails loudly on its own — a wrong number in a README is invisible
+  until someone acts on it.
 - **The spend ceiling:** [`SECURITY.md`](SECURITY.md) says what it protects
   and what it does not. Anything under `app/budget/`, or in `_reserve_chain`
   / `_settle_chain`, is the part with the worst track record for subtle
