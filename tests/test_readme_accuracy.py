@@ -171,14 +171,24 @@ def test_docs_only_reference_make_targets_that_exist(doc_name):
     )
 
 
-def test_readme_only_documents_endpoints_that_exist():
-    """The README names endpoints in backticks — `GET /readyz`,
-    `/admin/key-events`. A renamed or removed route leaves the README
-    promising an endpoint that 404s, which is discovered by the first person
-    trying to use the project rather than by anyone maintaining it.
+@pytest.mark.parametrize(
+    "doc_name",
+    [
+        "README.md",
+        # Names six of them, and is read while something is already broken —
+        # being sent to a 404 then costs more than it does from the README.
+        "docs/runbook.md",
+        "SECURITY.md",
+    ],
+)
+def test_docs_only_document_endpoints_that_exist(doc_name):
+    """These name endpoints in backticks — `GET /readyz`, `/admin/key-events`.
+    A renamed or removed route leaves prose promising something that 404s,
+    which is discovered by whoever is following it rather than by anyone
+    maintaining it.
 
-    Checks only the direction that can mislead. Not every route needs to be in
-    the README; every path in the README needs to be a route.
+    Checks only the direction that can mislead. Not every route needs to be
+    documented; every path documented needs to be a route.
     """
     from app.main import app
     from tests.conftest import all_route_paths
@@ -191,16 +201,21 @@ def test_readme_only_documents_endpoints_that_exist():
     # Collection paths cover their parameterised children: a README mentioning
     # /admin/keys is satisfied by /admin/keys/{key_id} existing too.
     served |= {p.split("/{", 1)[0] for p in served if "/{" in p}
+    # Prefixes the prose names as a group — "any key that can reach /admin",
+    # "the /v1 contract". Real as a namespace, never mounted as a route.
+    served |= {"/admin", "/v1"}
 
     documented = {
         p
-        for p in re.findall(r"`(?:GET |POST |DELETE )?(/[a-z0-9/_-]+)`", README.read_text())
+        for p in re.findall(
+            r"`(?:GET |POST |DELETE )?(/[a-z0-9/_-]+)`", (ROOT / doc_name).read_text(),
+        )
         # "/v1/" and friends name a prefix, not a route.
         if not p.endswith("/") or p == "/"
     }
-    assert documented, "README documents no endpoints — the guard would pass vacuously"
+    assert documented, f"{doc_name} documents no endpoints — the guard would pass vacuously"
 
     missing = sorted(p for p in documented if p.rstrip("/") not in served and p not in served)
     assert not missing, (
-        f"README documents {missing}, which the app does not serve"
+        f"{doc_name} documents {missing}, which the app does not serve"
     )
