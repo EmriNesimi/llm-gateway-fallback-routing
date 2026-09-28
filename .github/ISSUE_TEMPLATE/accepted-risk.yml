@@ -1,0 +1,49 @@
+name: Accepted risk or deferred decision
+description: Something known to be imperfect, recorded so it stays a decision rather than becoming an assumption
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: >-
+        For the thing you have looked at, understood, and chosen not to fix
+        yet. Several issues here are exactly that — the pre-auth rate limit,
+        the unreproduced test failure — and they are more useful written down
+        than fixed badly.
+
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: What happens today
+      description: The actual behaviour, not the ideal one. Name the file and function.
+    validations:
+      required: true
+
+  - type: textarea
+    id: why_not_fixed
+    attributes:
+      label: Why it is this way
+      description: >-
+        The reasoning that makes the current behaviour defensible. If the
+        obvious fix has a cost, say what it is — that is the part nobody can
+        reconstruct later.
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_would_change_it
+    attributes:
+      label: What would change the answer
+      description: >-
+        The condition under which this stops being acceptable — a second API
+        key, a reverse proxy, real traffic. Without this an accepted risk
+        quietly becomes an assumption.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Does this touch spend?
+      options:
+        - label: The ledgers, the ceiling, or anything under `app/budget/`
+        - label: If it does, and it is decided rather than deferred, it probably wants a `docs/decisions/` record instead of an issue
