@@ -1,10 +1,16 @@
-"""Keep the README's numbers honest.
+"""Keep the documentation's facts honest.
 
 The test count in the build log has gone stale four times, each caught by
 someone reading it rather than by anything failing. A README that overstates
 its own coverage is a small lie, but it's the first thing anyone reads about
 this project — and it's exactly the class of drift the pricing-coverage and
 dashboard-metrics guards already exist to prevent elsewhere.
+
+It started as README-only, which is what the file used to be called. The
+same drift applies to anything that tells a reader to run a command or hit
+an endpoint, so the guards here now cover CONTRIBUTING.md, the runbook,
+SECURITY.md and the PR template as well — the runbook especially, since it
+is read while something is already broken.
 """
 
 import pathlib
