@@ -41,6 +41,31 @@ _FILE_REF = re.compile(r"`?\b(app/[A-Za-z0-9_/]+\.py)`?")
 _FUNC_REF = re.compile(r"`(_[a-z][a-z0-9_]*)(?:\(\))?`")
 
 
+# Backticked ALL-CAPS names that are not this project's: protocol keywords,
+# SQL types, Docker directives, Redis commands and errors. Each is here
+# because it appears in prose and is not ours to rename.
+_NOT_OURS = {
+    "HEALTHCHECK",   # a Dockerfile directive
+    "VARCHAR",       # a SQL type
+    "INCRBYFLOAT",   # a Redis command
+    "NOAUTH",        # a Redis error code
+    "DONE",          # the [DONE] sentinel in the SSE protocol
+    "GATEWAY_ENV_FILE",  # read by conftest before Settings exists, so not a field
+    "DEMO_ADMIN_KEY",    # scripts/demo.sh only
+    "GATEWAY_URL", "CLIENT_KEY",  # scripts/load_test.js only
+    "APPLY", "ID",   # make purge-audit arguments
+    "POSTGRES_USER", "POSTGRES_PASSWORD", "POSTGRES_DB",  # compose only
+    "REDIS_PASSWORD", "GRAFANA_PASSWORD",  # compose only, per .env.example
+    "PYTHONUNBUFFERED",  # set in the Dockerfile
+    "KEYS", "FLUSHALL",  # more Redis commands
+    "SELECT", "DELETE",  # SQL verbs
+    "CODEOWNERS",        # a GitHub filename
+    # Ruff rule codes, named in the changelog where each was pinned or
+    # deliberately left off.
+    "ANN204", "D400", "N818", "PIE790", "RUF100", "TRY401",
+}
+
+
 def _app_source() -> str:
     return "\n".join(p.read_text() for p in sorted(ROOT.joinpath("app").rglob("*.py")))
 
@@ -82,4 +107,41 @@ def test_the_prose_list_is_not_empty():
     assert len(set(_FUNC_REF.findall(joined))) >= 4, (
         "almost no function references matched; check the pattern still fits"
         " how the docs actually write them"
+    )
+
+
+# `MAX_MESSAGES`, `PROVIDER_LIFETIME_BUDGET_USD` — a constant or setting in
+# backticks. Four or more characters, so `USD` and `SSE` do not qualify.
+_CONST_REF = re.compile(r"`([A-Z][A-Z0-9_]{3,})`")
+
+
+@pytest.mark.parametrize("doc", _PROSE, ids=lambda p: str(p.relative_to(ROOT)))
+def test_referenced_constants_exist(doc):
+    """A backticked capital name is either ours or on the list saying whose.
+
+    The README documents the request-size caps by name, SECURITY.md names the
+    settings behind each control, and `.env.example` is read as the list of
+    what can be configured. Renaming one of those leaves prose confidently
+    naming something that is not there — and unlike a wrong number, nothing
+    else fails to make anyone look.
+    """
+    from app.core.config import Settings
+
+    source = _app_source()
+    ours = {f.upper() for f in Settings.model_fields}
+
+    unknown = sorted(
+        {
+            name
+            for name in _CONST_REF.findall(doc.read_text())
+            if name not in _NOT_OURS
+            and name not in ours
+            and f"\n{name} " not in source
+            and f"\n{name}:" not in source
+        },
+    )
+    assert not unknown, (
+        f"{doc.relative_to(ROOT)} names {unknown}, which are neither settings,"
+        " constants defined in app/, nor listed in _NOT_OURS. Either it was"
+        " renamed, or it belongs on that list with a note saying whose it is."
     )
