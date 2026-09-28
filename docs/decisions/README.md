@@ -4,6 +4,16 @@ One file per decision, each with the alternative that was considered and why
 it lost. They exist so the non-obvious calls aren't re-litigated from scratch,
 and so a reader can tell a deliberate trade from an accident.
 
+**When to write one** rather than a comment or an issue: the reasoning
+outlives the code it is about, and someone could reasonably undo it without
+noticing there was a reason. A comment explains the line it sits on; a
+decision explains why the whole shape is what it is. An issue is for
+something still open — once it is settled, it wants a record here instead.
+
+Several of these were written *after* the code, when a review asked why —
+017 came from three contradictions in one week. That is a fine reason to
+write one. So is being unable to answer "why not the obvious thing" out loud.
+
 | # | Decision | |
 |---:|---|---|
 | 001 | Circuit breaker gates retry, not the other way around | [file](001-circuit-breaker-before-retry.md) |
