@@ -22,13 +22,18 @@ import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
+# The Makefile and .env.example are in here too: both explain themselves in
+# comments that name modules, and a comment pointing at a moved file rots the
+# same way prose does. They just write the path bare rather than in backticks.
 _PROSE = sorted(
     [*ROOT.joinpath("docs").rglob("*.md"), ROOT / "README.md",
-     ROOT / "SECURITY.md", ROOT / "CONTRIBUTING.md", ROOT / "CHANGELOG.md"],
+     ROOT / "SECURITY.md", ROOT / "CONTRIBUTING.md", ROOT / "CHANGELOG.md",
+     ROOT / "Makefile", ROOT / ".env.example"],
 )
 
-# `app/budget/tracker.py` — a path in backticks.
-_FILE_REF = re.compile(r"`(app/[A-Za-z0-9_/]+\.py)`")
+# `app/budget/tracker.py`, or the same path bare. Backticks optional because
+# half of these files are not markdown.
+_FILE_REF = re.compile(r"`?\b(app/[A-Za-z0-9_/]+\.py)`?")
 # `_settle_chain` or `_settle_chain()` — a private function in backticks.
 # Both spellings appear; the parens are optional and the docs mostly omit
 # them, which is how the first version of this guard matched nothing at all
