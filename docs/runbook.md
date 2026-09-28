@@ -275,10 +275,15 @@ ledger is untouched; only the limit it is compared against moves. This is the
 right lever when the spend is real and you want to keep going.
 
 **Reset it:** deleting `provider_budget:<provider>` in Redis sets that
-provider's lifetime spend back to zero. There is no second copy, so this is
-not undoable and it discards the record of money that was genuinely spent. It
-is the right move only when the ledger is wrong — for example after testing
-against a fake provider inflated it.
+provider's lifetime spend back to zero. Not undoable, and it discards the
+record of money that was genuinely spent. The right move only when the ledger
+is wrong — for example after testing against a fake provider inflated it.
+
+Run `make reconcile` first and write down what it said. The audit log keeps
+its own record, so after a reset it will report LEDGER LOW by whatever the
+real spend was; that figure is what to set the key back to if the reset turns
+out to have been a mistake. Prefer `SET` to the audit-log figure over `DEL`
+for that reason — it leaves the ceiling meaning something.
 
 **Back it up:** the ledger lives in the `redis-data` volume. `docker compose
 down` keeps it; `docker compose down -v` deletes it, and that is the usual way
