@@ -11,8 +11,18 @@ make help        # every target, one line each
 make check       # what CI runs without Docker: lint, types, audit, migrations, tests
 ```
 
-`make check` has to pass before a push. CI runs the same steps plus the
-Docker-dependent ones (`make shellcheck` is the local version of one).
+`make check` has to pass before a push. It deliberately excludes everything
+needing Docker, so it works with nothing but the venv. Those steps have their
+own targets, running the same images CI does:
+
+```
+make shellcheck      # the two shell scripts
+make promtool        # the Prometheus config and alert rules
+make compose-check   # docker-compose.yml parses
+```
+
+Worth running if you touched what they cover. All three fail in ways that
+otherwise only surface when someone brings the stack up.
 
 If `make check` fails at `migrate-check` with "Target database is not up to
 date", that is almost certainly not model drift: running the gateway locally
