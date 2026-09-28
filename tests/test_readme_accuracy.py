@@ -115,26 +115,42 @@ def test_readme_alert_count_matches_the_rules_file():
     )
 
 
-def test_readme_only_references_make_targets_that_exist():
-    """The README tells a reader to run ten different `make` commands. A
-    renamed or dropped target turns one of those into `make: *** No rule to
-    make target` — landing on whoever is following the README for the first
-    time, which is the worst possible audience for it.
+@pytest.mark.parametrize("doc_name", ["README.md", "CONTRIBUTING.md", "docs/runbook.md"])
+def test_docs_only_reference_make_targets_that_exist(doc_name):
+    """These tell a reader to run `make` something. A renamed or dropped
+    target turns one of those into `make: *** No rule to make target` —
+    landing on whoever is following the instructions for the first time,
+    which is the worst possible audience for it.
 
-    Checked against the rules the Makefile actually defines rather than
-    .PHONY, since a target can work without being listed there.
+    CONTRIBUTING.md and the runbook matter as much as the README here: one is
+    read before a first contribution, the other during an incident. Checked
+    against the rules the Makefile actually defines rather than .PHONY, since
+    a target can work without being listed there.
     """
     makefile = (ROOT / "Makefile").read_text()
     defined = set(re.findall(r"^([a-zA-Z][\w-]*):", makefile, re.MULTILINE))
     assert defined, "no targets found in the Makefile — the guard would pass vacuously"
 
-    referenced = set(re.findall(r"\bmake ([a-z][a-z-]*)", README.read_text()))
-    assert referenced, "README no longer mentions any make targets"
+    doc = ROOT / doc_name
+    # Only what is actually written as code. "make" is also an English verb:
+    # the runbook says "do not raise this to make it go away", and a pattern
+    # that scans raw prose reads that as a target called `it`. Matching from
+    # any backtick has the same problem from the other end, since a closing
+    # backtick looks exactly like an opening one — so the code spans are
+    # extracted first, in pairs, and only they are searched.
+    text = doc.read_text()
+    spans = re.findall(r"`([^`\n]+)`", text)
+    spans += re.findall(r"^\s*(?:\$ )?(make .+)$", text, re.MULTILINE)
+    referenced = {
+        m.group(1) for span in spans
+        for m in re.finditer(r"\bmake ([a-z][a-z-]*)", span)
+    }
+    assert referenced, f"{doc_name} no longer mentions any make targets"
 
     missing = sorted(referenced - defined)
     assert not missing, (
-        f"README tells the reader to run {missing}, which the Makefile does not"
-        f" define (it has {sorted(defined)})"
+        f"{doc_name} tells the reader to run {missing}, which the Makefile does"
+        f" not define (it has {sorted(defined)})"
     )
 
 
