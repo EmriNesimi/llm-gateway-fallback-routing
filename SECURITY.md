@@ -67,12 +67,19 @@ Two things, in this order:
 
 - **Public exposure without a reverse proxy.** There is no TLS termination and
   no WAF. `docker-compose.yml` binds every port to `127.0.0.1` deliberately.
-- **A tamper-proof spend ledger.** It lives in Redis, which now persists to
-  disk (`appendonly`) and survives a restart — until this batch it did not,
-  and every `docker compose down` silently reset the lifetime ceiling to zero.
-  Anyone who can reach Redis can still flush it, or delete the volume, and the
+- **A tamper-proof spend ledger.** It lives in Redis, which persists to disk
+  (`appendonly`) and survives a restart — it did not always, and every
+  `docker compose down` silently reset the lifetime ceiling to zero. Anyone
+  who can reach Redis can still flush it, or delete the volume, and the
   ceiling starts over. The password and loopback bind are what stand in the
-  way; there is no second copy of the number.
+  way.
+
+  What has changed is that tampering is now *detectable*, if not prevented:
+  the audit log records every request independently, and `make reconcile`
+  compares the two. A flushed ledger reads as LEDGER LOW against it. That is
+  a second record, not a second copy — it is written by a different code path
+  to a different store, which is what makes the comparison worth anything.
+  See [decision 017](docs/decisions/017-two-spend-records-neither-is-the-truth.md).
 
 ## Notes for anyone reading the code
 
