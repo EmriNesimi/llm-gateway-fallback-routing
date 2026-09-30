@@ -1,4 +1,4 @@
-.PHONY: help install check lint typecheck shellcheck promtool compose-check audit test run migrate migrate-check up down demo ledger reconcile purge-audit
+.PHONY: help install check lint typecheck shellcheck promtool compose-check audit test run migrate migrate-check up down demo ledger reconcile purge-audit bench
 
 # Default target. A `## text` on the same line as a target is its help line.
 help:
@@ -118,6 +118,11 @@ reconcile:  ## check the ledger against the audit log; 1 = gap, 2 = unreadable
 #   make purge-audit ID=client-hung-up APPLY=1
 purge-audit:  ## remove audit rows by exact ID=...; dry run unless APPLY=1
 	python -m scripts.purge_audit_rows "$(ID)" $(if $(APPLY),--apply,)
+
+# Answers the question docs/load-test-results.md says its numbers cannot:
+# what does the gateway itself cost, with the provider round trip taken out.
+bench:  ## measure gateway overhead with the provider stubbed (needs Redis)
+	python -m scripts.bench_overhead
 
 migrate:  ## alembic upgrade head
 	alembic upgrade head
