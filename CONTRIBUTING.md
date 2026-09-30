@@ -43,7 +43,7 @@ file has no revision recorded. `alembic stamp head` fixes it.
   | Guard | Fails when |
   |---|---|
   | `test_docs_accuracy.py` | a doc quotes a count, a `make` target or an endpoint that no longer matches |
-  | `test_docs_reference_real_code.py` | prose names a module, function or constant that was renamed |
+  | `test_docs_reference_real_code.py` | prose names a module, function, constant or test file that was renamed, or links to a file or heading that does not exist |
   | `test_decision_records.py` | a decision is cited by a number that does not exist, or is missing from the index |
   | `test_toolchain_consistency.py` | the Python version disagrees across the seven places it is written |
   | `test_env_example_matches_defaults.py` | `.env.example` documents a default the code no longer has |
