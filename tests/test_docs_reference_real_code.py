@@ -168,3 +168,29 @@ def test_referenced_test_modules_exist(doc):
         " test_readme_accuracy.py to test_docs_accuracy.py the same day this"
         " was written."
     )
+
+
+# [decision 017](docs/decisions/017-....md) — a relative link to a file in
+# the repo. Anchors and external URLs are somebody else's problem.
+_LINK = re.compile(r"\]\((?!https?:|#|mailto:)([^)#]+)")
+
+_LINKED_DOCS = sorted([*_PROSE, *ROOT.joinpath(".github").rglob("*.md")])
+
+
+@pytest.mark.parametrize("doc", _LINKED_DOCS, ids=lambda p: str(p.relative_to(ROOT)))
+def test_relative_links_resolve(doc):
+    """Markdown links between these files, and to the code they cite.
+
+    Every decision record links to the modules it is about, the README links
+    to sixteen decisions, SECURITY.md links to the decisions behind each
+    control. On GitHub a broken one is a 404 page — silent from here, since
+    nothing renders the markdown during a test run.
+    """
+    broken = sorted(
+        {target for target in _LINK.findall(doc.read_text())
+         if not (doc.parent / target.strip()).exists()},
+    )
+    assert not broken, (
+        f"{doc.relative_to(ROOT)} links to {broken}, which do not exist."
+        " Relative links are resolved from the linking file's own directory."
+    )
