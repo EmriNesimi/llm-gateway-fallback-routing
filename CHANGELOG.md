@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+**`make bench` — what the gateway itself costs**
+- The stubbed-provider run `docs/load-test-results.md` has been asking for.
+  Real router, both ledgers reserving and settling, real Redis at
+  `appendfsync always`, the audit write, metrics; only the provider is
+  stubbed. **13ms median, 15ms p95** on a laptop, against a provider call of
+  several hundred — so the four Redis round-trips that document worries
+  about are real and are not what dominates a request.
+- It costs nothing and calls no provider, which is the point: the number
+  that goes stale fastest is now the one that is free to refresh.
+- Its first version redirected Redis but not the database and put 338 rows
+  into the real `gateway.db` — the pollution the autouse `isolated_db`
+  fixture prevents in tests, which a script gets no fixture for. Removed,
+  exported first, and `make reconcile` agrees again. A guard now asserts
+  any script driving the request path redirects both stores, *before* the
+  first app import — Settings is built at import time, so a redirect after
+  it is read by nothing and looks correct.
+
 **Links are checked now, which nothing else could do**
 - Relative markdown links resolve, and their `#anchor` matches a heading in
   the file they point at. A broken one is a 404 on GitHub and completely
