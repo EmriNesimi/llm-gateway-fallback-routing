@@ -194,3 +194,36 @@ def test_relative_links_resolve(doc):
         f"{doc.relative_to(ROOT)} links to {broken}, which do not exist."
         " Relative links are resolved from the linking file's own directory."
     )
+
+
+# [ProviderBudgetLow](#providerbudgetlow), or the same across files.
+_ANCHOR_LINK = re.compile(r"\]\((?!https?:|mailto:)([^)#]*)#([a-z0-9-]+)\)")
+
+
+def _anchors_in(path: pathlib.Path) -> set[str]:
+    """GitHub's slug for each heading: lowercased, punctuation dropped, spaces to dashes."""
+    return {
+        re.sub(r"[^a-z0-9 -]", "", heading.lower()).replace(" ", "-")
+        for heading in re.findall(r"^#{1,6} (.+)$", path.read_text(), re.MULTILINE)
+    }
+
+
+@pytest.mark.parametrize("doc", _LINKED_DOCS, ids=lambda p: str(p.relative_to(ROOT)))
+def test_anchor_links_resolve(doc):
+    """The runbook's contents list is fourteen of these, and every alert's
+    runbook_url ends in one. A renamed heading leaves the link landing at the
+    top of the page instead — which during an incident means scrolling a long
+    document looking for the section that was supposed to be one click away.
+    """
+    broken = []
+    for target, anchor in _ANCHOR_LINK.findall(doc.read_text()):
+        linked = (doc.parent / target).resolve() if target else doc
+        if not linked.exists():
+            continue  # test_relative_links_resolve owns that failure
+        if anchor not in _anchors_in(linked):
+            broken.append(f"{target or doc.name}#{anchor}")
+
+    assert not broken, (
+        f"{doc.relative_to(ROOT)} links to headings that do not exist:"
+        f" {sorted(set(broken))}. A renamed heading silently changes its anchor."
+    )
