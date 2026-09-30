@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**Links are checked now, which nothing else could do**
+- Relative markdown links resolve, and their `#anchor` matches a heading in
+  the file they point at. A broken one is a 404 on GitHub and completely
+  silent locally — nothing renders markdown during a test run, so this was
+  the one class of rot with no way to catch it.
+- It matters most in the runbook: its contents list is fourteen anchors, and
+  a renamed heading drops the reader at the top of a long document during an
+  incident rather than at the section they clicked for.
+
 **The prose guards cover the prose that matters most**
 - The runbook is checked for endpoints and `make` targets that still exist.
   It is read while something is already broken, which is the worst moment to
