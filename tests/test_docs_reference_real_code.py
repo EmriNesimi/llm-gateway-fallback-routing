@@ -10,9 +10,19 @@ It is also what makes a rename break them silently. Nothing about renaming
 dangling reference is worse than no reference: it sends a reader looking for
 something that is not there and costs them the trust they had in the rest.
 
-So the references are checked. Anything in backticks that looks like a path
-under `app/` must exist, and anything that looks like a private function call
-must be defined somewhere in `app/`.
+So the references are checked. In these files:
+
+- a path under `app/` must exist, backticked or bare;
+- a private function name must be defined somewhere in `app/`;
+- a capitalised name is a setting, a constant in `app/`, or on a list saying
+  whose it is;
+- a `test_*.py` filename must exist under `tests/`;
+- a relative link must resolve, and its `#anchor` must match a heading in
+  the file it points at.
+
+The last two are the ones nothing else can catch: a broken link is a 404 on
+GitHub and completely silent here, since nothing renders markdown during a
+test run.
 """
 
 import pathlib
