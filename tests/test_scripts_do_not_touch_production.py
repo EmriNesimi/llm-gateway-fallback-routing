@@ -1,0 +1,73 @@
+"""A script that writes must redirect the stores it writes to.
+
+The suite has autouse fixtures for this — `isolated_db` and `isolated_redis`
+— because a test that forgets is not a test that fails, it is a test that
+writes to whatever the environment points at. That has happened twice: 150
+rows of stub traffic in the production audit log, and the spend ledger
+deleted on every run.
+
+A script gets no fixture. `scripts/bench_overhead.py` drives the real
+request path at volume, and its first version redirected Redis but not the
+database — 338 rows into the real `gateway.db` on the first run.
+
+So the redirect is asserted here. Read statically rather than by running the
+thing, because running it is what would do the damage.
+"""
+
+import pathlib
+import re
+
+import pytest
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# Scripts that drive the request path, so they write to both stores. A
+# read-only one (reconcile) and a deliberate writer aimed at production
+# (purge_audit_rows) are not in here — they are supposed to use the real
+# database, which is the whole point of them.
+_WRITES_AT_VOLUME = ["bench_overhead.py"]
+
+
+@pytest.mark.parametrize("script_name", _WRITES_AT_VOLUME)
+def test_the_script_redirects_both_stores(script_name):
+    source = (ROOT / "scripts" / script_name).read_text()
+
+    for var in ("REDIS_URL", "DATABASE_URL"):
+        assert re.search(rf'os\.environ\["{var}"\]\s*=', source), (
+            f"scripts/{script_name} drives the request path at volume but never"
+            f" redirects {var}. Every request it makes writes to whichever store"
+            " that names — the ledger for one, an audit row for the other."
+        )
+
+
+@pytest.mark.parametrize("script_name", _WRITES_AT_VOLUME)
+def test_the_redirect_happens_before_the_app_is_imported(script_name):
+    """Ordering is the whole thing.
+
+    `app/core/config.py` builds its Settings singleton at import time and
+    `app/budget/dependency.py` builds the ledger clients from it, so a
+    redirect after the first `app.` import changes nothing — the real URLs
+    are already captured. This is why conftest.py does its environment work
+    above its own imports and carries an E402 waiver for it.
+    """
+    lines = (ROOT / "scripts" / script_name).read_text().splitlines()
+
+    first_app_import = next(
+        (i for i, line in enumerate(lines) if re.match(r"\s*(from|import) app[. ]", line)),
+        None,
+    )
+    assert first_app_import is not None, f"scripts/{script_name} imports nothing from app/"
+
+    for var in ("REDIS_URL", "DATABASE_URL"):
+        redirect = next(
+            (i for i, line in enumerate(lines) if f'os.environ["{var}"]' in line and "=" in line),
+            None,
+        )
+        assert redirect is not None, (
+            f"scripts/{script_name} never sets {var}"
+        )
+        assert redirect < first_app_import, (
+            f"scripts/{script_name} sets {var} at line {redirect} but first imports"
+            f" from app/ at line {first_app_import}. Settings is built at import"
+            " time, so a redirect after that point is read by nothing."
+        )
