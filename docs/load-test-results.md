@@ -116,10 +116,36 @@ the budget a re-run would consume.
   round-trips per request on a two-provider chain, where there were none.
 - The commit it was measured at, replacing the pin at the top of this file, so
   the next staleness assessment starts from a fact rather than a guess.
-- Ideally a paired run with the providers stubbed, which isolates the
-  gateway's own overhead from the upstream round trip and costs nothing. The
-  absolute latencies would not be comparable to the run below, but the
-  delta that this table is all about would be.
+- ~~Ideally a paired run with the providers stubbed~~ — done, and it is
+  `make bench`. See below.
+
+## Gateway overhead, provider stubbed — `984b55e`
+
+The measurement the run below cannot give: everything except the upstream
+call. Real router, both ledgers reserving and settling, real Redis at
+`appendfsync always`, the audit write, metrics. The provider returns
+instantly.
+
+```
+200 requests through /v1/chat on the 'smart' chain
+
+  mean     13.39 ms
+  median   12.93 ms
+  p90      14.31 ms
+  p95      15.26 ms
+  p99      26.08 ms
+```
+
+Reproduce with `make bench`. It costs nothing and calls no provider, so
+unlike the run below there is no reason not to re-run it — which is the
+point: the number that goes stale fastest is now the one that is free to
+refresh.
+
+Read it as an order of magnitude, not a benchmark. A laptop running Docker,
+an ASGI transport rather than a socket, and one process. What it establishes
+is the scale: the gateway's own cost is tens of milliseconds against a
+provider call of hundreds, so the four Redis round-trips the table above
+worries about are real but not what dominates a request.
 
 ```
 checks_total.......: 3067    61.0/s
