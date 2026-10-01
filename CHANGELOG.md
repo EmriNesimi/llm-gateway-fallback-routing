@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+**What the reservation actually costs: four to five milliseconds**
+- `make bench` now also measures the `local` chain, which is Ollama only.
+  `_reserve_chain` skips free providers and then has nothing to claim
+  against the key either, so that chain does zero Redis round-trips for
+  spend where a billable one does six. The difference is the reservation
+  cost — the figure `docs/load-test-results.md` has listed as unmeasurable
+  since reservations landed.
+- About a third of the gateway's own overhead, and still two orders of
+  magnitude under the provider call it protects. Worth knowing before
+  anyone optimises it away.
+- Reported as a range. Five runs spanned 3.8–5.3ms, which is wider than the
+  gap between the two endpoints, so the two-decimal figure first written
+  down implied a precision the measurement does not have.
+- A guard pins the thing that would silently invalidate all of it: if a
+  billable hop is ever added to `local`, the subtraction starts comparing
+  two reserving chains and reporting the difference as the reservation cost.
+- A mistyped chain name now lists the real ones instead of raising a
+  `KeyError` four frames inside `_reserve_chain`.
+
 **`make bench` grew up**
 - It measures `/v1/chat/stream` too, draining the stream before stopping the
   clock so the tail bookkeeping is in the number. Both endpoints come in at
