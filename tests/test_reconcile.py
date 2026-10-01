@@ -95,3 +95,25 @@ def test_the_printed_url_has_no_password():
     assert "hunter2" not in _redacted("redis://:hunter2@localhost:6379/0")
     # No credentials, nothing to redact.
     assert _redacted("redis://localhost:6379/0") == "redis://localhost:6379/0"
+
+
+def test_redaction_covers_the_url_shapes_the_scripts_actually_see():
+    """Two scripts print this on failure now, so the contract is shared.
+
+    The cases are the ones a real REDIS_URL takes: no credentials at all,
+    a password with no username (what docker-compose and .env.example both
+    produce), and a username with one.
+    """
+    from scripts.reconcile import _redacted
+
+    assert _redacted("redis://localhost:6379/0") == "redis://localhost:6379/0"
+    assert _redacted("redis://:pw@localhost:6379/0") == "redis://:***@localhost:6379/0"
+    assert _redacted("redis://user:pw@host:6379/14") == "redis://user:***@host:6379/14"
+
+    # The point of all of it.
+    for url in (
+        "redis://:s3cret@localhost:6379/0",
+        "redis://admin:s3cret@redis.internal:6379/1",
+        "rediss://:s3cret@localhost:6380/0",
+    ):
+        assert "s3cret" not in _redacted(url), url
