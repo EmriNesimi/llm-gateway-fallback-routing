@@ -22,9 +22,13 @@ make compose-check   # docker-compose.yml parses
 ```
 
 Also useful, and free: `make bench` measures what the gateway itself costs
-per request with the provider stubbed. Worth a before-and-after if you have
-changed anything on the request path — it is the only number here that does
-not need a provider call to produce.
+per request with the provider stubbed, and the difference against a chain
+that reserves nothing — which is what the reservation costs. Worth a
+before-and-after if you have changed anything on the request path.
+
+Run it more than once before believing a change moved it. Five runs here
+spanned 3.8ms to 5.3ms on the same code, so anything under about a
+millisecond is noise on a laptop.
 
 Worth running if you touched what they cover. All three fail in ways that
 otherwise only surface when someone brings the stack up.
@@ -55,6 +59,7 @@ file has no revision recorded. `alembic stamp head` fixes it.
   | `test_stub_chains_match_reality.py` | a test's hardcoded copy of a chain or a price drifts from the real one |
   | `test_metrics_observability.py` | a metric is exported but never graphed or alerted on |
   | `test_scripts_do_not_touch_production.py` | a script that drives the request path writes to the real ledger or audit log |
+  | `test_bench_overhead.py` | the chain `bench --compare` subtracts stops being free, which would silently invalidate the figure |
 
   They exist because each of those has gone stale at least once, and none of
   them fails loudly on its own — a wrong number in a README is invisible
