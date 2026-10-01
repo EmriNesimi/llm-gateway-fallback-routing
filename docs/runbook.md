@@ -127,6 +127,14 @@ signal.
 makes each failing attempt take longer before falling back, which is the
 opposite of what a caller waiting on a slow request needs.
 
+**To rule the gateway itself out:** `make bench` times the same request path
+with the provider stubbed, so what is left is routing, both ledgers, the
+audit write and metrics. It normally comes in around 14ms. If it is still
+around 14ms, the latency is upstream and no amount of tuning here will help;
+if it has grown to seconds, the problem is Redis or the database and
+`/readyz` is the next thing to look at. It calls no provider, so it is safe
+to run against a gateway that is already struggling.
+
 ## UnhandledExceptions
 
 **Means:** requests are failing with a 500 — something raised past every
