@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+**`make bench` grew up**
+- It measures `/v1/chat/stream` too, draining the stream before stopping the
+  clock so the tail bookkeeping is in the number. Both endpoints come in at
+  ~14ms: the streaming path does strictly more work and costs no more.
+- It honours `REDIS_URL` now. It read `.env` unconditionally, so pointing it
+  at another server was silently ignored — a flag that does nothing is worse
+  than no flag.
+- An unreachable Redis gets one line and exit 2 rather than a traceback,
+  matching the other two scripts, with the password redacted through the
+  same helper. The ledgers fail closed, so unreachable means every request
+  refused, which otherwise reads as the gateway being slow.
+- CI smokes it at five requests — it is the only script that drives the
+  request path rather than reading a store, so the one most likely to break
+  on a rename. Not a measurement, and the step says so.
+- The runbook uses it to rule the gateway out of a latency alert: still
+  ~14ms means the latency is upstream.
+
 **`make bench` — what the gateway itself costs**
 - The stubbed-provider run `docs/load-test-results.md` has been asking for.
   Real router, both ledgers reserving and settling, real Redis at
