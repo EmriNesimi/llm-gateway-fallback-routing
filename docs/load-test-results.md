@@ -119,7 +119,7 @@ the budget a re-run would consume.
 - ~~Ideally a paired run with the providers stubbed~~ — done, and it is
   `make bench`. See below.
 
-## Gateway overhead, provider stubbed — `984b55e`
+## Gateway overhead, provider stubbed — `d54bdad`
 
 The measurement the run below cannot give: everything except the upstream
 call. Real router, both ledgers reserving and settling, real Redis at
@@ -127,14 +127,20 @@ call. Real router, both ledgers reserving and settling, real Redis at
 instantly.
 
 ```
-200 requests through /v1/chat on the 'smart' chain
+200 requests per endpoint on the 'smart' chain
 
-  mean     13.39 ms
-  median   12.93 ms
-  p90      14.31 ms
-  p95      15.26 ms
-  p99      26.08 ms
+                       mean   median      p90      p95      p99
+  /v1/chat            14.51    13.41    16.36    19.76    50.20
+  /v1/chat/stream     14.75    14.24    15.77    17.35    31.97
 ```
+
+The streaming row includes the bookkeeping that runs *after* the last chunk
+— reserve, settle, the flag that stops a second settle — because the stream
+is drained before the clock stops. Timing the response alone would miss it.
+
+Both endpoints cost the same, which is the useful part: the streaming path
+does strictly more work and does not pay for it, so there is nothing to
+trade away there.
 
 Reproduce with `make bench`. It costs nothing and calls no provider, so
 unlike the run below there is no reason not to re-run it — which is the
