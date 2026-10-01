@@ -121,8 +121,8 @@ purge-audit:  ## remove audit rows by exact ID=...; dry run unless APPLY=1
 
 # Answers the question docs/load-test-results.md says its numbers cannot:
 # what does the gateway itself cost, with the provider round trip taken out.
-bench:  ## measure gateway overhead with the provider stubbed (needs Redis)
-	python -m scripts.bench_overhead
+bench:  ## measure gateway overhead and what the reservation costs (needs Redis)
+	python -m scripts.bench_overhead --compare
 
 migrate:  ## alembic upgrade head
 	alembic upgrade head

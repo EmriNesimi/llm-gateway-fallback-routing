@@ -142,7 +142,9 @@ jobs:
           # runner's timings are worthless, but "it still drives the app" is
           # worth knowing, and this is the only script that touches the
           # request path rather than just reading a store.
-          python -m scripts.bench_overhead --requests 5
+          # --compare, because that path drives a second chain and the
+          # free-chain subtraction, which is the half most likely to break.
+          python -m scripts.bench_overhead --requests 5 --compare
 
   postgres-migrations:
     runs-on: ubuntu-latest
