@@ -52,8 +52,19 @@ def _scratch_redis_url(url: str) -> str:
 # Settings singleton at import time and app/budget/dependency.py builds the
 # ledger clients from it. tests/conftest.py does the same thing for the same
 # reason and carries the same E402 waiver.
-def _redis_url_from_env_file() -> str:
-    """REDIS_URL as .env sets it, or the default if there is no .env."""
+def _configured_redis_url() -> str:
+    """REDIS_URL from the environment, else from .env, else the default.
+
+    That order matters and was wrong at first: this read .env unconditionally,
+    so `REDIS_URL=... make bench` was silently ignored and the run went to
+    whichever Redis .env happened to name. An explicit environment variable
+    has to win — it is the only way to point this at a different server, and
+    a flag that does nothing is worse than no flag.
+    """
+    from_env = os.environ.get("REDIS_URL")
+    if from_env:
+        return from_env
+
     env_file = pathlib.Path(__file__).resolve().parent.parent / ".env"
     if env_file.exists():
         for line in env_file.read_text().splitlines():
@@ -63,7 +74,7 @@ def _redis_url_from_env_file() -> str:
     return "redis://localhost:6379/0"
 
 
-os.environ["REDIS_URL"] = _scratch_redis_url(_redis_url_from_env_file())
+os.environ["REDIS_URL"] = _scratch_redis_url(_configured_redis_url())
 # And a throwaway database. Redirecting Redis alone is not isolation: the
 # audit write is part of the request path being measured, so every sample
 # lands a row — 339 of them went into the real gateway.db the first time this
@@ -82,6 +93,7 @@ from app.main import app  # noqa: E402 - see above
 from app.providers.base import ChatResponse, StreamChunk  # noqa: E402 - see above
 from app.ratelimit import dependency as ratelimit_dependency  # noqa: E402 - see above
 from app.security.auth import require_api_key  # noqa: E402 - see above
+from scripts.reconcile import _redacted  # noqa: E402 - see above
 
 
 class _Instant:
@@ -109,7 +121,25 @@ class _Instant:
         )
 
 
+_UNREACHABLE = 2
+
+
 async def _run(requests: int, chain: str) -> int:
+    # Same split as reconcile.py and purge_audit_rows.py: a store that cannot
+    # be reached gets one line and its own exit code, not a traceback. The
+    # ledgers fail closed, so an unreachable Redis means every request is
+    # refused — which would otherwise read as the gateway being slow.
+    try:
+        await ratelimit_dependency._limiter._redis.ping()
+    except Exception as exc:  # noqa: BLE001 - reported, not handled
+        # Redacted, via reconcile's helper rather than a second copy: this
+        # prints on failure, which is when output gets pasted into an issue.
+        print(
+            f"cannot reach Redis at {_redacted(settings.redis_url)}: {exc}",
+            file=sys.stderr,
+        )
+        return _UNREACHABLE
+
     main_module.build_router = lambda model: (chain, _Instant())
     app.dependency_overrides[require_api_key] = lambda: "bench-key"
 
