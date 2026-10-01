@@ -92,6 +92,7 @@ from app.db.session import init_db  # noqa: E402 - see above
 from app.main import app  # noqa: E402 - see above
 from app.providers.base import ChatResponse, StreamChunk  # noqa: E402 - see above
 from app.ratelimit import dependency as ratelimit_dependency  # noqa: E402 - see above
+from app.routing.model_map import FALLBACK_CHAINS  # noqa: E402 - see above
 from app.security.auth import require_api_key  # noqa: E402 - see above
 from scripts.reconcile import _redacted  # noqa: E402 - see above
 
@@ -217,6 +218,16 @@ async def _run(requests: int, chain: str, compare: bool) -> int:
             file=sys.stderr,
         )
         return _UNREACHABLE
+
+    # Checked here rather than left to fail inside _reserve_chain, where a
+    # typo surfaces as a bare KeyError from a dict lookup four frames down.
+    for name in (chain, _FREE_CHAIN) if compare else (chain,):
+        if name not in FALLBACK_CHAINS:
+            print(
+                f"no chain named {name!r}. Available: {', '.join(sorted(FALLBACK_CHAINS))}",
+                file=sys.stderr,
+            )
+            return 1
 
     app.dependency_overrides[require_api_key] = lambda: "bench-key"
     # The rate limiter still runs — its Redis round-trip is part of what is
