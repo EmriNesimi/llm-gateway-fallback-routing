@@ -124,7 +124,85 @@ class _Instant:
 _UNREACHABLE = 2
 
 
-async def _run(requests: int, chain: str) -> int:
+# A chain of only free providers. _reserve_chain skips free providers
+# entirely, and with nothing reserved against a provider the per-key
+# reservation is skipped too — so this chain does zero Redis round-trips for
+# spend, where a billable one does six. The difference between them is the
+# reservation cost, which is the number docs/load-test-results.md keeps
+# saying it cannot produce.
+#
+# The provider is stubbed either way, so this measures the bookkeeping the
+# chain implies, not Ollama. It does not need Ollama running.
+_FREE_CHAIN = "local"
+
+
+async def _measure(client, requests: int, chain: str) -> dict[str, list[float]]:
+    """Time `requests` through each endpoint on one chain. Milliseconds, sorted."""
+    main_module.build_router = lambda model: (chain, _Instant())
+
+    # The bucket from the last chain is cleared: it persists in the scratch
+    # database, so the second chain would inherit an empty one and be refused
+    # from its first request regardless of the capacity set below.
+    scratch = ratelimit_dependency._limiter._redis
+    for key in await scratch.keys("ratelimit:*"):
+        await scratch.delete(key)
+
+    body = {"model": chain, "messages": [{"role": "user", "content": "hi"}]}
+
+    async def one(endpoint: str) -> int:
+        """Drive one request to completion and return its status."""
+        if endpoint == "/v1/chat":
+            return (await client.post(endpoint, json=body)).status_code
+        # A stream is not finished when the response arrives — its
+        # bookkeeping runs at the tail, after the last chunk. Timing the
+        # response alone would miss the settle entirely, which is most of
+        # what this is here to measure.
+        async with client.stream("POST", endpoint, json=body) as response:
+            async for _ in response.aiter_bytes():
+                pass
+            return response.status_code
+
+    results: dict[str, list[float]] = {}
+    for endpoint in ("/v1/chat", "/v1/chat/stream"):
+        samples: list[float] = []
+        # Warm the pools and let first-call imports settle, so the first
+        # sample is not measuring startup.
+        for _ in range(5):
+            await one(endpoint)
+        for _ in range(requests):
+            started = time.perf_counter()
+            status = await one(endpoint)
+            samples.append((time.perf_counter() - started) * 1000)
+            if status != 200:
+                msg = f"{endpoint} on chain {chain!r} failed with {status}"
+                raise RuntimeError(msg)
+        samples.sort()
+        results[endpoint] = samples
+    return results
+
+
+def _pct(samples: list[float], p: float) -> float:
+    return samples[min(len(samples) - 1, int(len(samples) * p))]
+
+
+def _print_table(title: str, results: dict[str, list[float]]) -> None:
+    print(title)
+    print()
+    print(f"  {'':<18}{'mean':>9}{'median':>9}{'p90':>9}{'p95':>9}{'p99':>9}{'max':>9}")
+    for endpoint, samples in results.items():
+        print(
+            f"  {endpoint:<18}"
+            f"{statistics.fmean(samples):>8.2f} "
+            f"{_pct(samples, 0.50):>8.2f} "
+            f"{_pct(samples, 0.90):>8.2f} "
+            f"{_pct(samples, 0.95):>8.2f} "
+            f"{_pct(samples, 0.99):>8.2f} "
+            f"{samples[-1]:>8.2f}",
+        )
+    print()
+
+
+async def _run(requests: int, chain: str, compare: bool) -> int:
     # Same split as reconcile.py and purge_audit_rows.py: a store that cannot
     # be reached gets one line and its own exit code, not a traceback. The
     # ledgers fail closed, so an unreachable Redis means every request is
@@ -140,22 +218,13 @@ async def _run(requests: int, chain: str) -> int:
         )
         return _UNREACHABLE
 
-    main_module.build_router = lambda model: (chain, _Instant())
     app.dependency_overrides[require_api_key] = lambda: "bench-key"
-
     # The rate limiter still runs — its Redis round-trip is part of what is
     # being measured — but with a bucket large enough not to refuse the run.
     # Left at the default it starts returning 429 after twenty requests, and
-    # a 429 is not the path this is timing.
-    # Times the number of endpoints measured, plus the warm-up each takes.
-    # Sized for one endpoint it runs out partway through the second.
-    ratelimit_dependency._limiter._capacity = (requests + 10) * 2 + 100
-    # And the bucket from the last run is cleared: it persists in the scratch
-    # database, so a second run inherits an empty bucket and is refused from
-    # the first request regardless of the capacity set above.
-    scratch = ratelimit_dependency._limiter._redis
-    for key in await scratch.keys("ratelimit:*"):
-        await scratch.delete(key)
+    # a 429 is not the path this is timing. Sized for every endpoint and
+    # chain this run will drive, plus their warm-ups.
+    ratelimit_dependency._limiter._capacity = (requests + 10) * 4 + 100
     # Same for the caps: an unmetered benchmark would otherwise settle enough
     # fake spend to trip them partway through and turn the tail into 402s.
     settings.monthly_budget_usd_per_key = 1e9
@@ -167,58 +236,36 @@ async def _run(requests: int, chain: str) -> int:
     # tables until this.
     await init_db()
 
-    body = {"model": chain, "messages": [{"role": "user", "content": "hi"}]}
     transport = httpx.ASGITransport(app=app)
-
     async with httpx.AsyncClient(transport=transport, base_url="http://bench") as client:
+        try:
+            billable = await _measure(client, requests, chain)
+            free = await _measure(client, requests, _FREE_CHAIN) if compare else None
+        except RuntimeError as exc:
+            print(exc, file=sys.stderr)
+            return 1
 
-        async def one(endpoint: str) -> int:
-            """Drive one request to completion and return its status."""
-            if endpoint == "/v1/chat":
-                return (await client.post(endpoint, json=body)).status_code
-            # A stream is not finished when the response arrives — its
-            # bookkeeping runs at the tail, after the last chunk. Timing the
-            # response alone would miss the settle entirely, which is most of
-            # what this is here to measure.
-            async with client.stream("POST", endpoint, json=body) as response:
-                async for _ in response.aiter_bytes():
-                    pass
-                return response.status_code
-
-        results: dict[str, list[float]] = {}
-        for endpoint in ("/v1/chat", "/v1/chat/stream"):
-            samples: list[float] = []
-            # Warm the pools and let first-call imports settle, so the first
-            # sample is not measuring startup.
-            for _ in range(5):
-                await one(endpoint)
-            for _ in range(requests):
-                started = time.perf_counter()
-                status = await one(endpoint)
-                samples.append((time.perf_counter() - started) * 1000)
-                if status != 200:
-                    print(f"{endpoint} failed with {status}", file=sys.stderr)
-                    return 1
-            samples.sort()
-            results[endpoint] = samples
-
-    def pct(samples: list[float], p: float) -> float:
-        return samples[min(len(samples) - 1, int(len(samples) * p))]
-
-    print(f"{requests} requests per endpoint on the {chain!r} chain, provider stubbed")
-    print()
-    print(f"  {'':<18}{'mean':>9}{'median':>9}{'p90':>9}{'p95':>9}{'p99':>9}{'max':>9}")
-    for endpoint, samples in results.items():
-        print(
-            f"  {endpoint:<18}"
-            f"{statistics.fmean(samples):>8.2f} "
-            f"{pct(samples, 0.50):>8.2f} "
-            f"{pct(samples, 0.90):>8.2f} "
-            f"{pct(samples, 0.95):>8.2f} "
-            f"{pct(samples, 0.99):>8.2f} "
-            f"{samples[-1]:>8.2f}",
+    _print_table(
+        f"{requests} requests per endpoint on the {chain!r} chain, provider stubbed",
+        billable,
+    )
+    if free is not None:
+        _print_table(
+            f"The same on {_FREE_CHAIN!r}, which reserves nothing",
+            free,
         )
-    print()
+        print("  Reservation cost, median, per request:")
+        for endpoint in billable:
+            delta = _pct(billable[endpoint], 0.50) - _pct(free[endpoint], 0.50)
+            print(f"    {endpoint:<18}{delta:>7.2f} ms")
+        print()
+        print("  A billable chain reserves and settles against each provider and")
+        print(f"  again against the caller's key; {_FREE_CHAIN!r} does neither, because")
+        print("  _reserve_chain skips free providers and then has nothing to claim")
+        print("  against the key either. The difference is what that bookkeeping")
+        print("  costs — the figure docs/load-test-results.md says it cannot give.")
+        print()
+
     print("All in milliseconds. This is the gateway's own cost: routing, both")
     print("ledgers reserving and settling, the audit write, metrics. No provider")
     print("call is in it. The streaming row includes the tail bookkeeping, which")
@@ -231,8 +278,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--requests", type=int, default=500, help="samples to take")
     parser.add_argument("--chain", default="smart", help="which chain to route (default: smart)")
+    parser.add_argument(
+        "--compare",
+        action="store_true",
+        help=f"also measure the free {_FREE_CHAIN!r} chain and report the reservation cost",
+    )
     args = parser.parse_args()
-    sys.exit(asyncio.run(_run(args.requests, args.chain)))
+    sys.exit(asyncio.run(_run(args.requests, args.chain, args.compare)))
 
 
 if __name__ == "__main__":
