@@ -288,6 +288,7 @@ Cost split by provider and model, breaker state per provider, request counts by 
 ![Prometheus showing cost per provider, circuit state, and request counts](docs/images/prometheus-metrics.jpg)
 
 - **Load testing** — `scripts/load_test.js` is a [k6](https://k6.io) script that drives sustained concurrent traffic at `/v1/chat` (ramping past the default rate limit on purpose) so you can watch the fallback chain, circuit breaker, and rate limiter behave under pressure live in the Grafana dashboard above: `GATEWAY_URL=http://localhost:8000 CLIENT_KEY=<your key> k6 run scripts/load_test.js`. Real results against live provider keys: [`docs/load-test-results.md`](docs/load-test-results.md) — re-run at `f88f658`, 1700 requests, 0 failures, 1657 of them refused by the rate limiter before any outbound call, total cost $0.00027. Served latency is ~3x the previous run's; the file says plainly which confounders that figure carries. The 2026-08-10 numbers are kept beside it as the before-picture.
+- **Overhead, measured separately** — `make bench` drives the same request path with the provider stubbed, so what is left in the timing is the gateway: routing, both ledgers reserving and settling, the audit write, metrics. **~14ms median on both `/v1/chat` and `/v1/chat/stream`**, against a provider call of several hundred — so the four Redis round-trips per request are real and are not what dominates one. It calls no provider and costs nothing, which is the point: the figure that goes stale fastest is the one that is free to refresh.
 
 ## 🚀 getting started
 
