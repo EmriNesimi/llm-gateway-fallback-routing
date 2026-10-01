@@ -152,16 +152,25 @@ and with nothing claimed against a provider it skips the per-key reservation
 too — so that chain does **zero** Redis round-trips for spend where a
 billable one does six.
 
+Across five runs of 200 requests each, that difference lands between **3.8ms
+and 5.3ms** per request on both endpoints. One run looked like:
+
 ```
   Reservation cost, median, per request:
-    /v1/chat             5.33 ms
-    /v1/chat/stream      4.51 ms
+    /v1/chat             4.17 ms
+    /v1/chat/stream      4.57 ms
 ```
 
-So roughly **5ms**, about a third of the gateway's own overhead — and still
-two orders of magnitude below the provider call it is protecting. The
-reservation is the right trade at this scale, which is worth knowing before
-anyone tries to optimise it away.
+Quote it as "four to five milliseconds", not as a figure with two decimal
+places. The spread across runs is wider than the difference between the two
+endpoints, so any comparison finer than that is reading noise — and a single
+run of this is one laptop, one process, and an ASGI transport rather than a
+socket.
+
+What it establishes is the scale: about a third of the gateway's own
+overhead, and still two orders of magnitude below the provider call it is
+protecting. The reservation is the right trade here, which is worth knowing
+before anyone tries to optimise it away.
 
 Reproduce with `make bench`. It costs nothing and calls no provider, so
 unlike the run below there is no reason not to re-run it — which is the
