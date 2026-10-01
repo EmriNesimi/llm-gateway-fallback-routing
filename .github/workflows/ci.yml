@@ -137,6 +137,12 @@ jobs:
         run: |
           python -m scripts.reconcile
           python -m scripts.purge_audit_rows ci-smoke-no-such-id
+          # Enough requests to exercise reserve, settle and the audit write
+          # on both endpoints; not enough to be a measurement. A shared
+          # runner's timings are worthless, but "it still drives the app" is
+          # worth knowing, and this is the only script that touches the
+          # request path rather than just reading a store.
+          python -m scripts.bench_overhead --requests 5
 
   postgres-migrations:
     runs-on: ubuntu-latest
