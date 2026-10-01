@@ -87,7 +87,7 @@ the order it landed:
 
 | Change | Cost per request | Where |
 |---|---|---|
-| Per-provider budget reservation | two Redis round-trips per billable provider (reserve, then settle) | [decision 011](decisions/011-hard-provider-spend-ceiling.md) |
+| Per-provider budget reservation | two Redis round-trips per billable provider (reserve, then settle) — [measured](#what-the-reservation-costs) at ~5ms | [decision 011](decisions/011-hard-provider-spend-ceiling.md) |
 | Request-size bounds | validation over the message list | `app/schemas.py` |
 | Un-costable refusal | a pricing lookup that can reject before any provider is called | [decision 012](decisions/012-uncostable-requests-are-refused.md) |
 | `/v1/chat/completions` | a second endpoint, and half the traffic the script now generates | `app/main.py` |
@@ -119,7 +119,7 @@ the budget a re-run would consume.
 - ~~Ideally a paired run with the providers stubbed~~ — done, and it is
   `make bench`. See below.
 
-## Gateway overhead, provider stubbed — `d54bdad`
+## Gateway overhead, provider stubbed — `fda2082`
 
 The measurement the run below cannot give: everything except the upstream
 call. Real router, both ledgers reserving and settling, real Redis at
@@ -141,6 +141,27 @@ is drained before the clock stops. Timing the response alone would miss it.
 Both endpoints cost the same, which is the useful part: the streaming path
 does strictly more work and does not pay for it, so there is nothing to
 trade away there.
+
+### What the reservation costs
+
+The table at the top of this file lists the per-provider budget reservation
+as the largest thing added to the request path since the run below, and says
+it cannot be isolated. It can: `make bench --compare` also measures the
+`local` chain, which is Ollama only. `_reserve_chain` skips free providers,
+and with nothing claimed against a provider it skips the per-key reservation
+too — so that chain does **zero** Redis round-trips for spend where a
+billable one does six.
+
+```
+  Reservation cost, median, per request:
+    /v1/chat             5.33 ms
+    /v1/chat/stream      4.51 ms
+```
+
+So roughly **5ms**, about a third of the gateway's own overhead — and still
+two orders of magnitude below the provider call it is protecting. The
+reservation is the right trade at this scale, which is worth knowing before
+anyone tries to optimise it away.
 
 Reproduce with `make bench`. It costs nothing and calls no provider, so
 unlike the run below there is no reason not to re-run it — which is the
