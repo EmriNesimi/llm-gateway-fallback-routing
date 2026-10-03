@@ -152,6 +152,10 @@ async def _measure(client, requests: int, chain: str) -> dict[str, list[float]]:
 
     async def one(endpoint: str) -> int:
         """Drive one request to completion and return its status."""
+        if endpoint == "/v1/chat/completions":
+            # The OpenAI-compatible endpoint streams on a body field rather
+            # than a separate path, so it is the one that has to be told.
+            return (await client.post(endpoint, json={**body, "stream": False})).status_code
         if endpoint == "/v1/chat":
             return (await client.post(endpoint, json=body)).status_code
         # A stream is not finished when the response arrives — its
@@ -164,7 +168,11 @@ async def _measure(client, requests: int, chain: str) -> dict[str, list[float]]:
             return response.status_code
 
     results: dict[str, list[float]] = {}
-    for endpoint in ("/v1/chat", "/v1/chat/stream"):
+    # /v1/chat/completions included because it is the endpoint real traffic
+    # uses — an existing application points its base_url here and changes
+    # nothing else. It shares _serve_chat with /v1/chat but carries its own
+    # request parsing and response shaping, so it is not free by assumption.
+    for endpoint in ("/v1/chat", "/v1/chat/stream", "/v1/chat/completions"):
         samples: list[float] = []
         # Warm the pools and let first-call imports settle, so the first
         # sample is not measuring startup.
@@ -189,10 +197,10 @@ def _pct(samples: list[float], p: float) -> float:
 def _print_table(title: str, results: dict[str, list[float]]) -> None:
     print(title)
     print()
-    print(f"  {'':<18}{'mean':>9}{'median':>9}{'p90':>9}{'p95':>9}{'p99':>9}{'max':>9}")
+    print(f"  {'':<22}{'mean':>9}{'median':>9}{'p90':>9}{'p95':>9}{'p99':>9}{'max':>9}")
     for endpoint, samples in results.items():
         print(
-            f"  {endpoint:<18}"
+            f"  {endpoint:<22}"
             f"{statistics.fmean(samples):>8.2f} "
             f"{_pct(samples, 0.50):>8.2f} "
             f"{_pct(samples, 0.90):>8.2f} "
@@ -268,7 +276,7 @@ async def _run(requests: int, chain: str, compare: bool) -> int:
         print("  Reservation cost, median, per request:")
         for endpoint in billable:
             delta = _pct(billable[endpoint], 0.50) - _pct(free[endpoint], 0.50)
-            print(f"    {endpoint:<18}{delta:>7.2f} ms")
+            print(f"    {endpoint:<22}{delta:>7.2f} ms")
         print()
         print("  A billable chain reserves and settles against each provider and")
         print(f"  again against the caller's key; {_FREE_CHAIN!r} does neither, because")
