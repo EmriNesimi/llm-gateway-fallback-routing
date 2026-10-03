@@ -26,9 +26,12 @@ per request with the provider stubbed, and the difference against a chain
 that reserves nothing — which is what the reservation costs. Worth a
 before-and-after if you have changed anything on the request path.
 
-Run it more than once before believing a change moved it. Five runs here
-spanned 3.8ms to 5.3ms on the same code, so anything under about a
-millisecond is noise on a laptop.
+Run it more than once before believing a change moved it, and run it on an
+idle machine. Five runs here spanned 3.8ms to 5.3ms on the same code, so
+anything under about a millisecond is noise — and at load average 18 it
+produced a negative reservation cost, which is impossible. It exits 3 rather
+than reporting that, so a non-zero exit from `make bench` usually means
+"close your other work and try again" rather than "something is broken".
 
 Worth running if you touched what they cover. All three fail in ways that
 otherwise only surface when someone brings the stack up.
