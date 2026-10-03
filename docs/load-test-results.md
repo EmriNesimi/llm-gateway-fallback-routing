@@ -162,10 +162,16 @@ and 5.3ms** per request on both endpoints. One run looked like:
 ```
 
 Quote it as "four to five milliseconds", not as a figure with two decimal
-places. The spread across runs is wider than the difference between the two
+places. The spread across runs is wider than the difference between the
 endpoints, so any comparison finer than that is reading noise — and a single
 run of this is one laptop, one process, and an ASGI transport rather than a
 socket.
+
+**Run it on an idle machine.** At load average 18 the same command produced
+`-1.58 ms`, which is impossible: reserving cannot make a request faster.
+`make bench` now detects that and exits 3 rather than printing it, but the
+underlying point stands for every figure on this page — a busy machine
+produces confident-looking numbers that mean nothing.
 
 What it establishes is the scale: about a third of the gateway's own
 overhead, and still two orders of magnitude below the provider call it is
