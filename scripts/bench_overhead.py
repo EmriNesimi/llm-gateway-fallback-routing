@@ -123,6 +123,9 @@ class _Instant:
 
 
 _UNREACHABLE = 2
+# A measurement the run itself proves wrong. Its own exit code so a script
+# can tell "could not measure" from "measured, and here it is".
+_TOO_NOISY = 3
 
 
 # A chain of only free providers. _reserve_chain skips free providers
@@ -274,10 +277,24 @@ async def _run(requests: int, chain: str, compare: bool) -> int:
             free,
         )
         print("  Reservation cost, median, per request:")
+        implausible = []
         for endpoint in billable:
             delta = _pct(billable[endpoint], 0.50) - _pct(free[endpoint], 0.50)
             print(f"    {endpoint:<22}{delta:>7.2f} ms")
+            if delta < 0:
+                implausible.append(endpoint)
         print()
+        if implausible:
+            # Reserving cannot make a request faster. A negative figure is not
+            # a surprising result, it is proof the noise on this machine
+            # exceeded what is being measured — which a loaded laptop will do
+            # happily while still printing a confident-looking number.
+            print(f"  !! Negative for {', '.join(implausible)}, which is impossible:")
+            print("     reserving cannot make a request faster. The noise on this")
+            print("     machine is larger than the thing being measured, so none of")
+            print("     the deltas above mean anything. Re-run on an idle machine.")
+            print()
+            return _TOO_NOISY
         print("  A billable chain reserves and settles against each provider and")
         print(f"  again against the caller's key; {_FREE_CHAIN!r} does neither, because")
         print("  _reserve_chain skips free providers and then has nothing to claim")
