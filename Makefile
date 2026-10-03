@@ -121,6 +121,10 @@ purge-audit:  ## remove audit rows by exact ID=...; dry run unless APPLY=1
 
 # Answers the question docs/load-test-results.md says its numbers cannot:
 # what does the gateway itself cost, with the provider round trip taken out.
+#
+# Exit 3 means it measured something impossible — a negative reservation
+# cost — which only happens when the machine is too loaded for the result to
+# mean anything. It is a reason to re-run, not a failure of the gateway.
 bench:  ## measure gateway overhead and what the reservation costs (needs Redis)
 	python -m scripts.bench_overhead --compare
 

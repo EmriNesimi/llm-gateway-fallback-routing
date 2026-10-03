@@ -17,6 +17,16 @@ against the one the gateway uses — the suite already destroyed the real
 ledger once by doing exactly that.
 
     python -m scripts.bench_overhead --requests 500
+    python -m scripts.bench_overhead --compare     # and what reserving costs
+
+Exit codes:
+
+    0   measured
+    1   a request failed, or the chain asked for does not exist
+    2   Redis could not be reached, so nothing was measured
+    3   measured, and the result disproves itself — a negative reservation
+        cost means the machine's noise was larger than the thing being
+        measured. Re-run somewhere idle.
 """
 
 import argparse
