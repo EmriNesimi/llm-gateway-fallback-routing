@@ -144,7 +144,14 @@ jobs:
           # request path rather than just reading a store.
           # --compare, because that path drives a second chain and the
           # free-chain subtraction, which is the half most likely to break.
-          python -m scripts.bench_overhead --requests 5 --compare
+          #
+          # Exit 3 is accepted: it means the subtraction came out negative,
+          # which on a shared runner at five requests is the likely outcome
+          # and is the script correctly refusing to report noise. This step
+          # asks "does it still run", not "what is the number" — the real
+          # measurement happens on a machine nobody else is using. Any other
+          # non-zero still fails.
+          python -m scripts.bench_overhead --requests 5 --compare || [ $? -eq 3 ]
 
   postgres-migrations:
     runs-on: ubuntu-latest
