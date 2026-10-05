@@ -319,10 +319,27 @@ async def _run(requests: int, chain: str, compare: bool) -> int:
     return 0
 
 
+def _positive_int(raw: str) -> int:
+    """At least one sample, or argparse rejects it with the usual usage line."""
+    value = int(raw)
+    if value < 1:
+        msg = f"need at least one request, got {value}"
+        raise argparse.ArgumentTypeError(msg)
+    return value
+
+
 def main() -> None:
     """Parse arguments and run the benchmark."""
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--requests", type=int, default=500, help="samples to take")
+    parser.add_argument(
+        "--requests",
+        # Rejected here rather than later: zero produces an empty table with
+        # headers and no rows, and a negative one produces the same. Neither
+        # looks like an error, and the percentiles below index into the list.
+        type=_positive_int,
+        default=500,
+        help="samples to take per endpoint (default: 500)",
+    )
     parser.add_argument("--chain", default="smart", help="which chain to route (default: smart)")
     parser.add_argument(
         "--compare",
