@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+**The operator scripts refuse bad arguments**
+- `purge-audit` rejects an empty id. `AuditLogEntry.request_id` defaults to
+  an empty string, so it was not a no-op — it selected every row written
+  without a correlation ID, which `ID=` with an unset variable produces.
+- `reconcile` rejects a negative tolerance, which made every row a gap
+  including ones where the two stores agree exactly.
+- `bench` rejects a request count below one, which printed an empty table
+  that did not look like an error, and lists the real chains in `--help`.
+
 **The benchmark refuses to report noise**
 - It measures `/v1/chat/completions` too — the endpoint real traffic uses,
   and the one that was not being measured.
