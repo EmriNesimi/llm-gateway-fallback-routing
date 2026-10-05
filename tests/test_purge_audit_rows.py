@@ -102,3 +102,22 @@ async def test_an_unreachable_database_exits_two(monkeypatch, tmp_path, capsys):
 
     assert "cannot read the audit log" in capsys.readouterr().err
     assert not list(tmp_path.iterdir()), "an unreachable database still wrote an export"
+
+
+@pytest.mark.parametrize("empty", ["", "   ", "\t"])
+def test_an_empty_request_id_is_refused(empty):
+    """An empty id is not a no-op for this tool.
+
+    AuditLogEntry.request_id defaults to "", so an empty argument selects
+    every row written without a correlation ID. `make purge-audit ID=` with
+    the variable unset produces exactly that, and the dry run would report a
+    count that looks deliberate.
+    """
+    import argparse
+
+    from scripts.purge_audit_rows import _non_empty
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        _non_empty(empty)
+
+    assert _non_empty("client-hung-up") == "client-hung-up"

@@ -118,9 +118,26 @@ async def purge(request_id: str, apply: bool, export_dir: pathlib.Path) -> int:
     return 0
 
 
+def _non_empty(raw: str) -> str:
+    """An empty id selects every row that has no correlation ID, not none."""
+    if not raw.strip():
+        msg = "request_id cannot be empty; it would select rows with no request_id"
+        raise argparse.ArgumentTypeError(msg)
+    return raw
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("request_id", help="exact request_id the rows to remove carry")
+    parser.add_argument(
+        "request_id",
+        # Refused if empty. AuditLogEntry.request_id defaults to "", so an
+        # empty argument is not a no-op — it targets every row written
+        # without a correlation ID. `make purge-audit ID=` with the variable
+        # unset produces exactly that, and the dry run would report a count
+        # that looks deliberate.
+        type=_non_empty,
+        help="exact request_id the rows to remove carry",
+    )
     parser.add_argument("--apply", action="store_true", help="actually delete (default: dry run)")
     parser.add_argument(
         "--export-dir",
