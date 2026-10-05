@@ -340,7 +340,15 @@ def main() -> None:
         default=500,
         help="samples to take per endpoint (default: 500)",
     )
-    parser.add_argument("--chain", default="smart", help="which chain to route (default: smart)")
+    parser.add_argument(
+        "--chain",
+        default="smart",
+        # Listed from the real chains rather than hardcoded, so --help cannot
+        # advertise one that was renamed. Not argparse `choices=`, because
+        # that error does not say why the chain matters here — the runtime
+        # check in _run names them and explains the free-chain comparison.
+        help=f"which chain to route: {', '.join(sorted(FALLBACK_CHAINS))} (default: smart)",
+    )
     parser.add_argument(
         "--compare",
         action="store_true",
