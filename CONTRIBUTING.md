@@ -63,6 +63,7 @@ file has no revision recorded. `alembic stamp head` fixes it.
   | `test_metrics_observability.py` | a metric is exported but never graphed or alerted on |
   | `test_scripts_do_not_touch_production.py` | a script that drives the request path writes to the real ledger or audit log |
   | `test_bench_overhead.py` | the chain `bench --compare` subtracts stops being free, which would silently invalidate the figure |
+  | `test_purge_audit_rows.py` | the delete tool stops refusing an empty id, which selects every row with no correlation ID |
 
   They exist because each of those has gone stale at least once, and none of
   them fails loudly on its own — a wrong number in a README is invisible
