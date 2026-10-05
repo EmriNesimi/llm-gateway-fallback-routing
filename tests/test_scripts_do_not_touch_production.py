@@ -71,3 +71,60 @@ def test_the_redirect_happens_before_the_app_is_imported(script_name):
             f" from app/ at line {first_app_import}. Settings is built at import"
             " time, so a redirect after that point is read by nothing."
         )
+
+
+# Globals a script may set for its own run that outlive it in a test
+# process. Each pairs what the script does with the evidence that the test
+# file puts it back — not merely that it mentions it, which the first
+# version of this checked and which the snapshot line satisfies on its own.
+_PROCESS_WIDE = [
+    (
+        "app.dependency_overrides[",
+        "app.dependency_overrides.update(",
+        "authentication stays overridden for every later test",
+    ),
+    (
+        "_limiter._capacity =",
+        'monkeypatch.setattr(\n        ratelimit_dependency._limiter, "_capacity"',
+        "the rate limiter stops refusing anything",
+    ),
+    (
+        "tracker._monthly_cap_usd =",
+        'budget_dependency.tracker, "_monthly_cap_usd"',
+        "the per-key budget stops refusing anything",
+    ),
+    (
+        "provider_budget._cap_usd =",
+        'budget_dependency.provider_budget, "_cap_usd"',
+        "the provider ceiling stops refusing anything",
+    ),
+]
+
+
+@pytest.mark.parametrize(("mutation", "restore", "consequence"), _PROCESS_WIDE)
+def test_a_test_calling_the_script_restores_what_it_changed(mutation, restore, consequence):
+    """Whatever `bench_overhead` mutates, its test file must put back.
+
+    The script is an entry point and owns the process it runs in, so raising
+    the caps and overriding auth is right for it. A test calling that same
+    function inherits the mutation and hands it to every test after — which
+    fails in combination and passes in isolation, the worst way to find out.
+    Two of these did exactly that.
+
+    Matched on the restore, not on the name being mentioned: the fixture
+    snapshots each of these by name on the way in, so a check for the name
+    alone passes even with the restore deleted. It did.
+
+    Read statically, because the failure this prevents is one test breaking
+    a different one, which a test cannot observe about itself.
+    """
+    script = (ROOT / "scripts" / "bench_overhead.py").read_text()
+    if mutation not in script:
+        pytest.skip(f"bench_overhead no longer sets {mutation}")
+
+    guard = (ROOT / "tests" / "test_bench_overhead.py").read_text()
+    assert restore in guard, (
+        f"scripts/bench_overhead.py sets {mutation} and"
+        f" tests/test_bench_overhead.py does not restore it, so after those"
+        f" tests run, {consequence}."
+    )
