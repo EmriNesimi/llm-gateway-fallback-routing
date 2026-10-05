@@ -10,7 +10,7 @@
   detects it, says the noise exceeded the measurement, and exits 3. CI
   accepts that exit specifically, since its smoke run at five requests on a
   shared runner is asking whether the script works, not what the number is.
-- Its own tests leaked twice. `_run` raises the caps and overrides auth for
+- Its own tests leaked twice. The entry point raises the caps and overrides auth for
   its run — correct for an entry point that owns the process, leakage when a
   test calls it. The admin rate-limit tests stopped seeing a 429 and the
   wrong-client-key test found its bad keys authenticated, each passing alone
