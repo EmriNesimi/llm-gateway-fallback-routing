@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+**The benchmark refuses to report noise**
+- It measures `/v1/chat/completions` too — the endpoint real traffic uses,
+  and the one that was not being measured.
+- A negative reservation cost is impossible: reserving cannot make a request
+  faster. At load average 18 this machine produced one, so the script now
+  detects it, says the noise exceeded the measurement, and exits 3. CI
+  accepts that exit specifically, since its smoke run at five requests on a
+  shared runner is asking whether the script works, not what the number is.
+- Its own tests leaked twice. `_run` raises the caps and overrides auth for
+  its run — correct for an entry point that owns the process, leakage when a
+  test calls it. The admin rate-limit tests stopped seeing a 429 and the
+  wrong-client-key test found its bad keys authenticated, each passing alone
+  and failing in combination. A guard now pins the restore.
+
 **What the reservation actually costs: four to five milliseconds**
 - `make bench` now also measures the `local` chain, which is Ollama only.
   `_reserve_chain` skips free providers and then has nothing to claim
