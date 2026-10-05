@@ -131,11 +131,23 @@ async def reconcile(tolerance_usd: float) -> int:
     return 0
 
 
+def _non_negative_float(raw: str) -> float:
+    """A tolerance below zero makes agreement itself look like a gap."""
+    value = float(raw)
+    if value < 0:
+        msg = f"tolerance cannot be negative, got {value}"
+        raise argparse.ArgumentTypeError(msg)
+    return value
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument(
         "--tolerance",
-        type=float,
+        # A negative tolerance makes every row a gap, including one where the
+        # two stores agree exactly — which reads as the ledger being broken
+        # everywhere rather than as a bad argument.
+        type=_non_negative_float,
         default=_DEFAULT_TOLERANCE_USD,
         help=f"largest gap in USD still reported as ok (default {_DEFAULT_TOLERANCE_USD})",
     )
