@@ -77,6 +77,12 @@ file has no revision recorded. `alembic stamp head` fixes it.
 
 ## Commits
 
+Write the message with `git commit -F -` and a quoted heredoc, not `-m
+"..."`. These messages name commands and settings in backticks, and inside
+double quotes the shell runs them as substitutions — a message mentioning
+`make purge-audit ID=` ran it, and the commit landed with the output pasted
+in where the backticks had been. Nothing warns you; the commit succeeds.
+
 Run the checks, **read the output**, then push as a separate command. Not
 `make check && git push` in one line: the failure scrolls past, the chain
 carries on, and the red lands on `main` where the next person finds it. That
