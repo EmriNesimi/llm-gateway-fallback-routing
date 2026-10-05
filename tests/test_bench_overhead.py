@@ -135,3 +135,18 @@ async def test_an_impossible_reservation_cost_is_refused(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "impossible" in out
     assert "Re-run on an idle machine" in out
+
+
+@pytest.mark.parametrize("bad", ["0", "-1"])
+def test_a_request_count_below_one_is_refused(bad):
+    """Zero printed an empty table with headers and no rows, which does not
+    look like an error — and the percentile helper indexes into that list.
+    """
+    import argparse
+
+    from scripts.bench_overhead import _positive_int
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        _positive_int(bad)
+
+    assert _positive_int("1") == 1

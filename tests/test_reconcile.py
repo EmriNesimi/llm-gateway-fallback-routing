@@ -117,3 +117,19 @@ def test_redaction_covers_the_url_shapes_the_scripts_actually_see():
         "rediss://:s3cret@localhost:6380/0",
     ):
         assert "s3cret" not in _redacted(url), url
+
+
+@pytest.mark.parametrize("bad", ["-0.1", "-5"])
+def test_a_negative_tolerance_is_refused(bad):
+    """It made every row a gap, including rows where the two stores agree
+    exactly — a typo'd argument reading as a ledger broken everywhere.
+    """
+    import argparse
+
+    from scripts.reconcile import _non_negative_float
+
+    with pytest.raises(argparse.ArgumentTypeError):
+        _non_negative_float(bad)
+
+    # Zero is meaningful: demand exact agreement, no float slack at all.
+    assert _non_negative_float("0") == 0.0
