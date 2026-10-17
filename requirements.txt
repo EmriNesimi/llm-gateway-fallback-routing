@@ -12,7 +12,7 @@ opentelemetry-instrumentation-fastapi>=0.65b0
 prometheus-client>=0.20
 sqlalchemy[asyncio]>=2.0
 aiosqlite>=0.20
-asyncpg>=0.29
+asyncpg>=0.31.0
 alembic>=1.13
 
 # providers
