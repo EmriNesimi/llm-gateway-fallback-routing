@@ -9,7 +9,7 @@
 
 pytest>=8.2
 pytest-asyncio>=0.23
-fakeredis>=2.23
+fakeredis>=2.38.0
 lupa>=2.2  # gives fakeredis EVAL/EVALSHA support, needed for our Lua-scripted token bucket
 ruff>=0.16.5
 pytest-cov>=7.1.0
