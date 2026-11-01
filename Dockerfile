@@ -8,7 +8,7 @@
 # readability and is what the seven-way Python version guard reads.
 # Dependabot updates digest and tag together, so this does not freeze
 # security patches — it makes taking them a commit.
-FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
+FROM python:3.12-slim@sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159
 
 # Without this, Python buffers stdout when it isn't a TTY — which is exactly
 # the case under Docker — so `docker logs` shows nothing until the buffer
